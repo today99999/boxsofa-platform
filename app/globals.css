@@ -179,12 +179,148 @@ textarea {
   padding: 28px;
 }
 
+.admin-title {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.admin-title h1 {
+  font-size: clamp(36px, 6vw, 64px);
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-weight: 900;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.role-switch {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  padding: 12px 14px;
+}
+
+.role-switch span,
+.panel span,
+.table span,
+.mini-card small {
+  color: var(--muted);
+}
+
+.admin-stat-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.stat-card span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.stat-card strong {
+  font-size: 34px;
+}
+
+.admin-grid-two {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
 .panel {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
   margin-bottom: 18px;
   padding: 18px;
+}
+
+.panel-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  margin: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.stock-list,
+.customer-list,
+.message-list {
+  display: grid;
+  gap: 12px;
+}
+
+.stock-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.stock-row img {
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  object-fit: cover;
+  width: 64px;
+}
+
+.stock-row p,
+.mini-card p,
+.message-card p {
+  margin: 4px 0 0;
+}
+
+.stock {
+  background: var(--soft);
+  border-radius: 999px;
+  font-weight: 900;
+  padding: 8px 10px;
+}
+
+.stock.low {
+  background: #ffe8dd;
+  color: var(--accent);
+}
+
+.mini-card,
+.message-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
 }
 
 .checkout-layout {
@@ -333,8 +469,20 @@ textarea {
 
   .hero,
   .admin-layout,
-  .checkout-layout {
+  .checkout-layout,
+  .admin-stat-grid,
+  .admin-grid-two {
     grid-template-columns: 1fr;
+  }
+
+  .admin-nav {
+    position: static;
+  }
+
+  .admin-title,
+  .panel-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .grid {
