@@ -187,6 +187,119 @@ textarea {
   padding: 18px;
 }
 
+.checkout-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.cart-list,
+.order-list,
+.checkout-form {
+  display: grid;
+  gap: 14px;
+}
+
+.cart-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 92px minmax(0, 1fr) 84px auto;
+  padding: 12px 0;
+}
+
+.cart-row img {
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  object-fit: cover;
+  width: 92px;
+}
+
+.cart-row input,
+.checkout-form input,
+.checkout-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.checkout-form label {
+  color: var(--muted);
+  display: grid;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.summary-lines {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+}
+
+.buy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.qty-stepper {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: inline-grid;
+  grid-template-columns: 44px 44px 44px;
+  min-height: 44px;
+  overflow: hidden;
+}
+
+.qty-stepper button {
+  background: #fff;
+  border: 0;
+  font-weight: 900;
+}
+
+.qty-stepper span {
+  align-items: center;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  display: flex;
+  font-weight: 900;
+  justify-content: center;
+}
+
+.inline-note {
+  color: var(--brand);
+  flex-basis: 100%;
+  font-weight: 800;
+  margin: 0;
+}
+
+.success-panel {
+  max-width: 720px;
+}
+
+.order-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.status {
+  background: var(--soft);
+  border-radius: 999px;
+  color: var(--brand);
+  display: inline-flex;
+  font-weight: 900;
+  justify-self: start;
+  padding: 6px 10px;
+}
+
 .table {
   border-collapse: collapse;
   width: 100%;
@@ -219,12 +332,22 @@ textarea {
   }
 
   .hero,
-  .admin-layout {
+  .admin-layout,
+  .checkout-layout {
     grid-template-columns: 1fr;
   }
 
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .cart-row {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .cart-row input,
+  .cart-row button {
+    grid-column: span 2;
   }
 
   .brand {

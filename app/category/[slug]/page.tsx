@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SupportButton } from "@/components/SupportButton";
 import { categories, getProductsByCategory } from "@/lib/catalog";
 
 export default function CategoryPage({ params }: { params: { slug: string } }) {
@@ -8,18 +10,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
 
   return (
     <>
-      <header className="site-header">
-        <Link className="brand" href="/">
-          BoxSofa
-        </Link>
-        <nav className="nav" aria-label="产品分类">
-          {categories.map((item) => (
-            <Link key={item.slug} href={`/category/${item.slug}`}>
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-      </header>
+      <SiteHeader />
       <main className="section">
         <div className="section-head">
           <h1>{category.name}</h1>
@@ -33,6 +24,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               </div>
               <div className="card-body">
                 <strong>{product.name}</strong>
+                <span>{product.description}</span>
                 <span>{product.color}</span>
                 <span className="price">EUR {product.priceEur}</span>
               </div>
@@ -40,9 +32,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
           ))}
         </div>
       </main>
-      <button className="chat-button" type="button">
-        在线客服
-      </button>
+      <SupportButton />
     </>
   );
 }

@@ -1,23 +1,12 @@
 import Link from "next/link";
-import { categories, products } from "@/lib/catalog";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SupportButton } from "@/components/SupportButton";
+import { products } from "@/lib/catalog";
 
 export default function HomePage() {
   return (
     <>
-      <div className="topbar">订单满 EUR 999 免基础配送 | 跨境物流预估 23-30 天到达</div>
-      <header className="site-header">
-        <Link className="brand" href="/">
-          BoxSofa
-        </Link>
-        <nav className="nav" aria-label="产品分类">
-          {categories.map((category) => (
-            <Link key={category.slug} href={`/category/${category.slug}`}>
-              {category.name}
-            </Link>
-          ))}
-        </nav>
-      </header>
-
+      <SiteHeader />
       <main>
         <section className="hero">
           <div>
@@ -43,13 +32,14 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid">
-            {products.map((product) => (
+            {products.slice(0, 5).map((product) => (
               <Link className="card" href={`/product/${product.slug}`} key={product.id}>
                 <div className="product-media">
                   <img src={product.mainImage} alt={product.name} />
                 </div>
                 <div className="card-body">
                   <strong>{product.name}</strong>
+                  <span>{product.description}</span>
                   <span>{product.color}</span>
                   <span className="price">EUR {product.priceEur}</span>
                 </div>
@@ -58,9 +48,7 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-      <button className="chat-button" type="button">
-        在线客服
-      </button>
+      <SupportButton />
     </>
   );
 }
