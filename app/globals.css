@@ -323,6 +323,20 @@ textarea {
   padding: 14px;
 }
 
+.empty-state {
+  background: var(--soft);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.empty-state p {
+  color: var(--muted);
+  margin: 0;
+}
+
 .checkout-layout {
   align-items: start;
   display: grid;
