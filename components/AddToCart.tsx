@@ -3,12 +3,16 @@
 import { useState } from "react";
 import { CART_KEY, productToCartItem } from "@/lib/cart";
 import type { Product } from "@/lib/catalog";
+import { trackEvent } from "@/lib/analytics";
+import { translateCatalogText } from "@/lib/catalogI18n";
+import { useTranslation } from "@/components/useTranslation";
 
 type Props = {
   product: Product;
 };
 
 export function AddToCart({ product }: Props) {
+  const { language, t } = useTranslation();
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState("");
 
@@ -21,14 +25,20 @@ export function AddToCart({ product }: Props) {
       existing.push(productToCartItem(product, quantity));
     }
     localStorage.setItem(CART_KEY, JSON.stringify(existing));
-    setMessage(`${product.name} 已加入购物车`);
+    trackEvent(goToCart ? "begin_checkout" : "add_to_cart", {
+      productId: product.id,
+      productSlug: product.slug,
+      productName: product.name,
+      valueEur: product.priceEur * quantity
+    });
+    setMessage(`${translateCatalogText(product.name, language, "name")} ${t("addedToCart")}`);
     window.dispatchEvent(new Event("boxsofa-cart-updated"));
     if (goToCart) window.location.href = "/cart";
   }
 
   return (
     <div className="buy-actions">
-      <div className="qty-stepper" aria-label="购买数量">
+      <div className="qty-stepper" aria-label={t("quantity")}>
         <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))}>
           -
         </button>
@@ -38,10 +48,10 @@ export function AddToCart({ product }: Props) {
         </button>
       </div>
       <button className="button" type="button" onClick={() => addToCart(false)}>
-        加入购物车
+        {t("addToCart")}
       </button>
       <button className="button primary" type="button" onClick={() => addToCart(true)}>
-        立即下单
+        {t("buyNow")}
       </button>
       {message ? <p className="inline-note">{message}</p> : null}
     </div>

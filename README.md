@@ -47,6 +47,7 @@ http://localhost:3000
    - `product-videos`
    - `detail-images`
 5. Copy keys into `.env.local` based on `.env.example`.
+6. Follow `docs/SUPABASE-MIGRATION-PLAN.md` to replace local browser orders with real database orders step by step.
 
 ## Payment phase
 
@@ -54,5 +55,5 @@ Stripe is intentionally not active yet. When the European bank account is ready,
 
 - Checkout session creation
 - Stripe webhook
-- Order status update to `paid`
+- Order status update to `paid_confirmed` or `processing`
 - Member spend calculation after confirmed payment

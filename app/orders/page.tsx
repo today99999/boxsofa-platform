@@ -1,6 +1,16 @@
+import type { Metadata } from "next";
 import { OrdersClient } from "@/components/OrdersClient";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
+
+export const metadata: Metadata = {
+  title: "Customer Dashboard | BoxSofa",
+  robots: {
+    index: false,
+    follow: false
+  }
+};
 
 export default function OrdersPage() {
   return (
@@ -9,6 +19,7 @@ export default function OrdersPage() {
       <main className="section">
         <OrdersClient />
       </main>
+      <SiteFooter />
       <SupportButton />
     </>
   );

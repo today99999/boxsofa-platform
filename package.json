@@ -5,8 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "prelaunch": "npm run build && npm run typecheck",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "smoke": "node scripts/prelaunch-smoke.mjs",
+    "env:check": "node scripts/check-env.mjs",
+    "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

@@ -2,22 +2,106 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CART_KEY, ORDERS_KEY, type CartItem, type LocalOrder } from "@/lib/cart";
+import { trackEvent } from "@/lib/analytics";
+import { CatalogText } from "@/components/CatalogText";
+import { useTranslation } from "@/components/useTranslation";
+
+type CheckoutForm = {
+  customerName: string;
+  phone: string;
+  email: string;
+  address: string;
+};
+
+type CustomerProfileResponse = {
+  ok: boolean;
+  mode: "local" | "supabase";
+  message?: string;
+  profile?: {
+    email?: string;
+    full_name?: string | null;
+    phone?: string | null;
+  } | null;
+  address?: {
+    country_code?: string | null;
+    recipient?: string | null;
+    phone?: string | null;
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    province?: string | null;
+    postal_code?: string | null;
+  } | null;
+};
+
+const emptyCheckoutForm: CheckoutForm = {
+  customerName: "",
+  phone: "",
+  email: "",
+  address: ""
+};
 
 function money(value: number) {
   return `EUR ${value.toFixed(2)}`;
 }
 
+function hasCheckoutInput(form: CheckoutForm) {
+  return Boolean(form.customerName || form.phone || form.email || form.address);
+}
+
+function formatSavedAddress(address: CustomerProfileResponse["address"]) {
+  if (!address) return "";
+  const cityLine = [address.postal_code, address.city].filter(Boolean).join(" ");
+  return [address.line1, address.line2, cityLine, address.province, address.country_code]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export function CartClient() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<CartItem[]>([]);
   const [submittedOrder, setSubmittedOrder] = useState<LocalOrder | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(emptyCheckoutForm);
+  const [profileMode, setProfileMode] = useState<"local" | "supabase">("local");
+  const [profileMessage, setProfileMessage] = useState("");
 
   useEffect(() => {
     setItems(JSON.parse(localStorage.getItem(CART_KEY) || "[]"));
+
+    fetch("/api/customer/profile")
+      .then((response) => response.json() as Promise<CustomerProfileResponse>)
+      .then((result) => {
+        if (!result.ok || result.mode !== "supabase") {
+          setProfileMode("local");
+          return;
+        }
+
+        const savedAddress = formatSavedAddress(result.address);
+        const savedForm: CheckoutForm = {
+          customerName: result.address?.recipient || result.profile?.full_name || "",
+          phone: result.address?.phone || result.profile?.phone || "",
+          email: result.profile?.email || "",
+          address: savedAddress
+        };
+
+        setProfileMode("supabase");
+        if (hasCheckoutInput(savedForm)) {
+          setProfileMessage("Saved customer delivery details have been loaded.");
+          setCheckoutForm((current) => (hasCheckoutInput(current) ? current : savedForm));
+        }
+      })
+      .catch(() => setProfileMode("local"));
   }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.priceEur * item.quantity, 0), [items]);
-  const shipping = subtotal >= 999 || subtotal === 0 ? 0 : 39;
+  const shipping = 0;
   const total = subtotal + shipping;
+
+  function updateCheckoutField<Field extends keyof CheckoutForm>(field: Field, value: CheckoutForm[Field]) {
+    setCheckoutForm((current) => ({ ...current, [field]: value }));
+  }
 
   function saveCart(nextItems: CartItem[]) {
     setItems(nextItems);
@@ -33,38 +117,60 @@ export function CartClient() {
     saveCart(items.filter((item) => item.id !== id));
   }
 
-  function submitOrder(event: FormEvent<HTMLFormElement>) {
+  async function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const order: LocalOrder = {
-      id: `BX-${Date.now().toString().slice(-8)}`,
-      createdAt: new Date().toISOString(),
-      status: "pending_confirm",
-      customerName: String(form.get("customerName") || ""),
-      phone: String(form.get("phone") || ""),
-      email: String(form.get("email") || ""),
-      address: String(form.get("address") || ""),
+    if (items.length === 0 || isSubmitting) return;
+
+    const payload = {
+      customerName: checkoutForm.customerName,
+      phone: checkoutForm.phone,
+      email: checkoutForm.email,
+      address: checkoutForm.address,
       items,
       subtotalEur: subtotal,
       discountEur: 0,
       shippingEur: shipping,
       totalEur: total
     };
-    const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || "[]");
-    localStorage.setItem(ORDERS_KEY, JSON.stringify([order, ...orders]));
-    localStorage.removeItem(CART_KEY);
-    setItems([]);
-    setSubmittedOrder(order);
+
+    setIsSubmitting(true);
+    setOrderError("");
+
+    try {
+      const response = await fetch(`/api/orders${window.location.search}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const result = (await response.json()) as { ok: boolean; message?: string; order?: LocalOrder };
+
+      if (!response.ok || !result.ok || !result.order) {
+        throw new Error(result.message || "Order submit failed.");
+      }
+
+      const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || "[]");
+      localStorage.setItem(ORDERS_KEY, JSON.stringify([result.order, ...orders]));
+      trackEvent("order_submit", { valueEur: total });
+      localStorage.removeItem(CART_KEY);
+      setItems([]);
+      setSubmittedOrder(result.order);
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "Order submit failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (submittedOrder) {
     return (
       <div className="panel success-panel">
-        <h1>订单已提交</h1>
-        <p>订单号：{submittedOrder.id}</p>
-        <p>商家会联系你确认付款方式。当前版本暂不接真实支付，后续开通欧洲银行账户后再接 Stripe。</p>
+        <h1>{t("orderSubmitted")}</h1>
+        <p>
+          {t("orderNumber")}: {submittedOrder.id}
+        </p>
+        <p>{t("paymentNote")}</p>
         <a className="button primary" href="/orders">
-          查看我的订单
+          {t("viewOrders")}
         </a>
       </div>
     );
@@ -73,17 +179,17 @@ export function CartClient() {
   return (
     <div className="checkout-layout">
       <section className="panel">
-        <h1>购物车</h1>
+        <h1>{t("cartTitle")}</h1>
         {items.length === 0 ? (
-          <p>购物车为空，请先选择商品。</p>
+          <p>{t("emptyCart")}</p>
         ) : (
           <div className="cart-list">
             {items.map((item) => (
               <article className="cart-row" key={item.id}>
                 <img src={item.image} alt={item.name} />
                 <div>
-                  <strong>{item.name}</strong>
-                  <p>{item.color}</p>
+                  <strong><CatalogText text={item.name} kind="name" /></strong>
+                  <p><CatalogText text={item.color} kind="color" /></p>
                   <p>{money(item.priceEur)}</p>
                 </div>
                 <input
@@ -93,7 +199,7 @@ export function CartClient() {
                   onChange={(event) => updateQuantity(item.id, Number(event.target.value))}
                 />
                 <button className="button" type="button" onClick={() => removeItem(item.id)}>
-                  移除
+                  {t("remove")}
                 </button>
               </article>
             ))}
@@ -102,33 +208,62 @@ export function CartClient() {
       </section>
 
       <form className="panel checkout-form" onSubmit={submitOrder}>
-        <h2>收货信息</h2>
+        <div>
+          <h2>{t("deliveryInfo")}</h2>
+          {profileMessage ? <p className="checkout-profile-note">{profileMessage}</p> : null}
+          {profileMode === "local" ? (
+            <p className="checkout-profile-note muted">Login as a customer to reuse saved delivery details.</p>
+          ) : null}
+        </div>
         <label>
-          姓名
-          <input name="customerName" required />
+          {t("name")}
+          <input
+            name="customerName"
+            required
+            value={checkoutForm.customerName}
+            onChange={(event) => updateCheckoutField("customerName", event.target.value)}
+          />
         </label>
         <label>
-          电话
-          <input name="phone" required />
+          {t("phone")}
+          <input
+            name="phone"
+            required
+            value={checkoutForm.phone}
+            onChange={(event) => updateCheckoutField("phone", event.target.value)}
+          />
         </label>
         <label>
-          邮箱
-          <input name="email" required type="email" />
+          {t("email")}
+          <input
+            name="email"
+            required
+            type="email"
+            value={checkoutForm.email}
+            onChange={(event) => updateCheckoutField("email", event.target.value)}
+          />
         </label>
         <label>
-          欧洲收货地址
-          <textarea name="address" required rows={4} />
+          {t("address")}
+          <textarea
+            name="address"
+            required
+            rows={4}
+            value={checkoutForm.address}
+            onChange={(event) => updateCheckoutField("address", event.target.value)}
+          />
         </label>
         <div className="summary-lines">
-          <span>商品小计</span>
+          <span>{t("subtotal")}</span>
           <strong>{money(subtotal)}</strong>
-          <span>基础配送</span>
+          <span>{t("shipping")}</span>
           <strong>{money(shipping)}</strong>
-          <span>合计</span>
+          <span>{t("total")}</span>
           <strong>{money(total)}</strong>
         </div>
-        <button className="button primary" disabled={items.length === 0} type="submit">
-          提交订单
+        {orderError ? <p className="form-error">{orderError}</p> : null}
+        <button className="button primary" disabled={items.length === 0 || isSubmitting} type="submit">
+          {isSubmitting ? "Submitting..." : t("submitOrder")}
         </button>
       </form>
     </div>

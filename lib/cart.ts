@@ -13,7 +13,13 @@ export type CartItem = {
 export type LocalOrder = {
   id: string;
   createdAt: string;
-  status: "pending_confirm";
+  status: "pending_confirm" | "paid_confirmed" | "shipped" | "cancelled";
+  paidConfirmedAt?: string;
+  trackingNumber?: string;
+  carrier?: string;
+  shippedAt?: string;
+  paymentMethodNote?: string;
+  internalNote?: string;
   customerName: string;
   phone: string;
   email: string;
