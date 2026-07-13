@@ -32,9 +32,15 @@ const categoryLabelKeys: Record<CategorySlug, TranslationKey> = {
 };
 
 const categoryOrder: CategorySlug[] = ["single", "double", "triple", "combo"];
+const cleanCategoryLabels: Record<CategorySlug, string> = {
+  single: "单人位",
+  double: "双人位",
+  triple: "三人位",
+  combo: "组合位"
+};
 
 function getColorOptionLabel(item: Product) {
-  const categoryLabel = categoryLabels[item.category];
+  const categoryLabel = cleanCategoryLabels[item.category];
   return item.color
     .replace(new RegExp(`^${categoryLabel}\\s*/\\s*`), "")
     .replace(new RegExp(`^${categoryLabel}`), "")

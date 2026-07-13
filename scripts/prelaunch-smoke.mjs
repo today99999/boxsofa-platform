@@ -3,14 +3,14 @@ const baseUrl = (process.env.SMOKE_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL 
 const publicChecks = [
   { path: '/', includes: ['BoxSofa'] },
   { path: '/category/all', includes: ['BoxSofa'] },
-  { path: '/product/chameleon-mario-sofa-01', includes: ['BoxSofa'] },
+  { path: '/product/chameleon-mario-sofa-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
   { path: '/shipping', includes: ['BoxSofa'] },
   { path: '/returns', includes: ['BoxSofa'] },
   { path: '/privacy', includes: ['BoxSofa'] },
   { path: '/terms', includes: ['BoxSofa'] },
   { path: '/faq', includes: ['BoxSofa'] },
   { path: '/robots.txt', includes: ['Sitemap'] },
-  { path: '/sitemap.xml', includes: ['/category/all', '/shipping', '/privacy'] },
+  { path: '/sitemap.xml', includes: ['https://boxsofa.eu/', '/category/all', '/product/chameleon-mario-sofa-01', '/shipping', '/privacy'] },
 ];
 
 const privateChecks = [
