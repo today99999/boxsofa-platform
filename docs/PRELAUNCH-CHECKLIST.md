@@ -40,6 +40,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
   - `EMAIL_FROM`
   - `EMAIL_API_KEY`
 - Confirm Vercel production domain points to `boxsofa.eu`.
+- Configure Cloudflare DNS for `boxsofa.eu` and `www.boxsofa.eu` as documented in `docs/PRODUCTION-SETUP.md`.
 - Run `SMOKE_BASE_URL=https://boxsofa.eu npm run smoke` after deployment.
 - Run `PRODUCTION_BASE_URL=https://boxsofa.eu EXPECTED_SITE_URL=https://boxsofa.eu npm run production:ready` after production environment variables and domain are configured.
 - Open and verify these public pages in production:

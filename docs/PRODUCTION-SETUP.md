@@ -38,6 +38,23 @@ Add both domains to the same Vercel project:
 
 Then update DNS as Vercel instructs. After DNS is active, both domains should serve this app and /api/health should return JSON instead of HTML.
 
+Current Vercel DNS recommendation from verification:
+
+- Cloudflare record for apex domain: CNAME @ -> 3f7e34346aeddb7f.vercel-dns-017.com. with proxy disabled
+- Cloudflare record for www: CNAME www -> 3f7e34346aeddb7f.vercel-dns-017.com. with proxy disabled
+
+Cloudflare Domain Connect apply URLs:
+
+- https://vercel.com/api/v9/projects/prj_1dnykjIBgeJokqFI46W56ZSPF5qG/domains/boxsofa.eu/domain-connect/apply?teamId=team_XE0YAB39PuagknoUGAaaWtbg
+- https://vercel.com/api/v9/projects/prj_1dnykjIBgeJokqFI46W56ZSPF5qG/domains/www.boxsofa.eu/domain-connect/apply?teamId=team_XE0YAB39PuagknoUGAaaWtbg
+
+Current status on 2026-07-14:
+
+- Vercel production env has Supabase and NEXT_PUBLIC_SITE_URL configured.
+- Vercel production smoke passes on https://boxsofa-platform.vercel.app.
+- boxsofa.eu and www.boxsofa.eu are attached to the Vercel project but still need Cloudflare DNS changes.
+- Email provider production env vars are still missing.
+
 ## Verification commands
 
 After Vercel env vars and domains are configured, redeploy production and run:
