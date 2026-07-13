@@ -42,7 +42,7 @@ function mapThread(thread: ChatThreadRow) {
 
 export async function GET() {
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", threads: [] });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();

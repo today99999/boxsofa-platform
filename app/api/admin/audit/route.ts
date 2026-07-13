@@ -17,7 +17,7 @@ type AuditLogRow = {
 
 export async function GET() {
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", logs: [] });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();

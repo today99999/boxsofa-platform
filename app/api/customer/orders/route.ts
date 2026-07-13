@@ -10,7 +10,7 @@ function hasSupabasePublicConfig() {
 
 export async function GET() {
   if (!hasSupabasePublicConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", orders: [] });
+    return NextResponse.json({ ok: false, message: "Customer login is required." }, { status: 401 });
   }
 
   const supabase = await createSupabaseServerClient();

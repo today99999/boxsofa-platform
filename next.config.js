@@ -52,6 +52,10 @@ module.exports = (phase) => ({
       {
         source: "/cart",
         headers: privateHeaders
+      },
+      {
+        source: "/login",
+        headers: privateHeaders
       }
     ];
   }

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!hasSupabasePublicConfig() || !hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", profile: null });
+    return NextResponse.json({ ok: false, message: "Not signed in." }, { status: 401 });
   }
 
   const supabase = await createSupabaseServerClient();

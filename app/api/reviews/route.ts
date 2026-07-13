@@ -30,12 +30,12 @@ export async function POST(request: Request) {
   }
 
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local" });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const review = payload.data;
   if (!hasSupabasePublicConfig()) {
-    return NextResponse.json({ ok: true, mode: "local" });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const authSupabase = await createSupabaseServerClient();

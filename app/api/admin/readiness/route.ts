@@ -15,23 +15,7 @@ async function countRows(
 
 export async function GET() {
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({
-      ok: true,
-      mode: "local",
-      readiness: {
-        customerProfiles: 0,
-        merchantProfiles: 0,
-        pendingOrders: 0,
-        lowStockProducts: 0,
-        queuedEmailNotifications: 0,
-        failedEmailNotifications: 0,
-        openSupportThreads: 0,
-        needsReplySupportThreads: 0,
-        customerOrdersProtected: false,
-        adminApisProtected: false,
-        emailProviderConfigured: hasEmailProviderConfig()
-      }
-    });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();

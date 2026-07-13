@@ -44,7 +44,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local" });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();

@@ -53,7 +53,7 @@ async function checkPrivateRoute(route) {
 
 async function checkProtectedApi(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
-  if (response.status !== 401 && response.status !== 403) {
+  if (response.status !== 401 && response.status !== 403 && response.status !== 503) {
     throw new Error(route.path + ' should reject anonymous access, received HTTP ' + response.status);
   }
 }

@@ -15,7 +15,7 @@ const updateProductSchema = z.object({
 
 export async function GET() {
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", products: [] });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();
@@ -61,7 +61,7 @@ export async function PATCH(request: Request) {
   }
 
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local" });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();
@@ -95,7 +95,7 @@ export async function PATCH(request: Request) {
 
   if (patch.stock !== undefined && patch.stock < (existingProduct.reserved_stock ?? 0)) {
     return NextResponse.json(
-      { ok: false, message: "?????????????????????" },
+      { ok: false, message: "Stock cannot be lower than reserved stock." },
       { status: 400 }
     );
   }

@@ -49,10 +49,6 @@ async function getCurrentUser() {
 export async function GET() {
   const current = await getCurrentUser();
   if (!current.user) {
-    if (current.mode === "local") {
-      return NextResponse.json({ ok: true, mode: "local", profile: null, address: null });
-    }
-
     return NextResponse.json(
       { ok: false, mode: "supabase", message: "Customer login is required.", profile: null, address: null },
       { status: 401 }

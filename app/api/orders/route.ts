@@ -115,7 +115,7 @@ async function saveCustomerCheckoutProfile(
 
 export async function GET() {
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", orders: [] });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const adminAccess = await requireAdminAccess();
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
   };
 
   if (!hasSupabaseServiceRoleConfig()) {
-    return NextResponse.json({ ok: true, mode: "local", order: localOrder });
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
   const attribution = trackOrderEventFields(request);
