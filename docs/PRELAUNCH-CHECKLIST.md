@@ -8,7 +8,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Required local environment variables can be checked without printing secrets by running `npm run env:check`.
 - Full local verification can be run with `npm run prelaunch:local` while the local server is running.
 - Local/production smoke checks are available with `npm run smoke` after a server is running. Use `SMOKE_BASE_URL=https://boxsofa.eu npm run smoke` for production.
-- Smoke checks verify public routes, private noindex pages, no-store private caching, health status, and protected admin/customer API routes reject anonymous requests.
+- Smoke checks verify public routes, sampled product SEO structured data, sampled admin section pages, mojibake prevention, private noindex pages, no-store private caching, health status, and protected admin/customer API routes reject anonymous requests.
 - Supabase is connected for orders, products, reviews, support chat, audit logs, notifications, and launch readiness.
 - Customer order APIs require customer login.
 - Admin APIs require merchant roles.
