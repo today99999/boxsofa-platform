@@ -29,12 +29,15 @@ const protectedApiChecks = [
   { path: '/api/customer/profile' },
 ];
 
+const mojibakePattern = /鍗|鍙|涓|缁|榫|娌|欏|彂|�/;
+
 async function checkPublicRoute(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
   if (!response.ok) throw new Error(route.path + ' returned HTTP ' + response.status);
   const frameHeader = response.headers.get('x-frame-options');
   if (frameHeader !== 'SAMEORIGIN') throw new Error(route.path + ' missing X-Frame-Options SAMEORIGIN');
   const text = await response.text();
+  if (mojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   for (const fragment of route.includes || []) {
     if (!text.includes(fragment)) throw new Error(route.path + ' missing expected text: ' + fragment);
   }
@@ -46,6 +49,7 @@ async function checkPrivateRoute(route) {
   const cacheControl = response.headers.get('cache-control') || '';
   if (!cacheControl.includes('no-store')) throw new Error(route.path + ' missing no-store cache header');
   const text = await response.text();
+  if (mojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   if (!/name="robots" content="noindex,\s*nofollow"/.test(text)) {
     throw new Error(route.path + ' missing noindex,nofollow metadata');
   }
