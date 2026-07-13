@@ -4,7 +4,10 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Returns and Warranty",
   description:
-    "BoxSofa returns and warranty information for compressed sofas before online payment launch."
+    "BoxSofa returns and warranty information for compressed sofas before online payment launch.",
+  alternates: {
+    canonical: "/returns"
+  }
 };
 
 export default function ReturnsPage() {

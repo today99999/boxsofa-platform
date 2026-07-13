@@ -4,7 +4,10 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "BoxSofa terms of service for pre-launch order confirmation, compressed sofa product information and seller-confirmed payment."
+    "BoxSofa terms of service for pre-launch order confirmation, compressed sofa product information and seller-confirmed payment.",
+  alternates: {
+    canonical: "/terms"
+  }
 };
 
 export default function TermsPage() {

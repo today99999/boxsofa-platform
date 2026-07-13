@@ -4,7 +4,10 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Shipping for Compressed Sofas",
   description:
-    "BoxSofa shipping information for compressed sofas in Europe, including free basic delivery, estimated cross-border delivery time and delivery preparation."
+    "BoxSofa shipping information for compressed sofas in Europe, including free basic delivery, estimated cross-border delivery time and delivery preparation.",
+  alternates: {
+    canonical: "/shipping"
+  }
 };
 
 export default function ShippingPage() {

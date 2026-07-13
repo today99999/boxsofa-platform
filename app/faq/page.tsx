@@ -4,7 +4,10 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Compressed Sofa FAQ",
   description:
-    "Frequently asked questions about BoxSofa compressed sofas, delivery, recovery time, payment confirmation and membership discount."
+    "Frequently asked questions about BoxSofa compressed sofas, delivery, recovery time, payment confirmation and membership discount.",
+  alternates: {
+    canonical: "/faq"
+  }
 };
 
 export default function FaqPage() {

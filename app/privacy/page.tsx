@@ -4,7 +4,10 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "BoxSofa privacy policy covering essential site operation, customer orders, support messages and optional analytics for GDPR-aware launch preparation."
+    "BoxSofa privacy policy covering essential site operation, customer orders, support messages and optional analytics for GDPR-aware launch preparation.",
+  alternates: {
+    canonical: "/privacy"
+  }
 };
 
 export default function PrivacyPage() {
