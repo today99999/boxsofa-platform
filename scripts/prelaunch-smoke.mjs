@@ -4,6 +4,11 @@ const publicChecks = [
   { path: '/', includes: ['BoxSofa'] },
   { path: '/category/all', includes: ['BoxSofa'] },
   { path: '/product/chameleon-mario-sofa-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
+  { path: '/product/single-029-fleece-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
+  { path: '/product/pebble-sofa-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
+  { path: '/product/waffle-sofa-04', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
+  { path: '/product/marshmallow-sofa-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
+  { path: '/product/cashew-sofa-01', includes: ['BoxSofa', 'application/ld+json', 'https://schema.org', 'Product'] },
   { path: '/shipping', includes: ['BoxSofa'] },
   { path: '/returns', includes: ['BoxSofa'] },
   { path: '/privacy', includes: ['BoxSofa'] },
@@ -18,6 +23,15 @@ const privateChecks = [
   { path: '/cart' },
   { path: '/orders' },
   { path: '/admin' },
+  { path: '/admin/launch' },
+  { path: '/admin/traffic' },
+  { path: '/admin/orders' },
+  { path: '/admin/products' },
+  { path: '/admin/reviews' },
+  { path: '/admin/customers' },
+  { path: '/admin/audit' },
+  { path: '/admin/notifications' },
+  { path: '/admin/support' },
 ];
 
 const protectedApiChecks = [
@@ -30,6 +44,7 @@ const protectedApiChecks = [
 ];
 
 const mojibakePattern = /鍗|鍙|涓|缁|榫|娌|欏|彂|�/;
+const stableMojibakePattern = /[\u934b\u934f\u6d93\u7f01\u6995\u6ccc\u6b0f\u5f42\ufffd]/;
 
 async function checkPublicRoute(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
@@ -37,7 +52,7 @@ async function checkPublicRoute(route) {
   const frameHeader = response.headers.get('x-frame-options');
   if (frameHeader !== 'SAMEORIGIN') throw new Error(route.path + ' missing X-Frame-Options SAMEORIGIN');
   const text = await response.text();
-  if (mojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
+  if (stableMojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   for (const fragment of route.includes || []) {
     if (!text.includes(fragment)) throw new Error(route.path + ' missing expected text: ' + fragment);
   }
@@ -49,7 +64,7 @@ async function checkPrivateRoute(route) {
   const cacheControl = response.headers.get('cache-control') || '';
   if (!cacheControl.includes('no-store')) throw new Error(route.path + ' missing no-store cache header');
   const text = await response.text();
-  if (mojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
+  if (stableMojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   if (!/name="robots" content="noindex,\s*nofollow"/.test(text)) {
     throw new Error(route.path + ' missing noindex,nofollow metadata');
   }
