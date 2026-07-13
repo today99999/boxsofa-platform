@@ -11,7 +11,8 @@
     "lint": "next lint",
     "smoke": "node scripts/prelaunch-smoke.mjs",
     "env:check": "node scripts/check-env.mjs",
-    "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke"
+    "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke",
+    "production:ready": "node scripts/production-readiness.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
