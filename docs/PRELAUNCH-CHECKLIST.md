@@ -20,6 +20,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 
 ## Before production launch
 
+- Follow `docs/PRODUCTION-SETUP.md` for Vercel project, production env vars, and domain binding.
 - Link this local folder to the Vercel project, because `.vercel/project.json` is not present yet.
   - Expected live preview domain: `boxsofa-platform.vercel.app`
   - Expected production domain: `boxsofa.eu`
