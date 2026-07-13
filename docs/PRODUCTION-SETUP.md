@@ -52,7 +52,8 @@ Current status on 2026-07-14:
 
 - Vercel production env has Supabase and NEXT_PUBLIC_SITE_URL configured.
 - Vercel production smoke passes on https://boxsofa-platform.vercel.app.
-- boxsofa.eu and www.boxsofa.eu are attached to the Vercel project but still need Cloudflare DNS changes.
+- boxsofa.eu and www.boxsofa.eu are attached to the Vercel project and verified by Vercel.
+- Production smoke passes on https://boxsofa.eu.
 - Email provider production env vars are still missing.
 
 ## Verification commands

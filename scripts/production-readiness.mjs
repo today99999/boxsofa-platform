@@ -19,7 +19,8 @@ if (health.paymentEnabled !== false) failures.push('Payment should stay disabled
 if (failures.length) {
   console.error('Production readiness is not complete for ' + baseUrl);
   for (const failure of failures) console.error('- ' + failure);
-  process.exit(1);
+  process.exitCode = 1;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+} else {
+  console.log('Production readiness passed for ' + baseUrl);
 }
-
-console.log('Production readiness passed for ' + baseUrl);
