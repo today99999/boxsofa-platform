@@ -556,65 +556,111 @@ alter table public.email_notifications enable row level security;
 alter table public.admin_audit_log enable row level security;
 
 drop policy if exists "public can read active styles" on public.product_styles;
-create policy "public can read active styles"
+drop policy if exists "product styles readable when active or admin" on public.product_styles;
+create policy "product styles readable when active or admin"
 on public.product_styles for select
 using (is_active = true or (select public.is_admin()));
 
 drop policy if exists "public can read active products" on public.products;
-create policy "public can read active products"
+drop policy if exists "products readable when active or admin" on public.products;
+create policy "products readable when active or admin"
 on public.products for select
 using (is_active = true or (select public.is_admin()));
 
 drop policy if exists "public can read active media" on public.product_media;
-create policy "public can read active media"
+drop policy if exists "product media readable when active or owner" on public.product_media;
+create policy "product media readable when active or owner"
 on public.product_media for select
-using (is_active = true);
+using (is_active = true or (select public.is_owner()));
 
 drop policy if exists "owners manage catalog styles" on public.product_styles;
-create policy "owners manage catalog styles"
-on public.product_styles for all
+drop policy if exists "owners insert product styles" on public.product_styles;
+create policy "owners insert product styles"
+on public.product_styles for insert
+with check ((select public.is_owner()));
+drop policy if exists "owners update product styles" on public.product_styles;
+create policy "owners update product styles"
+on public.product_styles for update
 using ((select public.is_owner()))
 with check ((select public.is_owner()));
+drop policy if exists "owners delete product styles" on public.product_styles;
+create policy "owners delete product styles"
+on public.product_styles for delete
+using ((select public.is_owner()));
 
 drop policy if exists "owners manage catalog products" on public.products;
-create policy "owners manage catalog products"
-on public.products for all
+drop policy if exists "owners insert products" on public.products;
+create policy "owners insert products"
+on public.products for insert
+with check ((select public.is_owner()));
+drop policy if exists "owners update products" on public.products;
+create policy "owners update products"
+on public.products for update
 using ((select public.is_owner()))
 with check ((select public.is_owner()));
+drop policy if exists "owners delete products" on public.products;
+create policy "owners delete products"
+on public.products for delete
+using ((select public.is_owner()));
 
 drop policy if exists "owners manage catalog media" on public.product_media;
-create policy "owners manage catalog media"
-on public.product_media for all
+drop policy if exists "owners insert product media" on public.product_media;
+create policy "owners insert product media"
+on public.product_media for insert
+with check ((select public.is_owner()));
+drop policy if exists "owners update product media" on public.product_media;
+create policy "owners update product media"
+on public.product_media for update
 using ((select public.is_owner()))
 with check ((select public.is_owner()));
+drop policy if exists "owners delete product media" on public.product_media;
+create policy "owners delete product media"
+on public.product_media for delete
+using ((select public.is_owner()));
 
 drop policy if exists "admins read inventory movements" on public.inventory_movements;
-create policy "admins read inventory movements"
+drop policy if exists "inventory movements readable by admin or owner" on public.inventory_movements;
+create policy "inventory movements readable by admin or owner"
 on public.inventory_movements for select
-using ((select public.is_admin()));
+using ((select public.is_admin()) or (select public.is_owner()));
 
 drop policy if exists "owners manage inventory movements" on public.inventory_movements;
-create policy "owners manage inventory movements"
-on public.inventory_movements for all
+drop policy if exists "owners insert inventory movements" on public.inventory_movements;
+create policy "owners insert inventory movements"
+on public.inventory_movements for insert
+with check ((select public.is_owner()));
+drop policy if exists "owners update inventory movements" on public.inventory_movements;
+create policy "owners update inventory movements"
+on public.inventory_movements for update
 using ((select public.is_owner()))
 with check ((select public.is_owner()));
+drop policy if exists "owners delete inventory movements" on public.inventory_movements;
+create policy "owners delete inventory movements"
+on public.inventory_movements for delete
+using ((select public.is_owner()));
 
 drop policy if exists "users read own profile" on public.profiles;
-create policy "users read own profile"
+drop policy if exists "profiles readable by owner admin or self" on public.profiles;
+create policy "profiles readable by owner admin or self"
 on public.profiles for select
-using (id = (select auth.uid()) or (select public.is_admin()));
+using (id = (select auth.uid()) or (select public.is_admin()) or (select public.is_owner()));
 
 drop policy if exists "users update own profile" on public.profiles;
-create policy "users update own profile"
+drop policy if exists "profiles updatable by owner or self" on public.profiles;
+create policy "profiles updatable by owner or self"
 on public.profiles for update
-using (id = (select auth.uid()))
-with check (id = (select auth.uid()));
+using (id = (select auth.uid()) or (select public.is_owner()))
+with check (id = (select auth.uid()) or (select public.is_owner()));
 
 drop policy if exists "owners manage profiles" on public.profiles;
-create policy "owners manage profiles"
-on public.profiles for all
-using ((select public.is_owner()))
+drop policy if exists "profiles insertable by owner" on public.profiles;
+create policy "profiles insertable by owner"
+on public.profiles for insert
 with check ((select public.is_owner()));
+drop policy if exists "profiles deletable by owner" on public.profiles;
+create policy "profiles deletable by owner"
+on public.profiles for delete
+using ((select public.is_owner()));
 
 drop policy if exists "users manage own addresses" on public.addresses;
 create policy "users manage own addresses"
@@ -623,14 +669,11 @@ using (customer_id = (select auth.uid()) or (select public.is_admin()))
 with check (customer_id = (select auth.uid()) or (select public.is_admin()));
 
 drop policy if exists "admins read orders" on public.orders;
-create policy "admins read orders"
-on public.orders for select
-using ((select public.is_admin()));
-
 drop policy if exists "customers read own orders" on public.orders;
-create policy "customers read own orders"
+drop policy if exists "orders readable by admin or customer" on public.orders;
+create policy "orders readable by admin or customer"
 on public.orders for select
-using (customer_id = (select auth.uid()));
+using ((select public.is_admin()) or customer_id = (select auth.uid()));
 
 drop policy if exists "admins update orders" on public.orders;
 create policy "admins update orders"
@@ -658,15 +701,13 @@ using ((select public.is_admin()))
 with check ((select public.is_admin()));
 
 drop policy if exists "admins manage shipments" on public.shipments;
-create policy "admins manage shipments"
-on public.shipments for all
-using ((select public.is_admin()))
-with check ((select public.is_admin()));
-
 drop policy if exists "customers read own shipments" on public.shipments;
-create policy "customers read own shipments"
+drop policy if exists "shipments readable by admin or customer" on public.shipments;
+create policy "shipments readable by admin or customer"
 on public.shipments for select
 using (
+  (select public.is_admin())
+  or
   exists (
     select 1
     from public.orders
@@ -674,22 +715,41 @@ using (
       and orders.customer_id = (select auth.uid())
   )
 );
-
-drop policy if exists "public read visible reviews" on public.product_reviews;
-create policy "public read visible reviews"
-on public.product_reviews for select
-using (is_visible = true and deleted_at is null);
-
-drop policy if exists "admins manage reviews" on public.product_reviews;
-create policy "admins manage reviews"
-on public.product_reviews for all
+drop policy if exists "admins insert shipments" on public.shipments;
+create policy "admins insert shipments"
+on public.shipments for insert
+with check ((select public.is_admin()));
+drop policy if exists "admins update shipments" on public.shipments;
+create policy "admins update shipments"
+on public.shipments for update
 using ((select public.is_admin()))
 with check ((select public.is_admin()));
+drop policy if exists "admins delete shipments" on public.shipments;
+create policy "admins delete shipments"
+on public.shipments for delete
+using ((select public.is_admin()));
 
+drop policy if exists "public read visible reviews" on public.product_reviews;
+drop policy if exists "reviews readable when visible or admin" on public.product_reviews;
+create policy "reviews readable when visible or admin"
+on public.product_reviews for select
+using ((is_visible = true and deleted_at is null) or (select public.is_admin()));
+
+drop policy if exists "admins manage reviews" on public.product_reviews;
 drop policy if exists "customers create own reviews" on public.product_reviews;
-create policy "customers create own reviews"
+drop policy if exists "reviews insertable by customer or admin" on public.product_reviews;
+create policy "reviews insertable by customer or admin"
 on public.product_reviews for insert
-with check (customer_id = (select auth.uid()));
+with check (customer_id = (select auth.uid()) or (select public.is_admin()));
+drop policy if exists "admins update reviews" on public.product_reviews;
+create policy "admins update reviews"
+on public.product_reviews for update
+using ((select public.is_admin()))
+with check ((select public.is_admin()));
+drop policy if exists "admins delete reviews" on public.product_reviews;
+create policy "admins delete reviews"
+on public.product_reviews for delete
+using ((select public.is_admin()));
 
 drop policy if exists "admins read analytics consents" on public.analytics_consents;
 create policy "admins read analytics consents"
@@ -749,10 +809,6 @@ begin
 end $$;
 
 drop policy if exists "admins read email notifications" on public.email_notifications;
-create policy "admins read email notifications"
-on public.email_notifications for select
-using ((select public.is_admin()));
-
 drop policy if exists "admins manage email notifications" on public.email_notifications;
 create policy "admins manage email notifications"
 on public.email_notifications for all

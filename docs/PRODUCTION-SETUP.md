@@ -54,6 +54,8 @@ Current status on 2026-07-14:
 - Vercel production smoke passes on https://boxsofa-platform.vercel.app.
 - boxsofa.eu and www.boxsofa.eu are attached to the Vercel project and verified by Vercel.
 - Production smoke passes on https://boxsofa.eu.
+- Supabase performance advisor has no WARN-level duplicate RLS policy findings; remaining performance findings are INFO-level unused indexes to review after real traffic.
+- Supabase security advisor still reports leaked password protection disabled in Auth settings.
 - Email provider production env vars are still missing.
 
 ## Verification commands
