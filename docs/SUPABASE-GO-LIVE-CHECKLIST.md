@@ -1,191 +1,203 @@
 # BoxSofa Supabase 上线配置清单
 
-这份清单用于把 BoxSofa 从本地原型切换到 Supabase PostgreSQL。当前代码已经支持未配置 Supabase 时自动回落到本地原型，但生产环境应以 Supabase 为准。
+这份清单用于把 BoxSofa 从本地原型切换到 Supabase PostgreSQL。生产环境应以 Supabase 为准；购物车、语言选择、Cookie 同意等前端状态仍可保留在浏览器本地。
 
 ## 1. Vercel 环境变量
 
-在 Vercel Project Settings -> Environment Variables 添加：
+生产环境必须配置：
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_SITE_URL=https://boxsofa.eu`
 
+邮件通知已配置：
+
+- `EMAIL_PROVIDER=resend`
+- `EMAIL_FROM=BoxSofa <orders@boxsofa.eu>`
+- `EMAIL_API_KEY`
+
 注意：
 
-- `SUPABASE_SERVICE_ROLE_KEY` 只能放在服务端环境变量，不要写入前端代码或公开文档。
-- 本地开发可放入 `.env.local`，不要提交到 GitHub。
+- `SUPABASE_SERVICE_ROLE_KEY` 只能放在服务端环境变量，不能写入前端代码或公开文档。
+- 支付仍保持关闭，Stripe 放在最后一步。
 
-当前状态：
+## 2. 数据库 Schema
 
-- 生产环境 Supabase 变量已配置。
-- 生产环境 `NEXT_PUBLIC_SITE_URL` 已配置为 `https://boxsofa.eu`。
+数据库已包含：
 
-## 2. 数据库 schema
+- 商品、款式、媒体、库存。
+- 订单、订单项、付款确认、物流。
+- 客户资料、地址、会员状态。
+- 商品评价。
+- 数据罗盘事件。
+- 客服聊天线程和消息。
+- 邮件通知队列。
+- 后台操作日志 `admin_audit_log`。
 
-在 Supabase SQL Editor 执行：
+关键安全要求：
 
-- `supabase/schema.sql`
+- 所有公开 schema 表启用 RLS。
+- 后台接口必须通过 `profiles.role` 判断权限。
+- 客户只能读取自己的订单、资料和评价权限范围内的数据。
+- 客服聊天的客户访问令牌只保存 SHA-256 hash。
 
-当前 schema 包含：
+## 3. 商家账号权限
 
-- 商品、订单、会员、评价、数据罗盘、客服聊天相关表
-- RLS 策略
-- 聊天表 realtime publication
-- 客服会话 `customer_access_token_hash`，用于保护客户聊天记录
-- 后台操作日志表 `admin_audit_log`
-
-## 3. 客服聊天落库与实时刷新
-
-客户前台提交在线客服时：
-
-- 写入 `chat_threads`
-- 写入 `chat_messages`
-- 服务端生成 `accessToken`
-- 数据库只保存 `accessToken` 的 SHA-256 hash
-
-客户继续留言或读取客服回复时：
-
-- 必须同时带 `threadId + accessToken`
-- 不能只靠 `threadId` 读取聊天内容
-
-商家后台：
-
-- 通过 `/api/admin/support` 读取全部会话
-- 通过 `/api/admin/support/[threadId]` 回复或关闭会话
-- 需要 Supabase 商家权限后才允许访问
-- 页面同时使用 realtime 订阅和 15 秒轮询兜底
-
-## 4. 商家账号权限
-
-后台 API 通过 `profiles.role` 判断权限。
-
-允许进入后台的角色：
+后台允许角色：
 
 - `owner`
 - `service`
 
-上线前需要：
+当前状态：
 
-1. 在 Supabase Auth 创建商家账号。
-2. 在 `profiles` 表中把对应用户的 `role` 设置为 `owner` 或 `service`。
-3. 用该账号登录后访问 `/admin`。
+- `owner@boxsofa.eu` 是正式老板账号，未禁用。
+- 自动测试账号 `seller-test@boxsofa.eu` 已禁用，保留审计引用。
 
-## 5. Supabase Auth 生产配置
+上线前必须确认：
 
-生产环境需要确认：
+1. 正式老板账号可登录。
+2. 登录后自动进入 `/admin`。
+3. 测试账号不能再登录。
+
+## 4. Supabase Auth 生产配置
+
+当前已确认：
 
 - Site URL: `https://boxsofa.eu`
-- Redirect URLs 至少包含生产域名和 Vercel 回退域名。
-- 客户账号登录后进入 `/orders`。
-- 商家账号登录后进入 `/admin`。
+- Redirect URLs:
+  - `https://boxsofa.eu/**`
+  - `https://www.boxsofa.eu/**`
+  - `https://boxsofa-platform.vercel.app/**`
+
+已知限制：
+
+- Supabase Security Advisor 仍提示 leaked password protection 未开启。
+- Supabase Dashboard 显示该功能需要 Pro Plan 或更高套餐。
+- 这是当前免费套餐限制，不是代码阻断。
+
+升级到 Pro 后处理：
+
+1. 进入 Supabase Dashboard -> Authentication -> Attack Protection。
+2. 打开 leaked password protection。
+3. 重新运行 Supabase Security Advisor。
+
+## 5. 客服聊天
+
+前台客户提交在线客服时：
+
+- 写入 `chat_threads`。
+- 写入 `chat_messages`。
+- 服务端生成客户访问 token。
+- 数据库只保存 token hash。
+
+后台客服工作台：
+
+- `/api/admin/support` 读取会话。
+- `/api/admin/support/[threadId]` 回复或关闭会话。
+- 使用 Supabase realtime 订阅，并保留 15 秒轮询兜底。
+
+上线前验证：
+
+1. 前台提交咨询后，后台出现待回复会话。
+2. 后台回复后，前台聊天窗口可看到回复。
+3. 关闭会话后状态变为 closed。
+
+## 6. 客户后台
+
+客户后台 `/orders` 支持：
+
+- 读取当前登录客户订单。
+- 保存客户姓名、电话、默认地址。
+- 显示会员进度和折扣状态。
+
+上线前验证：
+
+1. 客户邮箱登录后进入 `/orders`。
+2. 保存姓名、电话、地址后，Supabase 有对应记录。
+3. 登录状态下提交订单时，`orders.customer_id` 写入当前客户 ID。
+4. 客户只能看到自己的订单。
+
+## 7. 商品评价
+
+当前逻辑：
+
+- 未登录客户不能提交真实数据库评价。
+- 登录但未购买该商品的客户不能提交真实数据库评价。
+- 已确认付款、已发货或已完成订单中的商品可以评价。
+- 商家后台可以置顶或删除真实数据库评价。
+- 示例评价只用于前台展示，不参与后台操作。
 
 当前状态：
 
-- Supabase Auth URL Configuration 已确认：
-  - Site URL: `https://boxsofa.eu`
-  - Redirect URLs:
-    - `https://boxsofa.eu/**`
-    - `https://www.boxsofa.eu/**`
-    - `https://boxsofa-platform.vercel.app/**`
-- Supabase Auth 泄露密码保护暂时无法开启，因为当前 Supabase 组织是 Free 计划。后台明确提示 HaveIBeenPwned leaked password protection 需要 Pro Plan 或更高套餐。
+- 自动测试评价已清理。
+- 数据库真实评价当前为 0 条。
 
-升级到 Pro 后处理路径：
+## 8. 订单、邮件和测试数据清理
 
-1. Supabase Dashboard -> Authentication -> Attack Protection。
-2. 点击 Email provider 的 Configure。
-3. 打开 `Prevent use of leaked passwords`。
-4. 保存后重新运行 Supabase Security Advisor。
+2026-07-14 已清理：
 
-## 6. 上线前验证
+- 自动测试订单 `BX-48197139`。
+- 自动测试订单 `BX-60223689`。
+- 相关订单项、付款记录、物流记录、邮件通知、测试评价。
 
-至少验证以下流程：
+当前保留：
 
-- 前台提交客服咨询后，Supabase `chat_threads` 出现一条 open 会话。
-- Supabase `chat_messages` 出现客户消息。
-- 商家后台客服工作台出现待回复会话。
-- 商家回复后，前台聊天窗口能看到客服回复。
-- 关闭会话后，状态变为 closed。
-- 未配置 Supabase 环境变量时，本地原型仍然可用。
+- `BX-83704353`，邮箱 `240930747@qq.com`，状态为待确认付款。该订单看起来可能是人工测试或真实测试，暂不删除。
 
-## 7. 客户后台资料与默认地址
+当前测试账号状态：
 
-客户后台 `/orders` 已经支持读取和保存客户资料：
+- `buyer-test@boxsofa.eu` 已禁用到 2999-01-01。
+- `seller-test@boxsofa.eu` 已禁用到 2999-01-01。
 
-- `/api/customer/profile` `GET`：读取当前登录客户的 `profiles` 和默认 `addresses`。
-- `/api/customer/profile` `PUT`：保存客户姓名、电话、营销订阅和默认收货地址。
-- `/api/customer/orders`：读取当前登录客户名下的真实订单。
-- `/api/orders`：如果客户已通过 Supabase 登录，下单时会自动写入 `orders.customer_id`。
+## 9. 后台操作日志
 
-上线前需要验证：
+以下动作会写入 `admin_audit_log`：
 
-1. 客户邮箱登录后进入 `/orders`。
-2. 保存姓名、电话和地址后，Supabase `profiles` 与 `addresses` 有对应记录。
-3. 登录状态下提交新订单后，`orders.customer_id` 等于该客户的 `profiles.id`。
-4. 客户后台只能看到自己的订单，不能看到其他客户订单。
+- 订单状态更新、付款确认、物流单号录入。
+- 商品价格、库存、上架状态修改。
+- 评价置顶、取消置顶、删除。
+- 邮件通知发送、跳过、重新排队。
 
-## 8. 已购客户评价
+上线前验证：
 
-产品评价已经加上真实购买校验：
+1. 付款确认后出现订单操作日志。
+2. 修改库存或价格后出现商品操作日志。
+3. 管理评价后出现评价操作日志。
 
-- 本地原型模式：仍可提交本地评价，方便测试页面展示。
-- Supabase 模式：客户必须先登录，并且订单中购买过该产品，才可以提交评价。
-- 可评价订单状态：`paid_confirmed`、`processing`、`shipped`、`completed`。
-- 成功提交后会写入 `product_reviews.customer_id` 和对应 `order_id`。
-- 商家后台可置顶或删除评价。
+## 10. 已通过的生产验证
 
-上线前需要验证：
+当前已通过：
 
-1. 未登录客户提交评价时应被拦截。
-2. 登录但未购买该产品的客户应被拦截。
-3. 已确认付款或已发货订单里的商品可以提交评价。
-4. 商家后台可以看到该评价，并能置顶或删除。
+- `https://boxsofa.eu`
+- `https://www.boxsofa.eu`
+- 页面 smoke。
+- SEO audit。
+- API auth audit。
+- Production readiness。
+- Vercel 24 小时 runtime error 检查无错误。
+- Supabase security advisor 只有免费套餐限制项。
+- Supabase performance advisor 只有 INFO 级 unused index，等待真实流量后再评估。
 
-## 9. 后台操作审计
+标准验证命令：
 
-以下商家后台动作会写入 `admin_audit_log`：
+```powershell
+npm.cmd run production:verify
+```
 
-- 订单状态更新、付款确认、物流单号录入
-- 商品价格、库存、上架状态修改
-- 客户评价置顶、取消置顶、删除
+预期结果：
 
-审计记录包含：
-
-- 操作人 `actor_id`
-- 操作类型 `action`
-- 对象类型 `entity_type`
-- 对象 ID `entity_id`
-- 修改前数据 `before_data`
-- 修改后数据 `after_data`
-
-上线前需要验证：
-
-1. 商家确认付款后，`admin_audit_log` 出现 `order_update`。
-2. 商家修改库存后，出现 `product_update`。
-3. 商家置顶或删除评价后，出现 `review_pin_update` 或 `review_delete`。
-
-## 10. 当前生产状态
-
-2026-07-14 已确认：
-
-- Resend 域名 `boxsofa.eu` 已验证。
-- Vercel 已配置 `EMAIL_PROVIDER=resend`、`EMAIL_FROM=BoxSofa <orders@boxsofa.eu>`、`EMAIL_API_KEY`。
-- Supabase Auth Site URL 与 Redirect URLs 已配置到生产域名。
-- 生产验证账号已创建：
-  - 客户测试账号：`buyer-test@boxsofa.eu`
-  - 商家测试账号：`seller-test@boxsofa.eu`
-- 已触发 Vercel Production redeploy。
-- `npm.cmd run production:verify` 已通过。
-- `/api/health` 生产检查中 `emailProviderConfigured` 为 `true`。
-- `/api/health` 生产检查中 `paymentEnabled` 保持 `false`。
-- 客户测试账号可以登录生产站并进入 `/orders`。
-- 客户测试订单 `BX-48197139` 已成功提交，状态为 `pending_confirm`，付款状态为 `not_started`。
-- 客户后台可以看到该订单、待确认金额和会员进度。
-- 该订单已生成 `order_submitted` 邮件通知队列。
-- 商家后台邮件通知页可发送该通知；发送后状态为 `sent`，provider 为 `resend`，并写入 `admin_audit_log`。
+- smoke passed
+- SEO audit passed
+- API auth audit passed
+- production readiness passed
+- `paymentEnabled` 保持 `false`
 
 ## 11. 下一步
 
-- 完成生产环境商家订单确认、物流单号录入、评价、客服会话的端到端验证。
-- 全站可见文案和乱码最终清理。
-- 所有非支付项确认后，再进行 Stripe 支付接入。
+支付前剩余重点：
+
+1. 用正式老板账号再验证一次后台订单、商品、客服、评价、邮件通知。
+2. 清理或确认唯一保留的 QQ 邮箱订单。
+3. 全站可见文案最终检查。
+4. 最后再进入 Stripe 支付接入。
