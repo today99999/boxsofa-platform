@@ -9,6 +9,7 @@ export type ProductReview = {
   createdAt: string;
   pinned: boolean;
   deleted?: boolean;
+  source?: "seed" | "local" | "supabase";
 };
 
 export const REVIEWS_KEY = "boxsofa_product_reviews_v1";

@@ -15,7 +15,8 @@ type Props = {
   styleId: string;
 };
 
-type ReviewSubmitResponse = { ok: boolean; mode: "local" | "supabase"; message?: string };
+type ReviewSubmitResponse = { ok: boolean; mode: "local" | "supabase"; message?: string; review?: ProductReview };
+type ReviewListResponse = { ok: boolean; mode: "local" | "supabase"; message?: string; reviews?: ProductReview[] };
 
 function stars(rating: number) {
   return "★".repeat(rating) + "☆".repeat(Math.max(0, 5 - rating));
@@ -38,9 +39,31 @@ export function ProductReviews({ productSlug, styleId }: Props) {
     }
 
     syncReviews();
+    void loadServerReviews();
     window.addEventListener("boxsofa-reviews-updated", syncReviews);
     return () => window.removeEventListener("boxsofa-reviews-updated", syncReviews);
-  }, []);
+  }, [productSlug, styleId]);
+
+  async function loadServerReviews() {
+    try {
+      const response = await fetch(
+        `/api/reviews?productSlug=${encodeURIComponent(productSlug)}&styleId=${encodeURIComponent(styleId)}`
+      );
+      const result = (await response.json()) as ReviewListResponse;
+      if (!response.ok || !result.ok || !result.reviews) return;
+
+      setReviews((current) => {
+        const withoutServer = current.filter((review) => review.source !== "supabase");
+        const byId = new Map<string, ProductReview>();
+        [...result.reviews!, ...withoutServer].forEach((review) => byId.set(review.id, review));
+        const nextReviews = Array.from(byId.values());
+        saveStoredReviews(nextReviews);
+        return nextReviews;
+      });
+    } catch {
+      // Local seed reviews remain visible when the database cannot be reached.
+    }
+  }
 
   const visibleReviews = useMemo(() => visibleReviewsForStyle(reviews, styleId), [reviews, styleId]);
   const average = averageRating(visibleReviews);
@@ -69,10 +92,10 @@ export function ProductReviews({ productSlug, styleId }: Props) {
           ? "Thanks. Your review has been saved."
           : "Thanks. Your review has been added to the product page."
       );
-      return true;
+      return result.review ?? review;
     } catch {
       setMessage("Review could not be submitted.");
-      return false;
+      return null;
     }
   }
 
@@ -96,11 +119,11 @@ export function ProductReviews({ productSlug, styleId }: Props) {
       pinned: false
     };
 
-    const canShowReview = await syncReview(nextReview);
+    const savedReview = await syncReview(nextReview);
     setIsSubmitting(false);
-    if (!canShowReview) return;
+    if (!savedReview) return;
 
-    const nextReviews = [nextReview, ...reviews];
+    const nextReviews = [savedReview, ...reviews.filter((review) => review.id !== savedReview.id)];
     setReviews(nextReviews);
     saveStoredReviews(nextReviews);
     setCustomerName("");

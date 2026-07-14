@@ -52,6 +52,7 @@ type ProductListResponse = {
   products?: Array<{ productId: string; priceEur: number; stock: number; reservedStock: number; availableStock: number; active: boolean }>;
   message?: string;
 };
+type ReviewListResponse = { ok: boolean; mode: "local" | "supabase"; reviews?: ProductReview[]; message?: string };
 type ReviewUpdateResponse = { ok: boolean; mode: "local" | "supabase"; message?: string };
 type SupportListResponse = { ok: boolean; mode: "local" | "supabase"; threads?: ChatThread[]; message?: string };
 type SupportUpdateResponse = { ok: boolean; mode: "local" | "supabase"; message?: string };
@@ -311,7 +312,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     setProductDrafts(JSON.parse(localStorage.getItem(PRODUCT_DRAFTS_KEY) || "{}"));
     setAdSpend(JSON.parse(localStorage.getItem(AD_SPEND_KEY) || "{}"));
     setAnalyticsEvents(JSON.parse(localStorage.getItem(ANALYTICS_EVENTS_KEY) || "[]"));
-    setReviews(getStoredReviews());
+    void loadReviews();
     void loadProductDrafts();
     void loadSupportThreads();
     void loadAuditLogs();
@@ -741,6 +742,62 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     const next = { ...adSpend, [source]: value };
     setAdSpend(next);
     localStorage.setItem(AD_SPEND_KEY, JSON.stringify(next));
+  }
+
+  async function loadReviews() {
+    const localReviews = getStoredReviews().map((review) => ({
+      ...review,
+      source: review.source ?? ("seed" as const)
+    }));
+
+    try {
+      const response = await fetch("/api/admin/reviews");
+      const result = (await response.json()) as ReviewListResponse;
+      if (!response.ok || !result.ok || !result.reviews) {
+        setReviews(localReviews);
+        setReviewSyncMessage(result.message || "真实评价暂时无法读取，当前只显示示例评价。");
+        return;
+      }
+
+      const realIds = new Set(result.reviews.map((review) => review.id));
+      const readOnlyLocalReviews = localReviews.filter((review) => !realIds.has(review.id));
+      setReviews([...result.reviews, ...readOnlyLocalReviews]);
+      setReviewSyncMessage("真实评价已从 Supabase 读取；示例评价仅展示，不参与后台操作。");
+    } catch {
+      setReviews(localReviews);
+      setReviewSyncMessage("真实评价暂时无法读取，当前只显示示例评价。");
+    }
+  }
+
+  async function updateSupabaseReview(reviewId: string, patch: Partial<ProductReview>) {
+    const review = reviews.find((item) => item.id === reviewId);
+    if (!review || review.source !== "supabase") {
+      setReviewSyncMessage("示例评价只用于前台展示，不能在后台置顶或删除。");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/reviews/${encodeURIComponent(reviewId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pinned: patch.pinned,
+          deleted: patch.deleted
+        })
+      });
+      const result = (await response.json()) as ReviewUpdateResponse;
+      if (!response.ok || !result.ok) {
+        setReviewSyncMessage(result.message || "评价修改失败，数据库没有保存。");
+        return;
+      }
+
+      const next = reviews.map((item) => (item.id === reviewId ? { ...item, ...patch } : item));
+      setReviews(next);
+      saveStoredReviews(next);
+      setReviewSyncMessage(result.mode === "supabase" ? "评价修改已同步到 Supabase。" : "评价修改已保存。");
+    } catch {
+      setReviewSyncMessage("评价修改失败，数据库没有保存。");
+    }
   }
 
   async function syncReviewUpdate(reviewId: string, patch: Partial<ProductReview>) {
@@ -1743,18 +1800,25 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
                         <div className="admin-review-card" key={review.id}>
                           <div>
                             <strong>{review.customerName}</strong>
+                            <span className="status">{review.source === "supabase" ? "数据库评价" : "示例评价"}</span>
                             <span>{review.country} / {review.rating} 星 / {new Date(review.createdAt).toLocaleDateString("zh-CN")}</span>
                             <p>{review.comment}</p>
                           </div>
                           <div className="admin-actions">
                             <button
                               className={`button ${review.pinned ? "primary" : ""}`}
+                              disabled={review.source !== "supabase"}
                               type="button"
-                              onClick={() => updateReview(review.id, { pinned: !review.pinned })}
+                              onClick={() => updateSupabaseReview(review.id, { pinned: !review.pinned })}
                             >
                               {review.pinned ? "取消置顶" : "置顶"}
                             </button>
-                            <button className="button danger" type="button" onClick={() => updateReview(review.id, { deleted: true })}>
+                            <button
+                              className="button danger"
+                              disabled={review.source !== "supabase"}
+                              type="button"
+                              onClick={() => updateSupabaseReview(review.id, { deleted: true })}
+                            >
                               删除
                             </button>
                           </div>

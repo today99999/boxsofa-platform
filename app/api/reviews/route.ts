@@ -20,6 +20,89 @@ const createReviewSchema = z.object({
   locale: z.enum(["zh", "en", "es", "fr", "de"]).default("en")
 });
 
+function splitReviewBody(body: string) {
+  const [country, ...commentParts] = body.split("|").map((part) => part.trim());
+  return {
+    country: commentParts.length > 0 ? country : "",
+    comment: commentParts.length > 0 ? commentParts.join(" | ") : body
+  };
+}
+
+function mapReview(row: {
+  id: string;
+  customer_name: string;
+  rating: number;
+  body: string;
+  is_pinned: boolean;
+  is_visible: boolean;
+  created_at: string;
+  deleted_at: string | null;
+}, productSlug: string, styleId: string) {
+  const body = splitReviewBody(row.body);
+  return {
+    id: row.id,
+    styleId,
+    productSlug,
+    customerName: row.customer_name,
+    country: body.country,
+    rating: row.rating,
+    comment: body.comment,
+    createdAt: row.created_at,
+    pinned: row.is_pinned,
+    deleted: !row.is_visible || Boolean(row.deleted_at),
+    source: "supabase" as const
+  };
+}
+
+export async function GET(request: Request) {
+  if (!hasSupabaseServiceRoleConfig()) {
+    return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const productSlug = searchParams.get("productSlug")?.trim();
+  const styleId = searchParams.get("styleId")?.trim() || "";
+  if (!productSlug) {
+    return NextResponse.json({ ok: false, message: "Product slug is required." }, { status: 400 });
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id, style_id")
+    .eq("slug", productSlug)
+    .single();
+
+  if (productError || !product) {
+    return NextResponse.json(
+      { ok: false, message: "Product not found.", detail: productError?.message },
+      { status: 404 }
+    );
+  }
+
+  const { data: reviews, error: reviewsError } = await supabase
+    .from("product_reviews")
+    .select("id, customer_name, rating, body, is_pinned, is_visible, created_at, deleted_at")
+    .eq("style_id", product.style_id)
+    .eq("is_visible", true)
+    .is("deleted_at", null)
+    .order("is_pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (reviewsError) {
+    return NextResponse.json(
+      { ok: false, message: "Could not load reviews.", detail: reviewsError.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    mode: "supabase",
+    reviews: reviews.map((review) => mapReview(review, productSlug, styleId))
+  });
+}
+
 export async function POST(request: Request) {
   const rateLimit = checkRateLimit(request, { key: "reviews:create", limit: 20, windowMs: 10 * 60 * 1000 });
   if (!rateLimit.ok) {
@@ -91,18 +174,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error: reviewError } = await supabase.from("product_reviews").insert({
-    product_id: product.id,
-    style_id: product.style_id,
-    order_id: purchasedOrder.id,
-    customer_id: user.id,
-    customer_name: review.customerName,
-    rating: review.rating,
-    body: `${review.country} | ${review.comment}`,
-    locale: review.locale,
-    is_pinned: false,
-    is_visible: true
-  });
+  const { data: savedReview, error: reviewError } = await supabase
+    .from("product_reviews")
+    .insert({
+      product_id: product.id,
+      style_id: product.style_id,
+      order_id: purchasedOrder.id,
+      customer_id: user.id,
+      customer_name: review.customerName,
+      rating: review.rating,
+      body: `${review.country} | ${review.comment}`,
+      locale: review.locale,
+      is_pinned: false,
+      is_visible: true
+    })
+    .select("id, customer_name, rating, body, is_pinned, is_visible, created_at, deleted_at")
+    .single();
 
   if (reviewError) {
     return NextResponse.json(
@@ -111,5 +198,9 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, mode: "supabase" });
+  return NextResponse.json({
+    ok: true,
+    mode: "supabase",
+    review: mapReview(savedReview, review.productSlug, review.styleId)
+  });
 }
