@@ -22,6 +22,12 @@ function stars(rating: number) {
   return "★".repeat(rating) + "☆".repeat(Math.max(0, 5 - rating));
 }
 
+function reviewFingerprint(review: ProductReview) {
+  return [review.productSlug, review.customerName, review.country, review.rating, review.comment]
+    .map((part) => String(part).trim().toLowerCase())
+    .join("|");
+}
+
 export function ProductReviews({ productSlug, styleId }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -53,7 +59,10 @@ export function ProductReviews({ productSlug, styleId }: Props) {
       if (!response.ok || !result.ok || !result.reviews) return;
 
       setReviews((current) => {
-        const withoutServer = current.filter((review) => review.source !== "supabase");
+        const serverFingerprints = new Set(result.reviews!.map(reviewFingerprint));
+        const withoutServer = current.filter(
+          (review) => review.source !== "supabase" && !serverFingerprints.has(reviewFingerprint(review))
+        );
         const byId = new Map<string, ProductReview>();
         [...result.reviews!, ...withoutServer].forEach((review) => byId.set(review.id, review));
         const nextReviews = Array.from(byId.values());
@@ -123,7 +132,11 @@ export function ProductReviews({ productSlug, styleId }: Props) {
     setIsSubmitting(false);
     if (!savedReview) return;
 
-    const nextReviews = [savedReview, ...reviews.filter((review) => review.id !== savedReview.id)];
+    const savedFingerprint = reviewFingerprint(savedReview);
+    const nextReviews = [
+      savedReview,
+      ...reviews.filter((review) => review.id !== savedReview.id && reviewFingerprint(review) !== savedFingerprint)
+    ];
     setReviews(nextReviews);
     saveStoredReviews(nextReviews);
     setCustomerName("");

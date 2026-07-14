@@ -215,6 +215,12 @@ function labelSource(source: string) {
   return sourceLabels[source] ?? source;
 }
 
+function reviewFingerprint(review: ProductReview) {
+  return [review.productSlug, review.customerName, review.country, review.rating, review.comment]
+    .map((part) => String(part).trim().toLowerCase())
+    .join("|");
+}
+
 function inDateRange(date: string, range: DateRange) {
   if (range === "all") return true;
   const created = new Date(date).getTime();
@@ -760,7 +766,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       }
 
       const realIds = new Set(result.reviews.map((review) => review.id));
-      const readOnlyLocalReviews = localReviews.filter((review) => !realIds.has(review.id));
+      const realFingerprints = new Set(result.reviews.map(reviewFingerprint));
+      const readOnlyLocalReviews = localReviews.filter(
+        (review) => !realIds.has(review.id) && !realFingerprints.has(reviewFingerprint(review))
+      );
       setReviews([...result.reviews, ...readOnlyLocalReviews]);
       setReviewSyncMessage("真实评价已从 Supabase 读取；示例评价仅展示，不参与后台操作。");
     } catch {
