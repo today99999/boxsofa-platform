@@ -86,6 +86,7 @@ type EmailNotification = {
 };
 type EmailNotificationResponse = { ok: boolean; mode: "local" | "supabase"; notifications?: EmailNotification[]; message?: string };
 type EmailNotificationUpdateResponse = { ok: boolean; mode: "local" | "supabase"; notification?: EmailNotification; message?: string };
+type TestEmailResponse = { ok: boolean; provider?: string; message?: string };
 type ReadinessSummary = {
   customerProfiles: number;
   merchantProfiles: number;
@@ -267,6 +268,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const [notificationSyncMessage, setNotificationSyncMessage] = useState("");
   const [notificationStatusFilter, setNotificationStatusFilter] = useState<NotificationStatusFilter>("all");
   const [notificationActionStatus, setNotificationActionStatus] = useState<Record<string, "idle" | "saving" | "saved" | "error">>({});
+  const [testEmailStatus, setTestEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [readiness, setReadiness] = useState<ReadinessSummary | null>(null);
   const [readinessMode, setReadinessMode] = useState<"local" | "supabase" | null>(null);
   const [readinessMessage, setReadinessMessage] = useState("");
@@ -412,6 +414,28 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       setNotificationSyncMessage(result.mode === "supabase" ? "Email notification queue is connected to Supabase." : "Email notification queue will appear after Supabase is connected.");
     } catch {
       setNotificationSyncMessage("Email notification queue is temporarily unavailable.");
+    }
+  }
+
+  async function sendTestEmail() {
+    setTestEmailStatus("sending");
+    setNotificationSyncMessage("");
+
+    try {
+      const response = await fetch("/api/admin/notifications/test", { method: "POST" });
+      const result = (await response.json()) as TestEmailResponse;
+      if (!response.ok || !result.ok) {
+        setTestEmailStatus("error");
+        setNotificationSyncMessage(result.message || "Test email could not be sent.");
+        return;
+      }
+
+      setTestEmailStatus("sent");
+      setNotificationSyncMessage(result.message || "Test email sent.");
+      void loadAuditLogs();
+    } catch {
+      setTestEmailStatus("error");
+      setNotificationSyncMessage("Test email could not be sent.");
     }
   }
 
@@ -1977,9 +2001,19 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
                 <h2>Email notification queue</h2>
                 <p>Review order emails before we connect the real sending provider. New orders and order status changes are saved here first.</p>
               </div>
-              <button className="button" type="button" onClick={() => void loadEmailNotifications()}>
-                Refresh
-              </button>
+              <div className="panel-actions">
+                <button className="button" type="button" onClick={() => void loadEmailNotifications()}>
+                  Refresh
+                </button>
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={testEmailStatus === "sending"}
+                  onClick={() => void sendTestEmail()}
+                >
+                  {testEmailStatus === "sending" ? "Sending..." : "Send test email"}
+                </button>
+              </div>
             </div>
             {notificationSyncMessage ? <p className="admin-sync-note">{notificationSyncMessage}</p> : null}
             <div className="admin-mini-stats">

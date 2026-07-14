@@ -38,5 +38,5 @@ export async function requireAdminAccess() {
     return { ok: false as const, reason: "not_authorized" as const };
   }
 
-  return { ok: true as const, userId: user.id, role: profile.role as "owner" | "service" };
+  return { ok: true as const, userId: user.id, email: user.email ?? "", role: profile.role as "owner" | "service" };
 }

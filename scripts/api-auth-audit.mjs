@@ -9,6 +9,7 @@ const protectedChecks = [
   { method: 'GET', path: '/api/admin/readiness' },
   { method: 'GET', path: '/api/admin/audit' },
   { method: 'GET', path: '/api/admin/notifications' },
+  { method: 'POST', path: '/api/admin/notifications/test' },
   { method: 'PATCH', path: '/api/admin/notifications/test-notification-id', body: { action: 'requeue' } },
   { method: 'GET', path: '/api/admin/products' },
   { method: 'PATCH', path: '/api/admin/products', body: { productId: 'BS-TEST', stock: 1 } },

@@ -1108,6 +1108,14 @@ video {
   margin: 6px 0 0;
 }
 
+.panel-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .product-panel-actions {
   align-items: center;
   display: flex;
