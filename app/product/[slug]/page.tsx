@@ -47,7 +47,12 @@ function getColorOptionLabel(item: Product) {
     .trim() || item.color;
 }
 
+function isUnknownSpec(value: string) {
+  return !value.trim() || value.includes("待确认");
+}
+
 function formatWeight(weight: string) {
+  if (isUnknownSpec(weight)) return "";
   return /kg$/i.test(weight.trim()) ? weight : `${weight} KG`;
 }
 
@@ -116,15 +121,15 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
   const previousSku = siblings[(currentIndex - 1 + siblings.length) % siblings.length];
   const nextSku = siblings[(currentIndex + 1) % siblings.length];
   const specs = [
-    { key: "sku", label: "SKU", value: product.sku },
-    { key: "finished-size", label: <TranslatedText id="finishedSize" />, value: <CatalogText text={product.dimensions} kind="dimension" /> },
-    { key: "package-size", label: <TranslatedText id="packageSize" />, value: <CatalogText text={product.packageDimensions} kind="dimension" /> },
-    { key: "weight", label: <TranslatedText id="weight" />, value: formatWeight(product.weightKg) },
-    { key: "material", label: <TranslatedText id="material" />, value: <CatalogText text={product.material} kind="material" /> },
-    { key: "packaging", label: <TranslatedText id="packagingMethod" />, value: <CatalogText text={product.packagingMethod} kind="packaging" /> },
-    { key: "rebound", label: <TranslatedText id="reboundTime" />, value: <CatalogText text={product.reboundTime} kind="rebound" /> },
-    { key: "stock", label: <TranslatedText id="stock" />, value: <>{product.stock} <TranslatedText id="pieces" /></> }
-  ];
+    { key: "sku", label: "SKU", rawValue: product.sku, value: product.sku },
+    { key: "finished-size", label: <TranslatedText id="finishedSize" />, rawValue: product.dimensions, value: <CatalogText text={product.dimensions} kind="dimension" /> },
+    { key: "package-size", label: <TranslatedText id="packageSize" />, rawValue: product.packageDimensions, value: <CatalogText text={product.packageDimensions} kind="dimension" /> },
+    { key: "weight", label: <TranslatedText id="weight" />, rawValue: formatWeight(product.weightKg), value: formatWeight(product.weightKg) },
+    { key: "material", label: <TranslatedText id="material" />, rawValue: product.material, value: <CatalogText text={product.material} kind="material" /> },
+    { key: "packaging", label: <TranslatedText id="packagingMethod" />, rawValue: product.packagingMethod, value: <CatalogText text={product.packagingMethod} kind="packaging" /> },
+    { key: "rebound", label: <TranslatedText id="reboundTime" />, rawValue: product.reboundTime, value: <CatalogText text={product.reboundTime} kind="rebound" /> },
+    { key: "stock", label: <TranslatedText id="stock" />, rawValue: String(product.stock), value: <>{product.stock} <TranslatedText id="pieces" /></> }
+  ].filter((item) => !isUnknownSpec(item.rawValue));
 
   return (
     <>
