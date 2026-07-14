@@ -9,6 +9,8 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Full local verification can be run with `npm run prelaunch:local` while the local server is running.
 - Local/production smoke checks are available with `npm run smoke` after a server is running. Use `SMOKE_BASE_URL=https://boxsofa.eu npm run smoke` for production.
 - Smoke checks verify public routes, sampled product SEO structured data, sampled admin section pages, mojibake prevention, private noindex pages, no-store private caching, health status, and protected admin/customer API routes reject anonymous requests.
+- API permission checks are available with `npm run api:auth-audit`. Use `API_AUDIT_BASE_URL=https://boxsofa.eu npm run api:auth-audit` for production.
+- API permission checks verify anonymous visitors cannot access admin, customer profile, customer order, order-management, review-management, or notification-management endpoints.
 - Supabase is connected for orders, products, reviews, support chat, audit logs, notifications, and launch readiness.
 - Customer order APIs require customer login.
 - Admin APIs require merchant roles.
@@ -42,6 +44,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Confirm Vercel production domain points to `boxsofa.eu`.
 - Configure Cloudflare DNS for `boxsofa.eu` and `www.boxsofa.eu` as documented in `docs/PRODUCTION-SETUP.md`.
 - Run `SMOKE_BASE_URL=https://boxsofa.eu npm run smoke` after deployment.
+- Run `API_AUDIT_BASE_URL=https://boxsofa.eu npm run api:auth-audit` after deployment.
 - Run `PRODUCTION_BASE_URL=https://boxsofa.eu EXPECTED_SITE_URL=https://boxsofa.eu npm run production:ready` after production environment variables and domain are configured.
 - Open and verify these public pages in production:
   - `/`
