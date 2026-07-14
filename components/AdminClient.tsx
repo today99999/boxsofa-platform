@@ -1089,7 +1089,11 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const openSupportThreads = supportThreads.filter((thread) => thread.status === "open");
   const needsReplySupportThreads = openSupportThreads.filter((thread) => thread.messages.at(-1)?.sender === "customer");
   const closedSupportThreads = supportThreads.filter((thread) => thread.status === "closed");
-  const launchSupabaseConnected = readinessMode === "supabase" || Boolean(readiness);
+  const launchSupabaseConnected =
+    readinessMode === "supabase" ||
+    Boolean(readiness) ||
+    orderSource === "Supabase 数据库" ||
+    hasSupabaseBrowserConfig();
   const launchPendingOrderCount = readiness?.pendingOrders ?? pendingOrders.length;
   const launchLowStockCount = readiness?.lowStockProducts ?? lowStock.length;
   const launchNeedsReplyCount = readiness?.needsReplySupportThreads ?? needsReplySupportThreads.length;
