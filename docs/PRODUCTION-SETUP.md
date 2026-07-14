@@ -65,6 +65,7 @@ After Vercel env vars and domains are configured, redeploy production and run:
 ```powershell
 $env:SMOKE_BASE_URL='https://boxsofa.eu'; npm.cmd run smoke
 $env:PRODUCTION_BASE_URL='https://boxsofa.eu'; $env:EXPECTED_SITE_URL='https://boxsofa.eu'; npm.cmd run production:ready
+npm.cmd run production:verify
 ```
 
 Expected result before payment:

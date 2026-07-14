@@ -14,7 +14,8 @@
     "api:auth-audit": "node scripts/api-auth-audit.mjs",
     "env:check": "node scripts/check-env.mjs",
     "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke && npm run seo:audit && npm run api:auth-audit",
-    "production:ready": "node scripts/production-readiness.mjs"
+    "production:ready": "node scripts/production-readiness.mjs",
+    "production:verify": "node scripts/production-verify.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

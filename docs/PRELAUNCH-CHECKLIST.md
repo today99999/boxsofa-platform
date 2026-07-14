@@ -48,6 +48,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Run `SMOKE_BASE_URL=https://boxsofa.eu npm run smoke` after deployment.
 - Run `API_AUDIT_BASE_URL=https://boxsofa.eu npm run api:auth-audit` after deployment.
 - Run `PRODUCTION_BASE_URL=https://boxsofa.eu EXPECTED_SITE_URL=https://boxsofa.eu npm run production:ready` after production environment variables and domain are configured.
+- Run `npm run production:verify` for the full production gate across `boxsofa.eu`, `www.boxsofa.eu`, SEO, API permissions, and readiness.
 - Open and verify these public pages in production:
   - `/`
   - `/category/all`
