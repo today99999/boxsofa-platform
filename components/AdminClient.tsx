@@ -143,6 +143,11 @@ const adminSections: Array<{ id: AdminSection; label: string }> = [
   { id: "support", label: "客服聊天" }
 ];
 
+const adminSectionAliases: Record<string, AdminSection> = {
+  members: "customers",
+  "low-stock": "stock"
+};
+
 const sourceLabels: Record<string, string> = {
   tiktok: "TikTok",
   instagram: "Instagram",
@@ -302,7 +307,8 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     function syncSectionFromLocation() {
       const pathSection = window.location.pathname.split("/").filter(Boolean).at(1) || "";
       const hashSection = window.location.hash.replace("#", "");
-      const nextSection = pathSection || hashSection;
+      const rawSection = pathSection || hashSection;
+      const nextSection = adminSectionAliases[rawSection] ?? rawSection;
       if (adminSections.some((section) => section.id === nextSection)) {
         setActiveSection(nextSection as AdminSection);
       }
@@ -496,17 +502,17 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       const response = await fetch("/api/admin/support");
       const result = (await response.json()) as SupportListResponse;
       if (!response.ok || !result.ok) {
-        setSupportSyncMessage(result.message || "客服会话暂时使用本地原型数据。");
+        setSupportSyncMessage(result.message || "客服会话暂时不可用，请稍后刷新。");
         return;
       }
       if (result.mode === "supabase") {
         setSupportThreads(result.threads ?? []);
         setSupportSyncMessage("客服会话已连接 Supabase。");
       } else {
-        setSupportSyncMessage("客服会话当前使用本地原型数据。");
+        setSupportSyncMessage("客服会话需要 Supabase 后显示。");
       }
     } catch {
-      setSupportSyncMessage("客服会话暂时使用本地原型数据。");
+      setSupportSyncMessage("客服会话暂时不可用，请稍后刷新。");
     }
   }
 
@@ -867,7 +873,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
         setSupportSyncMessage(result.message || "客服会话已保存在本地，但暂时没有同步到服务端。");
         return;
       }
-      setSupportSyncMessage(result.mode === "supabase" ? "客服会话已同步到 Supabase。" : "客服会话已保存在本地原型。");
+      setSupportSyncMessage(result.mode === "supabase" ? "客服会话已同步到 Supabase。" : "客服会话已保存，等待服务端同步。");
       if (result.mode === "supabase") void loadSupportThreads();
     } catch {
       setSupportSyncMessage("客服会话已保存在本地，但暂时没有同步到服务端。");
@@ -1080,6 +1086,9 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const openSupportThreads = supportThreads.filter((thread) => thread.status === "open");
   const needsReplySupportThreads = openSupportThreads.filter((thread) => thread.messages.at(-1)?.sender === "customer");
   const closedSupportThreads = supportThreads.filter((thread) => thread.status === "closed");
+  const launchPendingOrderCount = readiness?.pendingOrders ?? pendingOrders.length;
+  const launchLowStockCount = readiness?.lowStockProducts ?? lowStock.length;
+  const launchNeedsReplyCount = readiness?.needsReplySupportThreads ?? needsReplySupportThreads.length;
   const launchChecks = [
     {
       label: "买家测试账号",
@@ -1127,21 +1136,21 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     },
     {
       label: "待确认付款订单",
-      value: `${pendingOrders.length} 单`,
-      tone: pendingOrders.length === 0 ? "ready" : "warning",
-      detail: pendingOrders.length === 0 ? "没有积压的待确认付款订单。" : "上线前请确认这些订单是否已付款或需要取消。"
+      value: `${launchPendingOrderCount} 单`,
+      tone: launchPendingOrderCount === 0 ? "ready" : "warning",
+      detail: launchPendingOrderCount === 0 ? "没有积压的待确认付款订单。" : "上线前请确认这些订单是否已付款或需要取消。"
     },
     {
       label: "低库存 SKU",
-      value: `${lowStock.length} 个`,
-      tone: lowStock.length === 0 ? "ready" : "warning",
-      detail: lowStock.length === 0 ? "当前没有低库存提醒。" : "需要检查库存数量，避免广告引流后售空。"
+      value: `${launchLowStockCount} 个`,
+      tone: launchLowStockCount === 0 ? "ready" : "warning",
+      detail: launchLowStockCount === 0 ? "当前没有低库存提醒。" : "需要检查库存数量，避免广告引流后售空。"
     },
     {
       label: "客服待回复",
-      value: `${needsReplySupportThreads.length} 条`,
-      tone: needsReplySupportThreads.length === 0 ? "ready" : "warning",
-      detail: needsReplySupportThreads.length === 0 ? "当前没有待回复客户会话。" : "上线前建议先回复客户咨询。"
+      value: `${launchNeedsReplyCount} 条`,
+      tone: launchNeedsReplyCount === 0 ? "ready" : "warning",
+      detail: launchNeedsReplyCount === 0 ? "当前没有待回复客户会话。" : "上线前建议先回复客户咨询。"
     },
     {
       label: "邮件通知队列",
@@ -2076,7 +2085,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
             <div className="panel-head">
               <div>
                 <h2>客服聊天工作台</h2>
-                <p>先使用本地原型会话，后续接入 Supabase 后可升级为实时客服与历史记录。</p>
+                <p>客服会话已接入 Supabase，可查看客户留言、快捷回复、关闭会话并保留历史记录。</p>
               </div>
               <span className="status">{needsReplySupportThreads.length} 个待回复</span>
             </div>
