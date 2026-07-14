@@ -417,7 +417,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
 
   async function loadReadiness() {
     try {
-      const response = await fetch("/api/admin/readiness");
+      const response = await fetch("/api/admin/launch-status");
       const result = (await response.json()) as ReadinessResponse;
       if (!response.ok || !result.ok) {
         setReadinessMessage(result.message || "上线检查暂时不可用。");
