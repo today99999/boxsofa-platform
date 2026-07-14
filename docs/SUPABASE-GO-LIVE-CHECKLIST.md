@@ -74,7 +74,8 @@
 
 - Supabase Security Advisor 仍提示 leaked password protection 未开启。
 - Supabase Dashboard 显示该功能需要 Pro Plan 或更高套餐。
-- 这是当前免费套餐限制，不是代码阻断。
+- 这是当前免费套餐限制，不是代码阻断；当前未接真实支付，可以作为已知风险暂缓处理。
+- 接入 Stripe 真实支付、稳定销售后，或增加多人后台账号前，再升级套餐并开启。
 
 升级到 Pro 后处理：
 

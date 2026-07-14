@@ -1138,9 +1138,9 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     },
     {
       label: "Supabase 密码保护",
-      value: "需在控制台开启",
+      value: "后续开启",
       tone: "paused",
-      detail: "安全 advisor 只剩泄露密码保护未开启，需要在 Supabase Auth 设置中打开。"
+      detail: "免费套餐暂不启用泄露密码保护；接入真实支付或稳定销售后升级 Supabase 并开启。"
     },
     {
       label: "待确认付款订单",

@@ -55,7 +55,7 @@ Current status on 2026-07-14:
 - boxsofa.eu and www.boxsofa.eu are attached to the Vercel project and verified by Vercel.
 - Production smoke passes on https://boxsofa.eu.
 - Supabase performance advisor has no WARN-level duplicate RLS policy findings; remaining performance findings are INFO-level unused indexes to review after real traffic.
-- Supabase security advisor still reports leaked password protection disabled in Auth settings. Supabase dashboard confirmed this setting requires Pro Plan or higher.
+- Supabase security advisor still reports leaked password protection disabled in Auth settings. This requires Pro Plan or higher and is intentionally deferred until stable sales or the final real-payment phase.
 - Resend domain `boxsofa.eu` is verified.
 - Vercel production env has `EMAIL_PROVIDER=resend`, `EMAIL_FROM=BoxSofa <orders@boxsofa.eu>`, and `EMAIL_API_KEY` configured.
 - Production redeploy after email env setup is ready.

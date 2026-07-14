@@ -28,7 +28,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Link this local folder to the Vercel project, because `.vercel/project.json` is not present yet.
   - Expected live preview domain: `boxsofa-platform.vercel.app`
   - Expected production domain: `boxsofa.eu`
-- Enable Supabase Auth leaked password protection after upgrading Supabase to Pro Plan or higher. The dashboard currently blocks this setting on the Free plan.
+- Supabase Auth leaked password protection can remain disabled on the Free plan for the pre-payment launch. Record it as a known limitation, then enable it after stable sales or before real Stripe payments require the higher Supabase plan.
 - Confirm production environment variables in Vercel:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
