@@ -268,6 +268,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const [notificationStatusFilter, setNotificationStatusFilter] = useState<NotificationStatusFilter>("all");
   const [notificationActionStatus, setNotificationActionStatus] = useState<Record<string, "idle" | "saving" | "saved" | "error">>({});
   const [readiness, setReadiness] = useState<ReadinessSummary | null>(null);
+  const [readinessMode, setReadinessMode] = useState<"local" | "supabase" | null>(null);
   const [readinessMessage, setReadinessMessage] = useState("");
   const [testCustomerStatus, setTestCustomerStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [testCustomerCredentials, setTestCustomerCredentials] = useState<{ email: string; password?: string; message: string } | null>(null);
@@ -423,8 +424,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
         return;
       }
       setReadiness(result.readiness ?? null);
+      setReadinessMode(result.mode);
       setReadinessMessage(result.mode === "supabase" ? "上线检查已连接 Supabase 真实数据。" : "上线检查当前使用本地原型数据。");
     } catch {
+      setReadinessMode(null);
       setReadinessMessage("上线检查暂时不可用。");
     }
   }
@@ -1086,6 +1089,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const openSupportThreads = supportThreads.filter((thread) => thread.status === "open");
   const needsReplySupportThreads = openSupportThreads.filter((thread) => thread.messages.at(-1)?.sender === "customer");
   const closedSupportThreads = supportThreads.filter((thread) => thread.status === "closed");
+  const launchSupabaseConnected = readinessMode === "supabase" || Boolean(readiness);
   const launchPendingOrderCount = readiness?.pendingOrders ?? pendingOrders.length;
   const launchLowStockCount = readiness?.lowStockProducts ?? lowStock.length;
   const launchNeedsReplyCount = readiness?.needsReplySupportThreads ?? needsReplySupportThreads.length;
@@ -1118,9 +1122,9 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     },
     {
       label: "Supabase 连接",
-      value: orderSource === "Supabase 数据库" ? "已连接" : "需确认",
-      tone: orderSource === "Supabase 数据库" ? "ready" : "warning",
-      detail: orderSource === "Supabase 数据库" ? "订单、库存和后台操作正在使用真实数据库。" : "当前仍在使用本地原型数据，不能作为正式上线状态。"
+      value: launchSupabaseConnected ? "已连接" : "需确认",
+      tone: launchSupabaseConnected ? "ready" : "warning",
+      detail: launchSupabaseConnected ? "上线检查、订单、库存、客服和操作日志正在读取 Supabase。" : "暂时无法读取 Supabase 上线检查数据，请刷新后重试。"
     },
     {
       label: "政策页面",
