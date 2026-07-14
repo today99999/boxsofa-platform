@@ -37,7 +37,9 @@ export function LoginClient() {
   const { t } = useTranslation();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const loginRole = getLoginRole(account);
   const normalizedPreviewAccount = account.trim();
@@ -69,6 +71,46 @@ export function LoginClient() {
 
     const normalizedAccount = account.trim();
     const canUseSupabase = hasSupabaseBrowserConfig() && normalizedAccount.includes("@");
+
+    if (mode === "register") {
+      if (!canUseSupabase) {
+        setLoginMessage("Please use an email address to create a customer account.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const supabase = createSupabaseBrowserClient();
+      const { data, error } =
+        supabase
+          ? await supabase.auth.signUp({
+              email: normalizedAccount,
+              password,
+              options: {
+                data: {
+                  full_name: fullName.trim()
+                },
+                emailRedirectTo: `${window.location.origin}/login`
+              }
+            })
+          : { data: null, error: new Error("Supabase is not configured.") };
+
+      if (error) {
+        setLoginMessage(error.message || "Could not create the customer account.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (data?.session) {
+        saveSession({ account: normalizedAccount, role: "customer", source: "supabase" });
+        window.location.href = "/orders";
+        return;
+      }
+
+      setLoginMessage("Customer account created. Please check your email to confirm the account before signing in.");
+      setMode("login");
+      setIsSubmitting(false);
+      return;
+    }
 
     if (canUseSupabase) {
       const supabase = createSupabaseBrowserClient();
@@ -110,6 +152,28 @@ export function LoginClient() {
 
   return (
     <form className="panel login-form" onSubmit={handleSubmit}>
+      <div className="login-mode-toggle" aria-label="Customer account mode">
+        <button
+          className={mode === "login" ? "active" : ""}
+          onClick={() => {
+            setMode("login");
+            setLoginMessage("");
+          }}
+          type="button"
+        >
+          Sign in
+        </button>
+        <button
+          className={mode === "register" ? "active" : ""}
+          onClick={() => {
+            setMode("register");
+            setLoginMessage("");
+          }}
+          type="button"
+        >
+          Create account
+        </button>
+      </div>
       <label>
         {t("account")}
         <input
@@ -120,10 +184,22 @@ export function LoginClient() {
           value={account}
         />
       </label>
+      {mode === "register" ? (
+        <label>
+          Full name
+          <input
+            autoComplete="name"
+            name="fullName"
+            onChange={(event) => setFullName(event.target.value)}
+            placeholder="Your name"
+            value={fullName}
+          />
+        </label>
+      ) : null}
       <label>
         {t("password")}
         <input
-          autoComplete="current-password"
+          autoComplete={mode === "register" ? "new-password" : "current-password"}
           name="password"
           onChange={(event) => setPassword(event.target.value)}
           placeholder={t("passwordPlaceholder")}
@@ -131,24 +207,33 @@ export function LoginClient() {
           value={password}
         />
       </label>
-      <div className="login-role-preview">
-        <span>{t("loginRolePreview")}</span>
-        <strong>
-          {isEmailAccount
-            ? "Route by account role"
-            : loginRole === "merchant"
-              ? t("loginAsMerchant")
-              : t("loginAsCustomer")}
-        </strong>
-      </div>
+      {mode === "login" ? (
+        <div className="login-role-preview">
+          <span>{t("loginRolePreview")}</span>
+          <strong>
+            {isEmailAccount
+              ? "Route by account role"
+              : loginRole === "merchant"
+                ? t("loginAsMerchant")
+                : t("loginAsCustomer")}
+          </strong>
+        </div>
+      ) : (
+        <div className="login-role-preview">
+          <span>Account type</span>
+          <strong>Customer account</strong>
+        </div>
+      )}
       <button className="button primary" disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Logging in..." : t("login")}
+        {isSubmitting ? (mode === "register" ? "Creating account..." : "Logging in...") : mode === "register" ? "Create customer account" : t("login")}
       </button>
       {loginMessage ? <p className="login-note">{loginMessage}</p> : null}
       <p className="login-note">
-        {localAuthEnabled
-          ? "Email accounts use Supabase roles: owner/service opens the seller dashboard, customer opens the customer dashboard. Local shortcut login is enabled only for development."
-          : "Use your BoxSofa email account. Seller or customer access is decided by the account role."}
+        {mode === "register"
+          ? "Create account is for customers only. Seller dashboard access is assigned separately by BoxSofa."
+          : localAuthEnabled
+            ? "Email accounts use Supabase roles: owner/service opens the seller dashboard, customer opens the customer dashboard. Local shortcut login is enabled only for development."
+            : "Use your BoxSofa email account. Seller or customer access is decided by the account role."}
       </p>
     </form>
   );

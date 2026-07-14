@@ -246,6 +246,34 @@ video {
   margin-bottom: 0;
 }
 
+.login-mode-toggle {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  padding: 5px;
+}
+
+.login-mode-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  min-height: 40px;
+  padding: 9px 10px;
+}
+
+.login-mode-toggle button.active {
+  background: var(--surface);
+  box-shadow: 0 1px 0 rgba(24, 33, 29, 0.06);
+  color: var(--ink);
+}
+
 .login-form label {
   color: var(--muted);
   display: grid;
