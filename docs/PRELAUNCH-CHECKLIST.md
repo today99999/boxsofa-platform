@@ -28,8 +28,8 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Link this local folder to the Vercel project, because `.vercel/project.json` is not present yet.
   - Expected live preview domain: `boxsofa-platform.vercel.app`
   - Expected production domain: `boxsofa.eu`
-- Enable Supabase Auth leaked password protection in the Supabase dashboard.
-- Add production environment variables in Vercel:
+- Enable Supabase Auth leaked password protection after upgrading Supabase to Pro Plan or higher. The dashboard currently blocks this setting on the Free plan.
+- Confirm production environment variables in Vercel:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
@@ -76,7 +76,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Verify email queue:
   - Order confirmation event creates a queued notification.
   - Payment/shipping changes create queued notifications.
-  - Production email provider can send a test message.
+  - Production email provider is configured with Resend and can send a test message.
 - Verify production health endpoint:
   - `/api/health` returns `ok: true`.
   - `siteUrl` is `https://boxsofa.eu`.
