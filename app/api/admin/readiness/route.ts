@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { hasEmailProviderConfig } from "@/lib/server/email-provider";
+import { getEmailProviderStatus, hasEmailProviderConfig } from "@/lib/server/email-provider";
 import { requireAdminAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
@@ -24,6 +24,7 @@ export async function GET() {
   }
 
   const supabase = createSupabaseServiceRoleClient();
+  const emailProviderStatus = getEmailProviderStatus();
 
   try {
     const [
@@ -58,7 +59,9 @@ export async function GET() {
         needsReplySupportThreads: openSupportThreads,
         customerOrdersProtected: true,
         adminApisProtected: true,
-        emailProviderConfigured: hasEmailProviderConfig()
+        emailProviderConfigured: hasEmailProviderConfig(),
+        emailProviderStatus,
+        emailProviderIssues: emailProviderStatus.issues
       }
     });
   } catch (error) {

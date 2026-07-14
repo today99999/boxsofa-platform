@@ -24,8 +24,8 @@ Required before real production use:
 Recommended before customer launch:
 
 - EMAIL_PROVIDER=resend
-- EMAIL_FROM
-- EMAIL_API_KEY
+- EMAIL_FROM as a verified sender address, for example `BoxSofa <orders@boxsofa.eu>`
+- EMAIL_API_KEY from Resend
 
 Keep payment disabled until the final Stripe step.
 

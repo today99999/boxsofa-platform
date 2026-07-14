@@ -36,6 +36,16 @@ const recommendedBeforeLaunch = [
 
 const missingRequired = required.filter((name) => !getEnv(name));
 const missingRecommended = recommendedBeforeLaunch.filter((name) => !getEnv(name));
+const emailProvider = getEnv('EMAIL_PROVIDER').trim().toLowerCase();
+const emailFrom = getEnv('EMAIL_FROM').trim();
+const emailApiKey = getEnv('EMAIL_API_KEY').trim();
+const emailIssues = [];
+
+function isLikelyEmailAddress(value) {
+  const emailMatch = value.match(/<([^>]+)>$/);
+  const email = (emailMatch?.[1] || value).trim();
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
 
 if (missingRequired.length) {
   console.error('Missing required environment variable names: ' + missingRequired.join(', '));
@@ -46,7 +56,21 @@ console.log('Required environment variables are present: ' + required.join(', ')
 if (missingRecommended.length) {
   console.warn('Recommended before launch, currently missing: ' + missingRecommended.join(', '));
 } else {
-  console.log('Email provider environment variables are present.');
+  if (emailProvider !== 'resend') {
+    emailIssues.push('EMAIL_PROVIDER must be resend. Current value: ' + emailProvider);
+  }
+  if (!isLikelyEmailAddress(emailFrom)) {
+    emailIssues.push('EMAIL_FROM must be a valid email address or Sender <email@example.com> value.');
+  }
+  if (emailApiKey.length < 20) {
+    emailIssues.push('EMAIL_API_KEY looks too short.');
+  }
+
+  if (emailIssues.length) {
+    console.warn('Email provider variables are present but need review: ' + emailIssues.join(' '));
+  } else {
+    console.log('Email provider environment variables look ready.');
+  }
 }
 
 const siteUrl = getEnv('NEXT_PUBLIC_SITE_URL');

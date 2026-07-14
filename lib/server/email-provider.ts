@@ -11,8 +11,51 @@ type EmailSendResult = {
   error?: string;
 };
 
+type EmailProviderStatus = {
+  configured: boolean;
+  provider: string;
+  issues: string[];
+};
+
+function isLikelyEmailAddress(value: string) {
+  const emailMatch = value.match(/<([^>]+)>$/);
+  const email = (emailMatch?.[1] || value).trim();
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
+
+export function getEmailProviderStatus(): EmailProviderStatus {
+  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "";
+  const from = process.env.EMAIL_FROM?.trim() || "";
+  const apiKey = process.env.EMAIL_API_KEY?.trim() || "";
+  const issues: string[] = [];
+
+  if (!provider) {
+    issues.push("EMAIL_PROVIDER is missing.");
+  } else if (provider !== "resend") {
+    issues.push(`EMAIL_PROVIDER must be resend. Current value: ${provider}.`);
+  }
+
+  if (!from) {
+    issues.push("EMAIL_FROM is missing.");
+  } else if (!isLikelyEmailAddress(from)) {
+    issues.push("EMAIL_FROM must be a valid email address or Sender <email@example.com> value.");
+  }
+
+  if (!apiKey) {
+    issues.push("EMAIL_API_KEY is missing.");
+  } else if (apiKey.length < 20) {
+    issues.push("EMAIL_API_KEY looks too short.");
+  }
+
+  return {
+    configured: issues.length === 0,
+    provider: provider || "not_configured",
+    issues
+  };
+}
+
 export function hasEmailProviderConfig() {
-  return Boolean(process.env.EMAIL_PROVIDER && process.env.EMAIL_FROM && process.env.EMAIL_API_KEY);
+  return getEmailProviderStatus().configured;
 }
 
 export async function sendTransactionalEmail(input: EmailSendInput): Promise<EmailSendResult> {

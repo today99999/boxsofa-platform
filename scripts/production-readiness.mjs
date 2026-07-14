@@ -13,7 +13,12 @@ if (health.ok !== true) failures.push('health.ok is not true');
 if (health.service !== 'boxsofa-platform') failures.push('unexpected service name');
 if (health.siteUrl !== expectedSiteUrl) failures.push('NEXT_PUBLIC_SITE_URL should be ' + expectedSiteUrl + ', received ' + health.siteUrl);
 if (health.supabaseConfigured !== true) failures.push('Supabase production environment variables are missing');
-if (health.emailProviderConfigured !== true) failures.push('Email provider production environment variables are missing');
+if (health.emailProviderConfigured !== true) {
+  const emailIssues = Array.isArray(health.emailProviderStatus?.issues) && health.emailProviderStatus.issues.length
+    ? health.emailProviderStatus.issues.join(' ')
+    : 'Email provider production environment variables are missing or invalid';
+  failures.push(emailIssues);
+}
 if (health.paymentEnabled !== false) failures.push('Payment should stay disabled before the final Stripe step');
 
 if (failures.length) {

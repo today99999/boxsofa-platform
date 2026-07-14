@@ -97,6 +97,12 @@ type ReadinessSummary = {
   customerOrdersProtected: boolean;
   adminApisProtected: boolean;
   emailProviderConfigured: boolean;
+  emailProviderStatus?: {
+    configured: boolean;
+    provider: string;
+    issues: string[];
+  };
+  emailProviderIssues?: string[];
 };
 type ReadinessResponse = { ok: boolean; mode: "local" | "supabase"; readiness?: ReadinessSummary; message?: string };
 type TestCustomerResponse = {

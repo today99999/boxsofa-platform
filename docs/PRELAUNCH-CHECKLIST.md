@@ -34,13 +34,13 @@ This checklist tracks the work that must be stable before Stripe or any real onl
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `NEXT_PUBLIC_SITE_URL=https://boxsofa.eu`
-  - `EMAIL_PROVIDER`
-  - `EMAIL_FROM`
-  - `EMAIL_API_KEY`
+  - `EMAIL_PROVIDER=resend`
+  - `EMAIL_FROM` as a verified sender address, for example `BoxSofa <orders@boxsofa.eu>`
+  - `EMAIL_API_KEY` from Resend
   - Current supported email provider value: `resend`
 - Add local variables before final local verification:
   - `NEXT_PUBLIC_SITE_URL`
-  - `EMAIL_PROVIDER`
+  - `EMAIL_PROVIDER=resend`
   - `EMAIL_FROM`
   - `EMAIL_API_KEY`
 - Confirm Vercel production domain points to `boxsofa.eu`.
