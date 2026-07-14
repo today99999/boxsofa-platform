@@ -450,10 +450,15 @@ drop trigger if exists set_email_notifications_updated_at on public.email_notifi
 create trigger set_email_notifications_updated_at before update on public.email_notifications
 for each row execute function public.set_updated_at();
 
-create or replace function public.is_admin()
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to anon, authenticated, service_role;
+
+create or replace function private.is_admin()
 returns boolean
 language sql
 stable
+security definer
 set search_path = public, pg_temp
 as $$
   select exists (
@@ -464,10 +469,11 @@ as $$
   );
 $$;
 
-create or replace function public.is_owner()
+create or replace function private.is_owner()
 returns boolean
 language sql
 stable
+security definer
 set search_path = public, pg_temp
 as $$
   select exists (
@@ -476,6 +482,29 @@ as $$
     where id = auth.uid()
       and role = 'owner'
   );
+$$;
+
+revoke all on function private.is_admin() from public;
+revoke all on function private.is_owner() from public;
+grant execute on function private.is_admin() to anon, authenticated, service_role;
+grant execute on function private.is_owner() to anon, authenticated, service_role;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select private.is_admin();
+$$;
+
+create or replace function public.is_owner()
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select private.is_owner();
 $$;
 
 create or replace function public.refresh_customer_membership(customer uuid)
