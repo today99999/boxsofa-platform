@@ -218,7 +218,7 @@ export const translations = {
     mainImagePending: "Main image pending",
     home: "Home",
     shippingAndPaymentNote:
-      "Cross-border delivery estimated in 23-30 days. Submit the order first; the seller will confirm payment. Stripe will open once the bank account is ready.",
+      "Cross-border delivery estimated in 23-30 days. Submit the order first; the seller will confirm payment. Online card payment will be added later.",
     seatCombo: "Seat / combination",
     color: "Color",
     productSpecs: "Product details",
