@@ -171,13 +171,21 @@
 - Resend 域名 `boxsofa.eu` 已验证。
 - Vercel 已配置 `EMAIL_PROVIDER=resend`、`EMAIL_FROM=BoxSofa <orders@boxsofa.eu>`、`EMAIL_API_KEY`。
 - Supabase Auth Site URL 与 Redirect URLs 已配置到生产域名。
+- 生产验证账号已创建：
+  - 客户测试账号：`buyer-test@boxsofa.eu`
+  - 商家测试账号：`seller-test@boxsofa.eu`
 - 已触发 Vercel Production redeploy。
 - `npm.cmd run production:verify` 已通过。
 - `/api/health` 生产检查中 `emailProviderConfigured` 为 `true`。
 - `/api/health` 生产检查中 `paymentEnabled` 保持 `false`。
+- 客户测试账号可以登录生产站并进入 `/orders`。
+- 客户测试订单 `BX-48197139` 已成功提交，状态为 `pending_confirm`，付款状态为 `not_started`。
+- 客户后台可以看到该订单、待确认金额和会员进度。
+- 该订单已生成 `order_submitted` 邮件通知队列。
+- 商家后台邮件通知页可发送该通知；发送后状态为 `sent`，provider 为 `resend`，并写入 `admin_audit_log`。
 
 ## 11. 下一步
 
-- 完成生产环境客户登录、商家登录、订单、评价、客服、通知邮件的端到端验证。
+- 完成生产环境商家订单确认、物流单号录入、评价、客服会话的端到端验证。
 - 全站可见文案和乱码最终清理。
 - 所有非支付项确认后，再进行 Stripe 支付接入。
