@@ -76,7 +76,8 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Verify email queue:
   - Order confirmation event creates a queued notification.
   - Payment/shipping changes create queued notifications.
-  - Production email provider is configured with Resend and can send a test message.
+  - Production email provider is configured with Resend.
+  - Merchant can use `/admin/notifications` to send a test email to the logged-in merchant account.
 - Verify production health endpoint:
   - `/api/health` returns `ok: true`.
   - `siteUrl` is `https://boxsofa.eu`.
