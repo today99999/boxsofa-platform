@@ -5,6 +5,7 @@ import { trackOrderEventFields } from "@/lib/server/analytics";
 import { buildOrderEmailPreview } from "@/lib/email-notifications";
 import { queueOrderEmailPreview } from "@/lib/server/email-notification-queue";
 import { ADMIN_ORDER_WITH_ITEMS_SELECT, type OrderRow, toLocalOrder } from "@/lib/server/orders";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
@@ -137,6 +138,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const rateLimit = checkRateLimit(request, { key: "orders:create", limit: 20, windowMs: 15 * 60 * 1000 });
+  if (!rateLimit.ok) {
+    return rateLimitResponse(rateLimit.resetAt);
+  }
+
   const payload = createOrderSchema.safeParse(await request.json());
 
   if (!payload.success) {

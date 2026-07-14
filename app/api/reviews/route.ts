@@ -6,6 +6,7 @@ import {
   hasSupabasePublicConfig,
   hasSupabaseServiceRoleConfig
 } from "@/lib/supabase/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,11 @@ const createReviewSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const rateLimit = checkRateLimit(request, { key: "reviews:create", limit: 20, windowMs: 10 * 60 * 1000 });
+  if (!rateLimit.ok) {
+    return rateLimitResponse(rateLimit.resetAt);
+  }
+
   const payload = createReviewSchema.safeParse(await request.json());
 
   if (!payload.success) {

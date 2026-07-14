@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -104,6 +105,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rateLimit = checkRateLimit(request, { key: "support:create", limit: 30, windowMs: 10 * 60 * 1000 });
+  if (!rateLimit.ok) {
+    return rateLimitResponse(rateLimit.resetAt);
+  }
+
   const payload = createThreadSchema.safeParse(await request.json());
 
   if (!payload.success) {
@@ -155,6 +161,11 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const rateLimit = checkRateLimit(request, { key: "support:reply", limit: 60, windowMs: 10 * 60 * 1000 });
+  if (!rateLimit.ok) {
+    return rateLimitResponse(rateLimit.resetAt);
+  }
+
   const payload = appendMessageSchema.safeParse(await request.json());
 
   if (!payload.success) {

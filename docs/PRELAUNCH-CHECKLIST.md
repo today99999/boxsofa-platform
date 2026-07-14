@@ -11,6 +11,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Smoke checks verify public routes, sampled product SEO structured data, sampled admin section pages, mojibake prevention, private noindex pages, no-store private caching, health status, and protected admin/customer API routes reject anonymous requests.
 - API permission checks are available with `npm run api:auth-audit`. Use `API_AUDIT_BASE_URL=https://boxsofa.eu npm run api:auth-audit` for production.
 - API permission checks verify anonymous visitors cannot access admin, customer profile, customer order, order-management, review-management, or notification-management endpoints.
+- Public write endpoints for orders, support chat, and reviews have lightweight hashed-source rate limiting.
 - Supabase is connected for orders, products, reviews, support chat, audit logs, notifications, and launch readiness.
 - Customer order APIs require customer login.
 - Admin APIs require merchant roles.
