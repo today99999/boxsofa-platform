@@ -298,16 +298,22 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   }, []);
 
   useEffect(() => {
-    function syncSectionFromHash() {
-      const nextSection = window.location.hash.replace("#", "");
+    function syncSectionFromLocation() {
+      const pathSection = window.location.pathname.split("/").filter(Boolean).at(1) || "";
+      const hashSection = window.location.hash.replace("#", "");
+      const nextSection = pathSection || hashSection;
       if (adminSections.some((section) => section.id === nextSection)) {
         setActiveSection(nextSection as AdminSection);
       }
     }
 
-    syncSectionFromHash();
-    window.addEventListener("hashchange", syncSectionFromHash);
-    return () => window.removeEventListener("hashchange", syncSectionFromHash);
+    syncSectionFromLocation();
+    window.addEventListener("hashchange", syncSectionFromLocation);
+    window.addEventListener("popstate", syncSectionFromLocation);
+    return () => {
+      window.removeEventListener("hashchange", syncSectionFromLocation);
+      window.removeEventListener("popstate", syncSectionFromLocation);
+    };
   }, []);
 
   useEffect(() => {
