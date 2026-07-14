@@ -1784,7 +1784,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
             <div className="panel-head">
               <div>
                 <h2>客户评价管理</h2>
-                <p>商家可对前台展示的评价进行置顶或删除。当前为本地原型数据。</p>
+                <p>真实数据库评价可置顶或删除；示例好评仅用于前台展示，不参与后台操作。</p>
               </div>
               <span className="status">{visibleReviews.length} 条</span>
             </div>
