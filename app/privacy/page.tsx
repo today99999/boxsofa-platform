@@ -31,7 +31,7 @@ export default function PrivacyPage() {
         },
         {
           title: "Data processors",
-          body: "Supabase is used for database storage during this build. Vercel hosts the website. Payment processing will be added later through Stripe."
+          body: "Supabase is used for database storage during this build. Vercel hosts the website. Secure online payment processing will be added later."
         },
         {
           title: "Before launch",

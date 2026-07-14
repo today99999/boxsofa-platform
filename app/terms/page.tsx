@@ -35,7 +35,7 @@ export default function TermsPage() {
         },
         {
           title: "Final terms",
-          body: "Full legal terms, company identity, tax information and online payment rules will be published before Stripe payment is enabled."
+          body: "Full legal terms, company identity, tax information and online payment rules will be published before secure online payment is enabled."
         }
       ]}
     />

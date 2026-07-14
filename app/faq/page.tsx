@@ -31,7 +31,7 @@ export default function FaqPage() {
         },
         {
           title: "Can I pay online now?",
-          body: "Not yet. Customers submit an order first, then the seller confirms the payment method. Stripe payment will be connected after the bank account is ready."
+          body: "Not yet. Customers submit an order first, then the seller confirms the payment method. Secure online card payment will be added later."
         },
         {
           title: "How does membership work?",
