@@ -417,7 +417,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
 
   async function loadReadiness() {
     try {
-      const response = await fetch("/api/admin/launch-status");
+      const response = await fetch("/api/admin/overview");
       const result = (await response.json()) as ReadinessResponse;
       if (!response.ok || !result.ok) {
         setReadinessMessage(result.message || "上线检查暂时不可用。");
@@ -428,7 +428,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       setReadinessMessage(result.mode === "supabase" ? "上线检查已连接 Supabase 真实数据。" : "上线检查当前使用本地原型数据。");
     } catch {
       setReadinessMode(null);
-      setReadinessMessage("上线检查暂时不可用。");
+      setReadinessMessage("上线检查暂时不可用，请检查浏览器插件或稍后刷新。");
     }
   }
 
