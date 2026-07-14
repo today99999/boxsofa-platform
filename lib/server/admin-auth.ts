@@ -13,10 +13,15 @@ export async function requireAdminAccess() {
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser();
+  let user;
+  let userError;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+    userError = result.error;
+  } catch {
+    return { ok: false as const, reason: "not_authenticated" as const };
+  }
 
   if (userError || !user) {
     return { ok: false as const, reason: "not_authenticated" as const };
