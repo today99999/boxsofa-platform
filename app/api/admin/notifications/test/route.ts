@@ -47,7 +47,7 @@ export async function POST() {
     actorId: adminAccess.userId,
     action: sendResult.ok ? "email_test_sent" : "email_test_failed",
     entityType: "email_provider",
-    entityId: "resend",
+    entityId: null,
     beforeData: null,
     afterData: {
       to: adminAccess.email,
