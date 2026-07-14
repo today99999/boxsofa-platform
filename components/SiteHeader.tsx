@@ -58,7 +58,7 @@ export function SiteHeader() {
               </div>
             ) : (
               <Link className="login-link" href="/login">
-                {t("login")}
+                {t("loginRegister")}
               </Link>
             )}
           </div>

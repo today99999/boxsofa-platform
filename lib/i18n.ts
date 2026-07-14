@@ -16,6 +16,7 @@ export const translations = {
   zh: {
     freeShippingTopbar: "全部沙发免基础配送费，跨境物流预估23-30天到达",
     login: "登录",
+    loginRegister: "登录 / 注册",
     allSofas: "全部沙发",
     myOrders: "我的订单",
     cart: "购物车",
@@ -133,6 +134,7 @@ export const translations = {
   en: {
     freeShippingTopbar: "Free basic delivery on all sofas, cross-border delivery estimated in 23-30 days",
     login: "Login",
+    loginRegister: "Sign in / Register",
     allSofas: "All Sofas",
     myOrders: "My Orders",
     cart: "Cart",
@@ -253,6 +255,7 @@ export const translations = {
   es: {
     freeShippingTopbar: "Envío básico gratis en todos los sofás, entrega internacional estimada en 23-30 días",
     login: "Iniciar sesión",
+    loginRegister: "Iniciar sesión / Registrarse",
     allSofas: "Todos los sofás",
     myOrders: "Mis pedidos",
     cart: "Carrito",
@@ -373,6 +376,7 @@ export const translations = {
   fr: {
     freeShippingTopbar: "Livraison de base gratuite sur tous les canapés, livraison transfrontalière estimée sous 23-30 jours",
     login: "Connexion",
+    loginRegister: "Connexion / Inscription",
     allSofas: "Tous les canapés",
     myOrders: "Mes commandes",
     cart: "Panier",
@@ -493,6 +497,7 @@ export const translations = {
   de: {
     freeShippingTopbar: "Kostenlose Basislieferung für alle Sofas, grenzüberschreitende Lieferung voraussichtlich in 23-30 Tagen",
     login: "Anmelden",
+    loginRegister: "Anmelden / Registrieren",
     allSofas: "Alle Sofas",
     myOrders: "Meine Bestellungen",
     cart: "Warenkorb",
