@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const TEST_CUSTOMER_EMAIL = "buyer-test@boxsofa.eu";
 const TEST_CUSTOMER_NAME = "BoxSofa Test Buyer";
+const testCustomerCreationEnabled = process.env.ALLOW_TEST_CUSTOMER_CREATION === "true";
 
 function createTemporaryPassword() {
   return `${randomBytes(12).toString("base64url")}Aa1!`;
@@ -56,6 +57,13 @@ export async function POST() {
   const adminAccess = await requireAdminAccess();
   if (!adminAccess.ok) {
     return NextResponse.json({ ok: false, message: "Merchant login is required." }, { status: 401 });
+  }
+
+  if (!testCustomerCreationEnabled) {
+    return NextResponse.json(
+      { ok: false, mode: "supabase", message: "Test customer creation is disabled in this environment." },
+      { status: 403 }
+    );
   }
 
   const supabase = createSupabaseServiceRoleClient();

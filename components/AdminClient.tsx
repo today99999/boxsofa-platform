@@ -121,6 +121,7 @@ type AdminAccess = "checking" | "allowed" | "denied";
 
 const PRODUCT_DRAFTS_KEY = "boxsofa_admin_product_drafts_v1";
 const AD_SPEND_KEY = "boxsofa_admin_ad_spend_v1";
+const testCustomerCreationEnabled = process.env.NEXT_PUBLIC_ALLOW_TEST_CUSTOMER_CREATION === "true";
 const supportQuickReplies = [
   "您好，感谢咨询。请问您想了解哪一款沙发、颜色和送货国家？",
   "这款沙发为压缩包装，跨境物流预计 23-30 天到达。",
@@ -1083,8 +1084,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     {
       label: "买家测试账号",
       value: `${readiness?.customerProfiles ?? 0} 个`,
-      tone: (readiness?.customerProfiles ?? 0) > 0 ? "ready" : "warning",
-      detail: (readiness?.customerProfiles ?? 0) > 0 ? "可以继续验证买家订单隔离和会员资料。" : "还没有买家账号，下一步需要创建一个客户测试账号。"
+      tone: (readiness?.customerProfiles ?? 0) > 0 ? "ready" : "paused",
+      detail: (readiness?.customerProfiles ?? 0) > 0
+        ? "可以继续验证买家订单隔离和会员资料。"
+        : "生产环境默认关闭测试账号创建；需要时临时开启专用环境变量。"
     },
     {
       label: "商家账号",
@@ -1293,10 +1296,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
           <div className="launch-test-account">
             <div>
               <h3>买家测试账号</h3>
-              <p>用于验证买家登录后只能查看自己的订单、地址、会员状态，不能进入商家后台。</p>
+              <p>{testCustomerCreationEnabled ? "用于验证买家登录后只能查看自己的订单、地址、会员状态，不能进入商家后台。" : "生产环境已关闭自动创建测试账号，避免上线后误生成测试数据。"}</p>
             </div>
-            <button className="button primary" disabled={testCustomerStatus === "saving"} type="button" onClick={() => void createTestCustomer()}>
-              {testCustomerStatus === "saving" ? "创建中..." : "创建买家测试账号"}
+            <button className="button primary" disabled={!testCustomerCreationEnabled || testCustomerStatus === "saving"} type="button" onClick={() => void createTestCustomer()}>
+              {!testCustomerCreationEnabled ? "测试账号创建已关闭" : testCustomerStatus === "saving" ? "创建中..." : "创建买家测试账号"}
             </button>
             {testCustomerCredentials ? (
               <div className={`launch-test-result ${testCustomerStatus === "error" ? "error" : ""}`}>
@@ -1311,7 +1314,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
           <div className="launch-next-steps">
             <h3>下一步顺序</h3>
             <ol>
-              <li>创建并验证买家测试账号，确认买家只能看到自己的订单和资料。</li>
+              <li>用正式买家账号或临时测试账号验证订单隔离，确认买家只能看到自己的订单和资料。</li>
               <li>确认商家账号可管理订单、商品、库存、评价、客服和邮件通知。</li>
               <li>清理全站乱码文案，再做 SEO 标题、描述、站点地图和 Google Search Console。</li>
               <li>绑定正式域名和 Vercel 环境变量，完成上线前最终检查。</li>
