@@ -49,8 +49,7 @@ const stableMojibakePattern = /[\u934b\u934f\u6d93\u7f01\u6995\u6ccc\u6b0f\u5f42
 async function checkPublicRoute(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
   if (!response.ok) throw new Error(route.path + ' returned HTTP ' + response.status);
-  const frameHeader = response.headers.get('x-frame-options');
-  if (frameHeader !== 'SAMEORIGIN') throw new Error(route.path + ' missing X-Frame-Options SAMEORIGIN');
+  checkSecurityHeaders(route.path, response.headers);
   const text = await response.text();
   if (stableMojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   for (const fragment of route.includes || []) {
@@ -58,9 +57,33 @@ async function checkPublicRoute(route) {
   }
 }
 
+function checkSecurityHeaders(path, headers) {
+  const expectedHeaders = [
+    ['x-frame-options', 'SAMEORIGIN'],
+    ['x-content-type-options', 'nosniff'],
+    ['referrer-policy', 'strict-origin-when-cross-origin'],
+    ['strict-transport-security', 'max-age=63072000; includeSubDomains; preload']
+  ];
+
+  for (const [name, expectedValue] of expectedHeaders) {
+    const actualValue = headers.get(name);
+    if (actualValue !== expectedValue) {
+      throw new Error(path + ' missing security header ' + name);
+    }
+  }
+
+  const permissionsPolicy = headers.get('permissions-policy') || '';
+  for (const rule of ['camera=()', 'microphone=()', 'geolocation=()']) {
+    if (!permissionsPolicy.includes(rule)) {
+      throw new Error(path + ' missing Permissions-Policy rule ' + rule);
+    }
+  }
+}
+
 async function checkPrivateRoute(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
   if (!response.ok) throw new Error(route.path + ' returned HTTP ' + response.status);
+  checkSecurityHeaders(route.path, response.headers);
   const cacheControl = response.headers.get('cache-control') || '';
   if (!cacheControl.includes('no-store')) throw new Error(route.path + ' missing no-store cache header');
   const text = await response.text();
