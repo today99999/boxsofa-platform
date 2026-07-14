@@ -91,9 +91,12 @@ async function checkRobotsAndSitemap() {
   const sitemap = await fetchText('/sitemap.xml');
   assert(sitemap.includes('https://boxsofa.eu/'), '/sitemap.xml missing production host');
   assert(!sitemap.includes('localhost'), '/sitemap.xml contains localhost');
-  for (const path of ['/', '/category/all', '/product/chameleon-mario-sofa-01', '/shipping', '/privacy']) {
+  for (const path of ['/', '/category/all', '/product/chameleon-mario-sofa-01', '/product/single-029-fleece-01', '/product/pebble-sofa-01', '/product/cashew-sofa-01', '/shipping', '/privacy']) {
     const url = path === '/' ? 'https://boxsofa.eu' : `https://boxsofa.eu${path}`;
     assert(sitemap.includes(url), `/sitemap.xml missing ${url}`);
+  }
+  for (const path of ['/product/chameleon-mario-sofa-02', '/product/waffle-sofa-10', '/product/cashew-sofa-05']) {
+    assert(!sitemap.includes(`https://boxsofa.eu${path}`), `/sitemap.xml should not include SKU variant ${path}`);
   }
   console.log('OK SEO /sitemap.xml');
 }

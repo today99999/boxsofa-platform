@@ -17,6 +17,7 @@ This checklist tracks the work that must be stable before Stripe or any real onl
 - Admin APIs require merchant roles.
 - Shipping, returns, privacy, terms, and FAQ pages exist and are included in `sitemap.xml`.
 - `robots.txt` allows storefront pages and blocks admin/API/private checkout pages.
+- `sitemap.xml` lists one representative URL per sofa style to reduce duplicate SKU crawling.
 - Supabase security advisor no longer reports public SECURITY DEFINER RPC access.
 - Supabase function `search_path` warnings have been fixed in the live database and reflected in `supabase/schema.sql`.
 - Missing foreign-key indexes have been added in the live database and reflected in `supabase/schema.sql`.

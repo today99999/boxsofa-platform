@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { categories, products } from "@/lib/catalog";
+import { categories, getStyleProductsByCategory } from "@/lib/catalog";
 
 const siteUrl = "https://boxsofa.eu";
 const policyRoutes = ["shipping", "returns", "privacy", "terms", "faq"];
@@ -12,7 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "weekly" as const,
     priority: category.slug === "all" ? 0.9 : 0.7
   }));
-  const productRoutes = products.map((product) => ({
+  const productRoutes = getStyleProductsByCategory("all").map((product) => ({
     url: `${siteUrl}/product/${product.slug}`,
     lastModified: now,
     changeFrequency: "weekly" as const,
