@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEmailProviderStatus, hasEmailProviderConfig } from "@/lib/server/email-provider";
+import { hasStripeConfig } from "@/lib/server/stripe";
 import { hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,6 @@ export async function GET() {
     supabaseConfigured: hasSupabaseServiceRoleConfig(),
     emailProviderConfigured: hasEmailProviderConfig(),
     emailProviderStatus,
-    paymentEnabled: false
+    paymentEnabled: hasStripeConfig()
   });
 }

@@ -175,7 +175,7 @@ export const translations = {
     submitOrder: "Submit Order",
     orderSubmitted: "Order submitted",
     orderNumber: "Order number",
-    paymentNote: "The seller will contact you to confirm the payment method. Real online payment is not enabled yet.",
+    paymentNote: "Secure online payment is available when Stripe is configured. If payment is not available, the seller will contact you to confirm the payment method.",
     viewOrders: "View My Orders",
     account: "Account",
     password: "Password",

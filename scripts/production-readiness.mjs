@@ -19,7 +19,11 @@ if (health.emailProviderConfigured !== true) {
     : 'Email provider production environment variables are missing or invalid';
   failures.push(emailIssues);
 }
-if (health.paymentEnabled !== false) failures.push('Payment should stay disabled before the final Stripe step');
+if (process.env.EXPECT_PAYMENT_ENABLED === 'true') {
+  if (health.paymentEnabled !== true) failures.push('Stripe payment should be enabled for production');
+} else if (health.paymentEnabled !== false) {
+  failures.push('Payment should stay disabled before the final Stripe step');
+}
 
 if (failures.length) {
   console.error('Production readiness is not complete for ' + baseUrl);

@@ -142,7 +142,12 @@ export function CartClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const result = (await response.json()) as { ok: boolean; message?: string; order?: LocalOrder };
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        order?: LocalOrder;
+        checkoutUrl?: string | null;
+      };
 
       if (!response.ok || !result.ok || !result.order) {
         throw new Error(result.message || "Order submit failed.");
@@ -153,6 +158,12 @@ export function CartClient() {
       trackEvent("order_submit", { valueEur: total });
       localStorage.removeItem(CART_KEY);
       setItems([]);
+
+      if (result.checkoutUrl) {
+        window.location.href = result.checkoutUrl;
+        return;
+      }
+
       setSubmittedOrder(result.order);
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : "Order submit failed.");

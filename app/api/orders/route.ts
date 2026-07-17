@@ -6,6 +6,7 @@ import { buildOrderEmailPreview } from "@/lib/email-notifications";
 import { queueOrderEmailPreview } from "@/lib/server/email-notification-queue";
 import { ADMIN_ORDER_WITH_ITEMS_SELECT, type OrderRow, toLocalOrder } from "@/lib/server/orders";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { getSiteUrl, getStripeClient, hasStripeCheckoutConfig } from "@/lib/server/stripe";
 import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
@@ -359,10 +360,69 @@ export async function POST(request: Request) {
     totalEur: order.totalEur
   });
   const emailQueue = await queueOrderEmailPreview(supabase, createdOrder.id, createdOrder.order_number, emailPreview);
+  let checkoutUrl: string | null = null;
+
+  if (hasStripeCheckoutConfig()) {
+    const stripe = getStripeClient();
+    const siteUrl = getSiteUrl();
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: order.email,
+      client_reference_id: createdOrder.order_number,
+      line_items: order.items.map((item) => ({
+        quantity: item.quantity,
+        price_data: {
+          currency: "eur",
+          unit_amount: Math.round(item.priceEur * 100),
+          product_data: {
+            name: item.name,
+            description: item.color || undefined,
+            images: item.image.startsWith("http") ? [item.image] : undefined,
+            metadata: {
+              sku: item.id,
+              slug: item.slug
+            }
+          }
+        }
+      })),
+      metadata: {
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.order_number
+      },
+      success_url: `${siteUrl}/checkout/success?order=${encodeURIComponent(createdOrder.order_number)}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/checkout/cancel?order=${encodeURIComponent(createdOrder.order_number)}`,
+      integration_identifier: "boxsofa_checkout_qhwerlmp"
+    } as Parameters<typeof stripe.checkout.sessions.create>[0]);
+
+    checkoutUrl = session.url;
+    await supabase
+      .from("orders")
+      .update({
+        payment_status: "pending",
+        payment_provider: "stripe",
+        payment_reference: session.id,
+        payment_method_note: "Stripe Checkout pending"
+      })
+      .eq("id", createdOrder.id);
+
+    await supabase.from("payments").insert({
+      order_id: createdOrder.id,
+      provider: "stripe",
+      provider_payment_id: session.id,
+      status: "pending",
+      amount_eur: order.totalEur,
+      currency: "EUR",
+      raw_payload: {
+        checkout_session_id: session.id
+      }
+    });
+  }
 
   return NextResponse.json({
     ok: true,
     mode: "supabase",
+    paymentEnabled: Boolean(checkoutUrl),
+    checkoutUrl,
     profileSaved: Boolean(customerId && !profileSaveWarning),
     profileSaveWarning,
     emailPreview,
