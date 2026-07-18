@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "@/components/useTranslation";
-import { AUTH_SESSION_KEY } from "@/lib/auth";
+import { AUTH_SESSION_KEY, getLoginFeedback } from "@/lib/auth";
 import { createSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase/browser";
 
 type AuthProfileResponse = {
@@ -41,10 +41,17 @@ export function LoginClient() {
   const [loginMessage, setLoginMessage] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const loginRole = getLoginRole(account);
   const normalizedPreviewAccount = account.trim();
   const isEmailAccount = normalizedPreviewAccount.includes("@");
   const localAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_LOCAL_AUTH === "true" || process.env.NODE_ENV !== "production";
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("confirmed") === "1") {
+      setLoginMessage("Email confirmed. You can now sign in.");
+    }
+  }, []);
 
   function saveSession(input: { account: string; role: "customer" | "merchant"; source: "local" | "supabase" }) {
     localStorage.setItem(
@@ -68,6 +75,7 @@ export function LoginClient() {
     if (!account.trim() || !password.trim()) return;
     setIsSubmitting(true);
     setLoginMessage("");
+    setCanResendConfirmation(false);
 
     const normalizedAccount = account.trim();
     const canUseSupabase = hasSupabaseBrowserConfig() && normalizedAccount.includes("@");
@@ -89,7 +97,7 @@ export function LoginClient() {
                 data: {
                   full_name: fullName.trim()
                 },
-                emailRedirectTo: `${window.location.origin}/login`
+                emailRedirectTo: `${window.location.origin}/login?confirmed=1`
               }
             })
           : { data: null, error: new Error("Supabase is not configured.") };
@@ -107,6 +115,7 @@ export function LoginClient() {
       }
 
       setLoginMessage("Customer account created. Please check your email to confirm the account before signing in.");
+      setCanResendConfirmation(true);
       setMode("login");
       setIsSubmitting(false);
       return;
@@ -131,11 +140,13 @@ export function LoginClient() {
         return;
       }
 
+      const feedback = getLoginFeedback(error);
       setLoginMessage(
-        localAuthEnabled
+        localAuthEnabled && !feedback.canResendConfirmation
           ? "Login failed. Please check the account and password, or use a local test account."
-          : "Login failed. Please check the email account and password."
+          : feedback.message
       );
+      setCanResendConfirmation(feedback.canResendConfirmation);
       setIsSubmitting(false);
       return;
     }
@@ -150,6 +161,31 @@ export function LoginClient() {
     window.location.href = getTargetPath(account);
   }
 
+  async function resendConfirmation() {
+    const normalizedAccount = account.trim();
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase || !normalizedAccount.includes("@")) {
+      setLoginMessage("Please enter the email address used to create the account.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: normalizedAccount,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login?confirmed=1`
+      }
+    });
+
+    setLoginMessage(
+      error
+        ? "The confirmation email could not be sent yet. Please wait a moment and try again."
+        : "Confirmation email sent. Please check your inbox and spam folder."
+    );
+    setIsSubmitting(false);
+  }
+
   return (
     <form className="panel login-form" onSubmit={handleSubmit}>
       <div className="login-mode-toggle" aria-label="Customer account mode">
@@ -158,6 +194,7 @@ export function LoginClient() {
           onClick={() => {
             setMode("login");
             setLoginMessage("");
+            setCanResendConfirmation(false);
           }}
           type="button"
         >
@@ -168,6 +205,7 @@ export function LoginClient() {
           onClick={() => {
             setMode("register");
             setLoginMessage("");
+            setCanResendConfirmation(false);
           }}
           type="button"
         >
@@ -179,7 +217,10 @@ export function LoginClient() {
         <input
           autoComplete="username"
           name="account"
-          onChange={(event) => setAccount(event.target.value)}
+          onChange={(event) => {
+            setAccount(event.target.value);
+            setCanResendConfirmation(false);
+          }}
           placeholder={t("accountPlaceholder")}
           value={account}
         />
@@ -227,6 +268,11 @@ export function LoginClient() {
       <button className="button primary" disabled={isSubmitting} type="submit">
         {isSubmitting ? (mode === "register" ? "Creating account..." : "Logging in...") : mode === "register" ? "Create customer account" : t("login")}
       </button>
+      {canResendConfirmation ? (
+        <button className="button secondary" disabled={isSubmitting} onClick={resendConfirmation} type="button">
+          Resend confirmation email
+        </button>
+      ) : null}
       {loginMessage ? <p className="login-note">{loginMessage}</p> : null}
       <p className="login-note">
         {mode === "register"
