@@ -1,5 +1,6 @@
 const baseUrl = (process.env.SEO_BASE_URL || process.env.SMOKE_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const canonicalHost = 'https://boxsofa.eu';
+const googleSiteVerification = 'ReHrUQ9HqM1xxiYbP5XKARBVSdAjkZzbq8V-4haDqGI';
 
 const pageChecks = [
   { path: '/', titleIncludes: ['BoxSofa'], canonical: canonicalHost },
@@ -63,6 +64,11 @@ async function checkPage(route) {
   const ogDescription = getAttribute(html, /<meta property="og:description" content="([^"]*)"/i);
   assert(ogTitle, `${route.path} missing og:title`);
   assertDescription(`${route.path} og`, ogDescription);
+
+  if (route.path === '/' && process.env.EXPECT_GOOGLE_VERIFICATION === 'true') {
+    const verification = getAttribute(html, /<meta name="google-site-verification" content="([^"]*)"/i);
+    assert(verification === googleSiteVerification, '/ missing Google site verification');
+  }
 
   if (route.productJsonLd) {
     assert(html.includes('application/ld+json'), `${route.path} missing JSON-LD`);
