@@ -15,7 +15,7 @@ export default function PrivacyPage() {
     <PolicyPage
       eyebrow="Privacy Policy"
       title="Privacy-first setup for European customers"
-      intro="BoxSofa is being prepared for the European market, so customer data and analytics must stay limited, useful and transparent."
+      intro="BoxSofa limits customer data and analytics to what is useful, secure and transparent for European customers."
       sections={[
         {
           title: "Essential data",
@@ -31,11 +31,11 @@ export default function PrivacyPage() {
         },
         {
           title: "Data processors",
-          body: "Supabase is used for database storage during this build. Vercel hosts the website. Secure online payment processing will be added later."
+          body: "Supabase provides database and account services, Vercel hosts the website, Stripe processes secure card payments and Resend supports transactional email delivery. Each provider processes data only for the relevant service."
         },
         {
-          title: "Before launch",
-          body: "Company entity details, data retention periods and formal GDPR contact information will be added before the website accepts real online payments."
+          title: "Questions and rights",
+          body: "Customers may ask to access, correct or delete eligible personal data by contacting BoxSofa support. Some order and payment records may be retained where required for legal, tax, fraud-prevention or dispute purposes."
         }
       ]}
     />

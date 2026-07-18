@@ -19,11 +19,11 @@ export default function ShippingPage() {
       sections={[
         {
           title: "Free basic delivery",
-          body: "BoxSofa plans free basic delivery for all sofas. Extra services such as appointment handling, special floor delivery or remote-area adjustments will be confirmed by the seller before final payment."
+          body: "BoxSofa provides free basic delivery for all sofas in Spain. Any optional service or remote-area limitation is shown or agreed before payment."
         },
         {
           title: "Estimated delivery time",
-          body: "Cross-border delivery is currently estimated at 23-30 days. The seller will confirm the order, payment method and delivery details before shipment."
+          body: "Estimated delivery is 23-30 working days. Customers receive an order confirmation after checkout and shipment details when the order leaves the warehouse."
         },
         {
           title: "Compressed packaging",

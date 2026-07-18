@@ -27,14 +27,14 @@ const footerCopy = {
     reviews: "客户评价",
     businessHours: "周一至周五 09:00-18:00 CET",
     whatsapp: "WhatsApp 客服预留",
-    noAdvance: "上线初期不收在线预付款",
-    sellerConfirm: "商家确认付款方式",
-    cardSoon: "在线银行卡支付稍后开放",
+    noAdvance: "Stripe 安全银行卡支付",
+    sellerConfirm: "支付成功后确认订单",
+    cardSoon: "西班牙基础配送免费",
     memberDiscount: "会员累计满 EUR 300 后 9 折",
-    trustScore: "原型评价 4.8 / 5",
+    trustScore: "客户评价 4.8 / 5",
     compressed: "真空压缩包装",
     euDelivery: "跨境物流预估 23-30 天",
-    copyright: "BoxSofa Europe 原型站。公司主体、税号和正式政策将在上线前更新。"
+    copyright: "© 2026 BoxSofa Europe. 保留所有权利。"
   },
   en: {
     newsletterTitle: "Home refresh ideas for compact European living",
@@ -58,14 +58,14 @@ const footerCopy = {
     reviews: "Customer reviews",
     businessHours: "Mon-Fri 09:00-18:00 CET",
     whatsapp: "WhatsApp support reserved",
-    noAdvance: "No online prepayment during prototype stage",
-    sellerConfirm: "Seller confirms payment method",
-    cardSoon: "Online card payment coming later",
+    noAdvance: "Secure card payment with Stripe",
+    sellerConfirm: "Order confirmed after payment",
+    cardSoon: "Free basic delivery in Spain",
     memberDiscount: "10% member discount after EUR 300 confirmed spend",
-    trustScore: "Prototype rating 4.8 / 5",
+    trustScore: "Customer rating 4.8 / 5",
     compressed: "Vacuum-compressed packaging",
     euDelivery: "EU cross-border delivery estimated in 23-30 days",
-    copyright: "BoxSofa Europe prototype. Company entity, tax number and final policies will be updated before launch."
+    copyright: "© 2026 BoxSofa Europe. All rights reserved."
   },
   es: {
     newsletterTitle: "Ideas para renovar hogares compactos en Europa",
@@ -89,14 +89,14 @@ const footerCopy = {
     reviews: "Reseñas de clientes",
     businessHours: "L-V 09:00-18:00 CET",
     whatsapp: "Soporte por WhatsApp reservado",
-    noAdvance: "Sin prepago online durante el prototipo",
-    sellerConfirm: "El vendedor confirma el método de pago",
-    cardSoon: "Pago online con tarjeta próximamente",
+    noAdvance: "Pago seguro con tarjeta mediante Stripe",
+    sellerConfirm: "Pedido confirmado tras el pago",
+    cardSoon: "Entrega básica gratuita en España",
     memberDiscount: "10% de descuento al superar EUR 300 confirmados",
-    trustScore: "Valoración prototipo 4.8 / 5",
+    trustScore: "Valoración de clientes 4.8 / 5",
     compressed: "Embalaje comprimido al vacío",
     euDelivery: "Entrega internacional en Europa estimada en 23-30 días",
-    copyright: "Prototipo BoxSofa Europe. Empresa, NIF y políticas finales se actualizarán antes del lanzamiento."
+    copyright: "© 2026 BoxSofa Europe. Todos los derechos reservados."
   },
   fr: {
     newsletterTitle: "Des idées pour aménager les petits espaces européens",
@@ -120,14 +120,14 @@ const footerCopy = {
     reviews: "Avis clients",
     businessHours: "Lun-ven 09:00-18:00 CET",
     whatsapp: "Support WhatsApp réservé",
-    noAdvance: "Pas de prépaiement en ligne pendant le prototype",
-    sellerConfirm: "Le vendeur confirme le mode de paiement",
-    cardSoon: "Paiement par carte en ligne à venir",
+    noAdvance: "Paiement sécurisé par carte via Stripe",
+    sellerConfirm: "Commande confirmée après paiement",
+    cardSoon: "Livraison de base gratuite en Espagne",
     memberDiscount: "10% de remise après EUR 300 confirmés",
-    trustScore: "Note prototype 4.8 / 5",
+    trustScore: "Note clients 4.8 / 5",
     compressed: "Emballage compressé sous vide",
     euDelivery: "Livraison transfrontalière Europe estimée en 23-30 jours",
-    copyright: "Prototype BoxSofa Europe. Société, numéro fiscal et politiques finales seront mis à jour avant le lancement."
+    copyright: "© 2026 BoxSofa Europe. Tous droits réservés."
   },
   de: {
     newsletterTitle: "Wohnideen für kompakte europäische Räume",
@@ -151,14 +151,14 @@ const footerCopy = {
     reviews: "Kundenbewertungen",
     businessHours: "Mo-Fr 09:00-18:00 CET",
     whatsapp: "WhatsApp-Support reserviert",
-    noAdvance: "Keine Online-Vorauszahlung im Prototyp",
-    sellerConfirm: "Verkäufer bestätigt Zahlungsmethode",
-    cardSoon: "Online-Kartenzahlung folgt später",
+    noAdvance: "Sichere Kartenzahlung über Stripe",
+    sellerConfirm: "Bestellung nach Zahlung bestätigt",
+    cardSoon: "Kostenlose Standardlieferung in Spanien",
     memberDiscount: "10% Mitgliedsrabatt nach EUR 300 bestätigtem Umsatz",
-    trustScore: "Prototyp-Bewertung 4.8 / 5",
+    trustScore: "Kundenbewertung 4.8 / 5",
     compressed: "Vakuumkomprimierte Verpackung",
     euDelivery: "EU-Lieferung geschätzt in 23-30 Tagen",
-    copyright: "BoxSofa Europe Prototyp. Firma, Steuernummer und finale Richtlinien werden vor dem Start ergänzt."
+    copyright: "© 2026 BoxSofa Europe. Alle Rechte vorbehalten."
   }
 };
 

@@ -16,6 +16,7 @@ const pageChecks = [
 
 const privatePaths = ['/login', '/cart', '/orders', '/admin'];
 const mojibakePattern = /[\u934b\u934f\u6d93\u7f01\u6995\u6ccc\u6b0f\u5f42\ufffd]/;
+const staleLaunchCopyPattern = /before online payment launch|before payment is enabled|real online payment will be enabled later|online card payment (?:will be added|coming) later/i;
 
 function getAttribute(html, pattern) {
   const match = html.match(pattern);
@@ -42,6 +43,7 @@ async function fetchText(path) {
 async function checkPage(route) {
   const html = await fetchText(route.path);
   assert(!mojibakePattern.test(html), `${route.path} contains mojibake text`);
+  assert(!staleLaunchCopyPattern.test(html), `${route.path} contains stale pre-payment copy`);
 
   const title = getAttribute(html, /<title>(.*?)<\/title>/i);
   assert(title, `${route.path} missing title`);
@@ -68,6 +70,12 @@ async function checkPage(route) {
   if (route.path === '/' && process.env.EXPECT_GOOGLE_VERIFICATION === 'true') {
     const verification = getAttribute(html, /<meta name="google-site-verification" content="([^"]*)"/i);
     assert(verification === googleSiteVerification, '/ missing Google site verification');
+  }
+
+  if (route.path === '/returns') {
+    assert(html.includes('14 calendar days'), '/returns missing 14-day withdrawal period');
+    assert(html.includes('50% of the product purchase price'), '/returns missing maximum return-cost estimate');
+    assert(html.includes('defective, damaged or incorrect'), '/returns missing seller-paid faulty-item returns');
   }
 
   if (route.productJsonLd) {

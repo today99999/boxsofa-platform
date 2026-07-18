@@ -27,11 +27,11 @@ export default function FaqPage() {
         },
         {
           title: "Is delivery free?",
-          body: "All sofas are planned with free basic delivery. Any extra delivery service will be confirmed by the seller before payment."
+          body: "Yes. Basic delivery is free for all sofas in Spain. Any optional service or remote-area limitation is shown or agreed before payment."
         },
         {
           title: "Can I pay online now?",
-          body: "Not yet. Customers submit an order first, then the seller confirms the payment method. Secure online card payment will be added later."
+          body: "Yes. Secure card payment is handled through Stripe Checkout. BoxSofa does not store full card details."
         },
         {
           title: "How does membership work?",

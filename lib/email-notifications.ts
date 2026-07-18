@@ -36,14 +36,14 @@ export function buildOrderEmailPreview(event: OrderEmailEvent, input: OrderEmail
   const templates: Record<OrderEmailEvent, Omit<OrderEmailPreview, "event" | "to" | "readyToSend" | "provider">> = {
     order_submitted: {
       subject: `BoxSofa order received: ${input.orderNumber}`,
-      previewText: "We received your order. BoxSofa will contact you to confirm the payment method.",
+      previewText: "We received your order and will confirm it after secure payment is completed.",
       bodyText: [
         intro,
         "",
         `We received your BoxSofa order ${input.orderNumber}.`,
         `Order total: ${formatTotal(input.totalEur)}.`,
         "",
-        "Current step: the merchant will contact you to confirm the payment method. Online card payment is not enabled yet.",
+        "If payment is still pending, use the secure Stripe Checkout link shown after ordering. Your order is confirmed automatically after successful payment.",
         "Estimated cross-border delivery after dispatch: 23-30 days.",
         "",
         "Thank you,",
