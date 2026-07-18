@@ -2,6 +2,20 @@
 
 更新时间：2026-07-14
 
+## 0. 2026-07-18 最新状态（优先于下方旧记录）
+
+- Stripe 正式支付已经启用并完成真实下单链路验证；支付取消订单也已在商家后台处理。
+- 客户注册后无法登录的问题已修复：未确认邮箱时显示明确提示，并提供重新发送确认邮件入口。
+- Google Merchant Center 已完成 6/6 设置，商家 ID `5826490678`。
+- `boxsofa.eu` 已通过 HTML 元标记验证，西班牙为首个目标市场，商品语言为英语。
+- 网站已提供 `https://boxsofa.eu/google-merchant-feed.tsv`，Google 已导入 144 个 SKU；当前全部处于 Google 审核中，后台显示没有需要修正的设置或政策问题。
+- 西班牙基础配送免费，Merchant Center 配送承诺为 23-30 个工作日，时区为马德里。
+- 退货政策：收货后 14 个自然日；非质量问题由客户承担退运费，预计最高为商品购买价格的 50%；无重新上架费；质量问题、运输损坏或错发由 BoxSofa 承担合理退运费用；退款处理期 14 天。
+- Google Search Console 已添加并自动验证 `https://boxsofa.eu/` 网址前缀资源，`sitemap.xml` 已提交。新资源正在处理数据，初次显示“无法抓取”时网站端检查为 HTTP 200 和有效 XML，可等待 Google 异步处理。
+- 第一阶段免费推广（Google 免费商品展示 + Search Console）配置已完成，下一阶段是建立短视频渠道与首批内容。
+- `info@boxsofa.eu` 目前仍没有真正邮箱收件箱；Namecheap 邮件转发因域名未使用其默认 DNS 而不可用。不要为启用邮件转发切换 nameserver，以免影响网站 DNS。
+- 最近相关提交：`0e373b2 Publish live payment and return policies`、`7633ea4 Add Google Merchant product feed`、`a11e0d9 Add Google site verification`。
+
 ## 1. 项目目标
 
 BoxSofa 是面向欧洲市场的压缩海绵沙发独立站，不是 WordPress。当前目标是在不接真实支付的前提下完成可上线版本：展示真实商品、接收订单、商家后台处理订单与客户、收集流量来源、支持客服聊天、客户登录、邮件通知和 SEO 基础。Stripe 支付放到最后一步，必须人工确认后再开启。
