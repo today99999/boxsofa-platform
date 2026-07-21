@@ -953,6 +953,18 @@ video {
   padding: 12px clamp(18px, 5vw, 64px) 30px;
 }
 
+.home-guides-section {
+  padding-top: 18px;
+}
+
+.home-guide-grid {
+  padding: 0;
+}
+
+.guide-index-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .guide-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -970,6 +982,19 @@ video {
   color: #3d4942;
   line-height: 1.6;
   margin: 0;
+}
+
+.guide-link-card {
+  color: inherit;
+  display: grid;
+  gap: 8px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.guide-link-card:hover {
+  border-color: rgba(24, 55, 44, 0.26);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
 }
 
 .guide-products {

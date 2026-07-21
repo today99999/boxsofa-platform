@@ -218,7 +218,7 @@ export function SiteFooter() {
           <Link href="/privacy">{copy.privacy}</Link>
           <Link href="/terms">{copy.terms}</Link>
           <Link href="/faq">{copy.faq}</Link>
-          <Link href="/guides/compressed-sofa-small-apartment-spain">{copy.guides}</Link>
+          <Link href="/guides">{copy.guides}</Link>
           <Link href="/orders">{copy.tracking}</Link>
           <a href="/product/chameleon-mario-sofa-01#product-reviews">{copy.reviews}</a>
         </nav>

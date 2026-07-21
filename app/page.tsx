@@ -6,10 +6,12 @@ import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { getStyleProductsByCategory } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
+import { guides } from "@/lib/guides";
 
 export default function HomePage() {
   const hotProducts = getStyleProductsByCategory("all").slice(0, 8);
   const heroProduct = hotProducts[0];
+  const featuredGuides = guides.slice(0, 3);
 
   return (
     <>
@@ -91,6 +93,27 @@ export default function HomePage() {
                   <strong><CatalogText text={product.name} kind="name" /></strong>
                   <span className="price">EUR {product.priceEur}</span>
                 </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="section home-guides-section">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Buying help</p>
+              <h2>Not sure a compressed sofa will fit your building?</h2>
+            </div>
+            <Link className="button" href="/guides">
+              View guides
+            </Link>
+          </div>
+          <div className="guide-content home-guide-grid" aria-label="Compressed sofa buying guides">
+            {featuredGuides.map((guide) => (
+              <Link className="guide-card guide-link-card" href={`/guides/${guide.slug}`} key={guide.slug}>
+                <span className="eyebrow">Guide</span>
+                <h2>{guide.title}</h2>
+                <p>{guide.description}</p>
               </Link>
             ))}
           </div>

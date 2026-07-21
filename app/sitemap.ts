@@ -39,6 +39,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1
     },
+    {
+      url: `${siteUrl}/guides`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8
+    },
     ...categoryRoutes,
     ...productRoutes,
     ...guideRoutes,
