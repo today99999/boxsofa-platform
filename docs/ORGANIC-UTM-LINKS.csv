@@ -1,0 +1,18 @@
+channel,campaign,page,url,use
+TikTok,organic_launch,All sofas,https://boxsofa.eu/category/all?utm_source=tiktok&utm_medium=social&utm_campaign=organic_launch,Profile link and product videos
+Instagram,organic_launch,All sofas,https://boxsofa.eu/category/all?utm_source=instagram&utm_medium=social&utm_campaign=organic_launch,Bio link and Reels captions
+YouTube,organic_launch,All sofas,https://boxsofa.eu/category/all?utm_source=youtube&utm_medium=shorts&utm_campaign=organic_launch,Shorts descriptions
+Facebook,organic_launch,All sofas,https://boxsofa.eu/category/all?utm_source=facebook&utm_medium=social&utm_campaign=organic_launch,Page posts
+Pinterest,organic_guides,Guide hub,https://boxsofa.eu/guides?utm_source=pinterest&utm_medium=social&utm_campaign=organic_guides,Guide pins
+Spanish social,spanish_guides,Spanish guide hub,https://boxsofa.eu/es/guias?utm_source=social&utm_medium=organic&utm_campaign=spanish_guides,Spanish social posts
+TikTok,recovery_proof,Recovery guide,https://boxsofa.eu/guides/compressed-sofa-delivery-recovery?utm_source=tiktok&utm_medium=social&utm_campaign=recovery_proof,Recovery before-after videos
+Instagram,recovery_proof,Recovery guide,https://boxsofa.eu/guides/compressed-sofa-delivery-recovery?utm_source=instagram&utm_medium=reels&utm_campaign=recovery_proof,Recovery Reels
+Facebook,narrow_stairs,Narrow stairs guide,https://boxsofa.eu/guides/sofa-for-narrow-stairs-no-elevator?utm_source=facebook&utm_medium=social&utm_campaign=narrow_stairs,Old building posts
+TikTok,sofa_en_caja,Sofá en caja,https://boxsofa.eu/es/guias/sofa-en-caja-europa?utm_source=tiktok&utm_medium=social&utm_campaign=sofa_en_caja,Spanish sofa-in-a-box videos
+Facebook,madrid_small_flats,Madrid guide,https://boxsofa.eu/es/guias/sofa-comprimido-madrid-piso-pequeno?utm_source=facebook&utm_medium=group&utm_campaign=madrid_small_flats,Madrid rental and expat groups
+Facebook,barcelona_narrow_stairs,Barcelona guide,https://boxsofa.eu/es/guias/sofa-comprimido-barcelona-escaleras-estrechas?utm_source=facebook&utm_medium=group&utm_campaign=barcelona_narrow_stairs,Barcelona rental and old building groups
+Instagram,valencia_rentals,Valencia guide,https://boxsofa.eu/es/guias/sofa-en-caja-valencia-alquiler?utm_source=instagram&utm_medium=reels&utm_campaign=valencia_rentals,Valencia rental content
+TikTok,malaga_apartments,Malaga guide,https://boxsofa.eu/es/guias/sofa-comprimido-malaga-apartamento?utm_source=tiktok&utm_medium=social&utm_campaign=malaga_apartments,Malaga apartment content
+Pinterest,rental_sofa_bed,Rental sofa bed guide,https://boxsofa.eu/guides/rental-apartment-sofa-bed?utm_source=pinterest&utm_medium=pin&utm_campaign=rental_sofa_bed,Rental flat pins
+Facebook,returns_trust,Returns policy,https://boxsofa.eu/returns?utm_source=facebook&utm_medium=social&utm_campaign=returns_trust,Trust-building posts
+Instagram,stripe_trust,Privacy and payment trust,https://boxsofa.eu/privacy?utm_source=instagram&utm_medium=reels&utm_campaign=stripe_trust,Payment trust posts
