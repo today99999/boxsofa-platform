@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { getProductBySlug, type Product } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
+import { buildFaqJsonLd } from "@/lib/conversionFaq";
 import { getGuideBySlug, guides } from "@/lib/guides";
 
 export function generateStaticParams() {
@@ -36,10 +37,15 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
   if (!guide) notFound();
 
   const products = guide.productSlugs.map(getProductBySlug).filter((product): product is Product => Boolean(product));
+  const faqJsonLd = buildFaqJsonLd(guide.sections.map((section) => ({ question: section.title, answer: section.body })));
 
   return (
     <>
       <SiteHeader />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <main className="guide-page">
         <section className="guide-hero">
           <p className="eyebrow">BoxSofa buying guide</p>

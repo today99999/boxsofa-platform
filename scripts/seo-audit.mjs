@@ -7,6 +7,10 @@ const pageChecks = [
   { path: '/category/all', titleIncludes: ['Compressed Sofas'], canonical: `${canonicalHost}/category/all` },
   { path: '/product/chameleon-mario-sofa-01', titleIncludes: ['Compressed Sofa', 'BoxSofa'], canonical: `${canonicalHost}/product/chameleon-mario-sofa-01`, productJsonLd: true },
   { path: '/product/pebble-sofa-01', titleIncludes: ['Compressed Sofa', 'BoxSofa'], canonical: `${canonicalHost}/product/pebble-sofa-01`, productJsonLd: true },
+  { path: '/guides', titleIncludes: ['Compressed Sofa', 'Guides'], canonical: `${canonicalHost}/guides` },
+  { path: '/guides/sofa-in-a-box-europe', titleIncludes: ['Sofa in a Box', 'BoxSofa'], canonical: `${canonicalHost}/guides/sofa-in-a-box-europe`, faqJsonLd: true },
+  { path: '/es/guias', titleIncludes: ['Guías', 'Sofás Comprimidos'], canonical: `${canonicalHost}/es/guias` },
+  { path: '/es/guias/sofa-en-caja-europa', titleIncludes: ['Sofá en Caja', 'BoxSofa'], canonical: `${canonicalHost}/es/guias/sofa-en-caja-europa`, faqJsonLd: true },
   { path: '/shipping', titleIncludes: ['Shipping'], canonical: `${canonicalHost}/shipping` },
   { path: '/returns', titleIncludes: ['Returns'], canonical: `${canonicalHost}/returns` },
   { path: '/privacy', titleIncludes: ['Privacy'], canonical: `${canonicalHost}/privacy` },
@@ -82,6 +86,12 @@ async function checkPage(route) {
     assert(html.includes('application/ld+json'), `${route.path} missing JSON-LD`);
     assert(html.includes('"@type":"Product"'), `${route.path} missing Product JSON-LD`);
     assert(html.includes('"priceCurrency":"EUR"'), `${route.path} missing EUR offer`);
+    assert(html.includes('"@type":"FAQPage"'), `${route.path} missing product FAQ JSON-LD`);
+  }
+
+  if (route.faqJsonLd) {
+    assert(html.includes('application/ld+json'), `${route.path} missing JSON-LD`);
+    assert(html.includes('"@type":"FAQPage"'), `${route.path} missing FAQPage JSON-LD`);
   }
 
   console.log(`OK SEO ${route.path}`);
@@ -105,7 +115,7 @@ async function checkRobotsAndSitemap() {
   const sitemap = await fetchText('/sitemap.xml');
   assert(sitemap.includes('https://boxsofa.eu/'), '/sitemap.xml missing production host');
   assert(!sitemap.includes('localhost'), '/sitemap.xml contains localhost');
-  for (const path of ['/', '/category/all', '/product/chameleon-mario-sofa-01', '/product/single-029-fleece-01', '/product/pebble-sofa-01', '/product/cashew-sofa-01', '/shipping', '/privacy']) {
+  for (const path of ['/', '/category/all', '/product/chameleon-mario-sofa-01', '/product/single-029-fleece-01', '/product/pebble-sofa-01', '/product/cashew-sofa-01', '/guides', '/guides/sofa-in-a-box-europe', '/es/guias', '/es/guias/sofa-en-caja-europa', '/shipping', '/privacy']) {
     const url = path === '/' ? 'https://boxsofa.eu' : `https://boxsofa.eu${path}`;
     assert(sitemap.includes(url), `/sitemap.xml missing ${url}`);
   }

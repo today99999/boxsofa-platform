@@ -15,6 +15,7 @@ import {
   getPublicProductTitle,
   getSeoProductTitle
 } from "@/lib/catalogMarketing";
+import { buildFaqJsonLd, productFaqs } from "@/lib/conversionFaq";
 import type { TranslationKey } from "@/lib/i18n";
 
 const siteUrl = "https://boxsofa.eu";
@@ -154,6 +155,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       }
     }
   };
+  const faqJsonLd = buildFaqJsonLd(productFaqs);
   const siblings = products.filter((item) => item.styleId === product.styleId);
   const typeOptions = categoryOrder
     .map((category) => siblings.find((item) => item.category === category))
@@ -182,6 +184,10 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       <main className="hero product-hero">
         <div>
@@ -254,6 +260,21 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
               </div>
             ))}
           </dl>
+        </div>
+
+        <div className="panel product-faq-panel">
+          <div className="panel-head">
+            <h2>Before you order</h2>
+            <span className="status">Compressed sofa FAQ</span>
+          </div>
+          <div className="product-faq-grid">
+            {productFaqs.map((item) => (
+              <details className="product-faq-item" key={item.question}>
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
+          </div>
         </div>
 
         <div className="detail-media-stack">
