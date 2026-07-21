@@ -8,6 +8,7 @@ import { getProductBySlug, type Product } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { buildFaqJsonLd } from "@/lib/conversionFaq";
 import { getEnglishGuideForSpanishSlug, getRelatedGuides, getSpanishGuideBySlug, spanishGuides } from "@/lib/guides";
+import { buildBreadcrumbJsonLd } from "@/lib/structuredData";
 
 export function generateStaticParams() {
   return spanishGuides.map((guide) => ({ slug: guide.slug }));
@@ -45,6 +46,11 @@ export default function SpanishGuidePage({ params }: { params: { slug: string } 
 
   const products = guide.productSlugs.map(getProductBySlug).filter((product): product is Product => Boolean(product));
   const faqJsonLd = buildFaqJsonLd(guide.sections.map((section) => ({ question: section.title, answer: section.body })));
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Inicio", url: "https://boxsofa.eu" },
+    { name: "Guías", url: "https://boxsofa.eu/es/guias" },
+    { name: guide.title, url: `https://boxsofa.eu/es/guias/${guide.slug}` }
+  ]);
   const relatedGuides = getRelatedGuides(guide.slug, "es", 3);
   const englishGuide = getEnglishGuideForSpanishSlug(guide.slug);
 
@@ -54,6 +60,10 @@ export default function SpanishGuidePage({ params }: { params: { slug: string } 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <main className="guide-page">
         <section className="guide-hero">

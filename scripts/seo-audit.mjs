@@ -8,10 +8,10 @@ const pageChecks = [
   { path: '/product/chameleon-mario-sofa-01', titleIncludes: ['Compressed Sofa', 'BoxSofa'], canonical: `${canonicalHost}/product/chameleon-mario-sofa-01`, productJsonLd: true },
   { path: '/product/pebble-sofa-01', titleIncludes: ['Compressed Sofa', 'BoxSofa'], canonical: `${canonicalHost}/product/pebble-sofa-01`, productJsonLd: true },
   { path: '/guides', titleIncludes: ['Compressed Sofa', 'Guides'], canonical: `${canonicalHost}/guides` },
-  { path: '/guides/sofa-in-a-box-europe', titleIncludes: ['Sofa in a Box', 'BoxSofa'], canonical: `${canonicalHost}/guides/sofa-in-a-box-europe`, faqJsonLd: true },
+  { path: '/guides/sofa-in-a-box-europe', titleIncludes: ['Sofa in a Box', 'BoxSofa'], canonical: `${canonicalHost}/guides/sofa-in-a-box-europe`, faqJsonLd: true, breadcrumbJsonLd: true },
   { path: '/es/guias', titleIncludes: ['Guías', 'Sofás Comprimidos'], canonical: `${canonicalHost}/es/guias` },
-  { path: '/es/guias/sofa-en-caja-europa', titleIncludes: ['Sofá en Caja', 'BoxSofa'], canonical: `${canonicalHost}/es/guias/sofa-en-caja-europa`, faqJsonLd: true },
-  { path: '/es/guias/sofa-comprimido-madrid-piso-pequeno', titleIncludes: ['Madrid', 'BoxSofa'], canonical: `${canonicalHost}/es/guias/sofa-comprimido-madrid-piso-pequeno`, faqJsonLd: true },
+  { path: '/es/guias/sofa-en-caja-europa', titleIncludes: ['Sofá en Caja', 'BoxSofa'], canonical: `${canonicalHost}/es/guias/sofa-en-caja-europa`, faqJsonLd: true, breadcrumbJsonLd: true },
+  { path: '/es/guias/sofa-comprimido-madrid-piso-pequeno', titleIncludes: ['Madrid', 'BoxSofa'], canonical: `${canonicalHost}/es/guias/sofa-comprimido-madrid-piso-pequeno`, faqJsonLd: true, breadcrumbJsonLd: true },
   { path: '/shipping', titleIncludes: ['Shipping'], canonical: `${canonicalHost}/shipping` },
   { path: '/returns', titleIncludes: ['Returns'], canonical: `${canonicalHost}/returns` },
   { path: '/privacy', titleIncludes: ['Privacy'], canonical: `${canonicalHost}/privacy` },
@@ -88,11 +88,16 @@ async function checkPage(route) {
     assert(html.includes('"@type":"Product"'), `${route.path} missing Product JSON-LD`);
     assert(html.includes('"priceCurrency":"EUR"'), `${route.path} missing EUR offer`);
     assert(html.includes('"@type":"FAQPage"'), `${route.path} missing product FAQ JSON-LD`);
+    assert(html.includes('"@type":"BreadcrumbList"'), `${route.path} missing BreadcrumbList JSON-LD`);
   }
 
   if (route.faqJsonLd) {
     assert(html.includes('application/ld+json'), `${route.path} missing JSON-LD`);
     assert(html.includes('"@type":"FAQPage"'), `${route.path} missing FAQPage JSON-LD`);
+  }
+
+  if (route.breadcrumbJsonLd) {
+    assert(html.includes('"@type":"BreadcrumbList"'), `${route.path} missing BreadcrumbList JSON-LD`);
   }
 
   console.log(`OK SEO ${route.path}`);

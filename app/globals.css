@@ -713,6 +713,13 @@ video {
   font-weight: 900;
 }
 
+.collection-intro {
+  color: #3d4942;
+  line-height: 1.58;
+  margin: 10px 0 0;
+  max-width: 760px;
+}
+
 .product-grid {
   display: grid;
   gap: 14px;
@@ -783,6 +790,52 @@ video {
   color: var(--accent) !important;
   font-weight: 900;
   margin-top: 2px;
+}
+
+.collection-guide-band {
+  align-items: start;
+  background: #f7f8f2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.15fr);
+  margin-top: 28px;
+  padding: 20px;
+}
+
+.collection-guide-band h2 {
+  font-size: clamp(22px, 2.8vw, 34px);
+  line-height: 1.08;
+  margin: 0;
+}
+
+.collection-guide-links {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.collection-guide-links a {
+  background: #fff;
+  border: 1px solid rgba(223, 229, 222, 0.95);
+  border-radius: 8px;
+  color: inherit;
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+}
+
+.collection-guide-links span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.collection-guide-links strong {
+  font-size: 15px;
+  line-height: 1.32;
 }
 
 .card {
@@ -3292,6 +3345,11 @@ video {
     line-height: 1.1;
   }
 
+  .collection-intro {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
   .product-grid {
     gap: 10px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3315,6 +3373,16 @@ video {
   .product-card-body span {
     font-size: 13px;
     line-height: 1.35;
+  }
+
+  .collection-guide-band {
+    grid-template-columns: 1fr;
+    margin-top: 18px;
+    padding: 15px;
+  }
+
+  .collection-guide-links {
+    grid-template-columns: 1fr;
   }
 
   .spec-grid {

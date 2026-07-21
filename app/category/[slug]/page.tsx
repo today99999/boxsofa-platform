@@ -7,6 +7,7 @@ import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { categories, getStyleProductsByCategory } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
+import { guides, spanishGuides } from "@/lib/guides";
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const category = categories.find((item) => item.slug === params.slug) ?? categories[0];
@@ -33,6 +34,10 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
   const category = categories.find((item) => item.slug === slug) ?? categories[0];
   const items = getStyleProductsByCategory(category.slug);
+  const guideLinks = [
+    ...guides.slice(0, 2).map((guide) => ({ ...guide, href: `/guides/${guide.slug}`, label: "Guide" })),
+    ...spanishGuides.slice(0, 2).map((guide) => ({ ...guide, href: `/es/guias/${guide.slug}`, label: "Guía" }))
+  ];
 
   return (
     <>
@@ -42,6 +47,10 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
           <div>
             <p className="eyebrow">BoxSofa Collection</p>
             <h1>{category.slug === "all" ? <TranslatedText id="allSofas" /> : category.name}</h1>
+            <p className="collection-intro">
+              Compressed foam sofas for small apartments, rental homes, narrow stairs and compact lifts. Free basic
+              delivery in Spain, secure Stripe payment and a 14-day return window after delivery.
+            </p>
           </div>
           <span>{items.length} <TranslatedText id="stylesCount" /></span>
         </div>
@@ -63,6 +72,20 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
             </Link>
           ))}
         </div>
+        <section className="collection-guide-band" aria-label="Compressed sofa buying guides">
+          <div>
+            <p className="eyebrow">Before you choose</p>
+            <h2>Measure the delivery route, then choose the sofa.</h2>
+          </div>
+          <div className="collection-guide-links">
+            {guideLinks.map((guide) => (
+              <Link href={guide.href} key={guide.href}>
+                <span>{guide.label}</span>
+                <strong>{guide.title}</strong>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
       <SiteFooter />
       <SupportButton />

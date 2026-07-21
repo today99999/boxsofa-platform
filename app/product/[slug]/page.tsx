@@ -17,6 +17,7 @@ import {
 } from "@/lib/catalogMarketing";
 import { buildFaqJsonLd, productFaqs } from "@/lib/conversionFaq";
 import type { TranslationKey } from "@/lib/i18n";
+import { buildBreadcrumbJsonLd } from "@/lib/structuredData";
 
 const siteUrl = "https://boxsofa.eu";
 
@@ -156,6 +157,11 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
     }
   };
   const faqJsonLd = buildFaqJsonLd(productFaqs);
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Home", url: siteUrl },
+    { name: "All Compressed Sofas", url: absoluteUrl("/category/all") },
+    { name: publicTitle, url: absoluteUrl(`/product/${product.slug}`) }
+  ]);
   const siblings = products.filter((item) => item.styleId === product.styleId);
   const typeOptions = categoryOrder
     .map((category) => siblings.find((item) => item.category === category))
@@ -188,6 +194,10 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <main className="hero product-hero">
         <div>
