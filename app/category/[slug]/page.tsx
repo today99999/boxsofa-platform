@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { categories, getStyleProductsByCategory } from "@/lib/catalog";
+import { getPublicProductTitle } from "@/lib/catalogMarketing";
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const category = categories.find((item) => item.slug === params.slug) ?? categories[0];
@@ -49,7 +50,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
             <Link className="product-card" href={`/product/${product.slug}`} key={product.id}>
               <div className="collection-product-media">
                 {product.mainImage ? (
-                  <img src={product.mainImage} alt={product.name} />
+                  <img src={product.mainImage} alt={getPublicProductTitle(product)} />
                 ) : (
                   <div className="image-placeholder"><TranslatedText id="mainImagePending" /></div>
                 )}

@@ -1,5 +1,10 @@
 import type { Product } from "./catalog.ts";
-import { translateCatalogText } from "./catalogI18n.ts";
+import {
+  getMerchantProductTitle,
+  getPublicItemGroupId,
+  getPublicProductColor,
+  getPublicProductDescription
+} from "./catalogMarketing.ts";
 
 const columns = [
   "id",
@@ -39,16 +44,16 @@ export function buildGoogleMerchantFeed(items: Product[], siteUrl: string) {
   const rows = items.map((product) => {
     const values: Record<(typeof columns)[number], string | number> = {
       id: product.sku,
-      title: translateCatalogText(product.name, "en"),
-      description: translateCatalogText(product.description, "en", "description"),
+      title: getMerchantProductTitle(product),
+      description: getPublicProductDescription(product),
       link: absoluteUrl(siteUrl, `/product/${product.slug}`),
       image_link: absoluteUrl(siteUrl, product.mainImage),
       availability: product.stock > 0 ? "in_stock" : "out_of_stock",
       price: `${product.priceEur.toFixed(2)} EUR`,
       condition: "new",
       identifier_exists: "no",
-      item_group_id: product.styleId,
-      color: translateCatalogText(product.color, "en"),
+      item_group_id: getPublicItemGroupId(product),
+      color: getPublicProductColor(product),
       product_type: categoryName(product)
     };
 

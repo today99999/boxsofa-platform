@@ -582,6 +582,24 @@ video {
   margin-bottom: 18px;
 }
 
+.product-trust-strip {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 18px;
+}
+
+.product-trust-strip span {
+  background: #f7f8f2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #24342c;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  padding: 10px 11px;
+}
+
 .sku-selector {
   display: grid;
   gap: 16px;
@@ -896,6 +914,66 @@ video {
   aspect-ratio: 16 / 9;
   height: auto;
   object-fit: contain;
+}
+
+.guide-page {
+  background: #fbfaf6;
+}
+
+.guide-hero {
+  display: grid;
+  gap: 16px;
+  max-width: 920px;
+  padding: clamp(34px, 6vw, 72px) clamp(18px, 5vw, 64px) 28px;
+}
+
+.guide-hero h1 {
+  font-size: clamp(32px, 5vw, 58px);
+  letter-spacing: 0;
+  line-height: 1.04;
+  margin: 0;
+}
+
+.guide-hero p:not(.eyebrow) {
+  color: #34423a;
+  font-size: clamp(17px, 1.7vw, 20px);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 780px;
+}
+
+.guide-hero .button {
+  justify-self: start;
+}
+
+.guide-content {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px clamp(18px, 5vw, 64px) 30px;
+}
+
+.guide-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.guide-card h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+
+.guide-card p {
+  color: #3d4942;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.guide-products {
+  padding-top: 16px;
 }
 
 .admin-layout {

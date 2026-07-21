@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { getProductBySlug, products, type CategorySlug, type Product } from "@/lib/catalog";
+import { getPublicProductDescription, getPublicProductName, getPublicProductTitle } from "@/lib/catalogMarketing";
 import type { TranslationKey } from "@/lib/i18n";
 
 const siteUrl = "https://boxsofa.eu";
@@ -58,17 +59,18 @@ function formatWeight(weight: string) {
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const product = getProductBySlug(params.slug) ?? products[0];
-  const description = `Compressed sofa for European apartments, rental homes, old buildings, elevators, staircases, and compact spaces. Dimensions: ${product.dimensions}. Price: EUR ${product.priceEur}. Estimated cross-border delivery: 23-30 days.`;
+  const publicTitle = getPublicProductTitle(product);
+  const description = getPublicProductDescription(product);
   const image = product.mainImage || product.images[0];
 
   return {
-    title: `${product.name} | Compressed Sofa`,
+    title: `${publicTitle} | BoxSofa`,
     description,
     alternates: {
       canonical: `/product/${product.slug}`
     },
     openGraph: {
-      title: `${product.name} | BoxSofa`,
+      title: publicTitle,
       description,
       url: `/product/${product.slug}`,
       type: "website",
@@ -76,7 +78,7 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
         ? [
             {
               url: image,
-              alt: product.name
+              alt: publicTitle
             }
           ]
         : undefined
@@ -86,14 +88,17 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
 
 export default function ProductPage({ params }: { params: { slug: string } }) {
   const product = getProductBySlug(params.slug) ?? products[0];
+  const publicName = getPublicProductName(product);
+  const publicTitle = getPublicProductTitle(product);
+  const publicDescription = getPublicProductDescription(product);
   const productImages = (product.images.length ? product.images : [product.mainImage])
     .filter(Boolean)
     .map(absoluteUrl);
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: product.name,
-    description: product.description,
+    name: publicTitle,
+    description: publicDescription,
     sku: product.sku,
     brand: {
       "@type": "Brand",
@@ -106,7 +111,42 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       priceCurrency: "EUR",
       price: product.priceEur,
       availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      itemCondition: "https://schema.org/NewCondition"
+      itemCondition: "https://schema.org/NewCondition",
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingDestination: {
+          "@type": "DefinedRegion",
+          addressCountry: "ES"
+        },
+        shippingRate: {
+          "@type": "MonetaryAmount",
+          value: 0,
+          currency: "EUR"
+        },
+        deliveryTime: {
+          "@type": "ShippingDeliveryTime",
+          handlingTime: {
+            "@type": "QuantitativeValue",
+            minValue: 1,
+            maxValue: 3,
+            unitCode: "d"
+          },
+          transitTime: {
+            "@type": "QuantitativeValue",
+            minValue: 23,
+            maxValue: 30,
+            unitCode: "d"
+          }
+        }
+      },
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: "ES",
+        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+        merchantReturnDays: 14,
+        returnMethod: "https://schema.org/ReturnByMail",
+        returnFees: "https://schema.org/ReturnShippingFees"
+      }
     }
   };
   const siblings = products.filter((item) => item.styleId === product.styleId);
@@ -141,7 +181,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       <main className="hero product-hero">
         <div>
           <ProductMedia
-            name={product.name}
+            name={publicTitle}
             images={product.images.length ? product.images : [product.mainImage]}
             previousHref={siblings.length > 1 ? `/product/${previousSku.slug}` : undefined}
             nextHref={siblings.length > 1 ? `/product/${nextSku.slug}` : undefined}
@@ -152,6 +192,12 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <h1><CatalogText text={product.name} kind="name" /></h1>
           <p><CatalogText text={product.description} kind="description" /></p>
           <p><TranslatedText id="shippingAndPaymentNote" /></p>
+          <div className="product-trust-strip" aria-label={`Why buy ${publicName} from BoxSofa`}>
+            <span>Secure Stripe card payment</span>
+            <span>14-day return window in Spain</span>
+            <span>Free basic delivery in Spain</span>
+            <span>Support: info@boxsofa.eu</span>
+          </div>
           <div className="price">EUR {product.priceEur}</div>
           <div className="sku-selector">
             <div className="sku-section">

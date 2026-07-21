@@ -108,6 +108,12 @@ const phrases: Record<Exclude<LanguageCode, "zh">, PhraseMap> = {
     "紫色": "purple",
     "花色": "patterned",
     "沙发态": "sofa mode",
+    "另一模块": "another module",
+    "双扶手": "two-arm",
+    "大包": "large package",
+    "小包": "small package",
+    "每箱": "each box",
+    "箱": "box",
     "展开约": "unfolded approx.",
     "展开": "unfolded",
     "半展开约": "half-unfolded approx.",
@@ -431,6 +437,8 @@ export function translateCatalogText(text: string, language: LanguageCode, kind:
   return applyPhraseMap(text, language)
     .replace(/\s*\/\s*/g, " / ")
     .replace(/\s*;\s*/g, "; ")
+    .replace(/：/g, ": ")
+    .replace(/[（）]/g, " ")
     .replace(/，/g, ", ")
     .replace(/、/g, ", ")
     .replace(/。/g, ".")

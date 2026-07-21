@@ -23,6 +23,7 @@ const footerCopy = {
     privacy: "隐私政策",
     terms: "服务条款",
     faq: "常见问题",
+    guides: "小空间购买指南",
     tracking: "订单查询",
     reviews: "客户评价",
     businessHours: "周一至周五 09:00-18:00 CET",
@@ -54,6 +55,7 @@ const footerCopy = {
     privacy: "Privacy policy",
     terms: "Terms of service",
     faq: "Compressed sofa FAQ",
+    guides: "Small-space buying guides",
     tracking: "Order tracking",
     reviews: "Customer reviews",
     businessHours: "Mon-Fri 09:00-18:00 CET",
@@ -85,6 +87,7 @@ const footerCopy = {
     privacy: "Política de privacidad",
     terms: "Condiciones",
     faq: "FAQ de sofás comprimidos",
+    guides: "Guías para espacios pequeños",
     tracking: "Seguimiento de pedidos",
     reviews: "Reseñas de clientes",
     businessHours: "L-V 09:00-18:00 CET",
@@ -116,6 +119,7 @@ const footerCopy = {
     privacy: "Politique de confidentialité",
     terms: "Conditions",
     faq: "FAQ canapé compressé",
+    guides: "Guides petits espaces",
     tracking: "Suivi de commande",
     reviews: "Avis clients",
     businessHours: "Lun-ven 09:00-18:00 CET",
@@ -147,6 +151,7 @@ const footerCopy = {
     privacy: "Datenschutz",
     terms: "Nutzungsbedingungen",
     faq: "FAQ zu komprimierten Sofas",
+    guides: "Ratgeber für kleine Räume",
     tracking: "Bestellverfolgung",
     reviews: "Kundenbewertungen",
     businessHours: "Mo-Fr 09:00-18:00 CET",
@@ -213,6 +218,7 @@ export function SiteFooter() {
           <Link href="/privacy">{copy.privacy}</Link>
           <Link href="/terms">{copy.terms}</Link>
           <Link href="/faq">{copy.faq}</Link>
+          <Link href="/guides/compressed-sofa-small-apartment-spain">{copy.guides}</Link>
           <Link href="/orders">{copy.tracking}</Link>
           <a href="/product/chameleon-mario-sofa-01#product-reviews">{copy.reviews}</a>
         </nav>

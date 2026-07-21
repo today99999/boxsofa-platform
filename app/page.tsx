@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { getStyleProductsByCategory } from "@/lib/catalog";
+import { getPublicProductTitle } from "@/lib/catalogMarketing";
 
 export default function HomePage() {
   const hotProducts = getStyleProductsByCategory("all").slice(0, 8);
@@ -81,7 +82,7 @@ export default function HomePage() {
               <Link className="card home-product-card" href={`/product/${product.slug}`} key={product.id}>
                 <div className="product-media">
                   {product.mainImage ? (
-                    <img src={product.mainImage} alt={product.name} />
+                    <img src={product.mainImage} alt={getPublicProductTitle(product)} />
                   ) : (
                     <div className="image-placeholder"><TranslatedText id="mainImagePending" /></div>
                   )}
