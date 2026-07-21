@@ -107,6 +107,9 @@ export default function HomePage() {
             <Link className="button" href="/guides">
               View guides
             </Link>
+            <Link className="button" href="/es/guias">
+              Guías ES
+            </Link>
           </div>
           <div className="guide-content home-guide-grid" aria-label="Compressed sofa buying guides">
             {featuredGuides.map((guide) => (

@@ -33,9 +33,14 @@ export default function GuidesIndexPage() {
             Practical guides for small apartments, narrow stairs, compact lifts, sofa-in-a-box delivery and flexible
             rental homes in Spain and Europe.
           </p>
-          <Link className="button primary" href="/category/all">
-            Shop compressed sofas
-          </Link>
+          <div className="guide-action-row">
+            <Link className="button primary" href="/category/all">
+              Shop compressed sofas
+            </Link>
+            <Link className="button" href="/es/guias">
+              Guías en español
+            </Link>
+          </div>
         </section>
 
         <section className="guide-content guide-index-grid" aria-label="Compressed sofa buying guides">

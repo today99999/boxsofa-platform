@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { categories, getStyleProductsByCategory } from "@/lib/catalog";
-import { guides } from "@/lib/guides";
+import { guides, spanishGuides } from "@/lib/guides";
 
 const siteUrl = "https://boxsofa.eu";
 const policyRoutes = ["shipping", "returns", "privacy", "terms", "faq"];
@@ -31,6 +31,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "monthly" as const,
     priority: 0.75
   }));
+  const spanishGuideRoutes = spanishGuides.map((guide) => ({
+    url: `${siteUrl}/es/guias/${guide.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.75
+  }));
 
   return [
     {
@@ -45,9 +51,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.8
     },
+    {
+      url: `${siteUrl}/es/guias`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8
+    },
     ...categoryRoutes,
     ...productRoutes,
     ...guideRoutes,
+    ...spanishGuideRoutes,
     ...policyPageRoutes
   ];
 }

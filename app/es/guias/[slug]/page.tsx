@@ -1,0 +1,97 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { SiteFooter } from "@/components/SiteFooter";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SupportButton } from "@/components/SupportButton";
+import { getProductBySlug, type Product } from "@/lib/catalog";
+import { getPublicProductTitle } from "@/lib/catalogMarketing";
+import { getSpanishGuideBySlug, spanishGuides } from "@/lib/guides";
+
+export function generateStaticParams() {
+  return spanishGuides.map((guide) => ({ slug: guide.slug }));
+}
+
+export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+  const guide = getSpanishGuideBySlug(params.slug);
+  if (!guide) return {};
+
+  return {
+    title: `${guide.title} | Guía BoxSofa`,
+    description: guide.description,
+    alternates: {
+      canonical: `/es/guias/${guide.slug}`
+    },
+    openGraph: {
+      title: guide.title,
+      description: guide.description,
+      url: `/es/guias/${guide.slug}`,
+      type: "article"
+    }
+  };
+}
+
+export default function SpanishGuidePage({ params }: { params: { slug: string } }) {
+  const guide = getSpanishGuideBySlug(params.slug);
+  if (!guide) notFound();
+
+  const products = guide.productSlugs.map(getProductBySlug).filter((product): product is Product => Boolean(product));
+
+  return (
+    <>
+      <SiteHeader />
+      <main className="guide-page">
+        <section className="guide-hero">
+          <p className="eyebrow">Guía BoxSofa</p>
+          <h1>{guide.title}</h1>
+          <p>{guide.intro}</p>
+          <div className="guide-action-row">
+            <Link className="button primary" href="/category/all">
+              Ver sofás comprimidos
+            </Link>
+            <Link className="button" href="/es/guias">
+              Todas las guías
+            </Link>
+          </div>
+        </section>
+
+        <section className="guide-content" aria-label={guide.title}>
+          {guide.sections.map((section) => (
+            <article className="guide-card" key={section.title}>
+              <h2>{section.title}</h2>
+              <p>{section.body}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className="section guide-products">
+          <div className="section-head">
+            <h2>Modelos recomendados de sofá comprimido</h2>
+            <Link className="button" href="/category/all">
+              Ver todos
+            </Link>
+          </div>
+          <div className="grid home-product-grid">
+            {products.map((product) => (
+              <Link className="card home-product-card" href={`/product/${product.slug}`} key={product.id}>
+                <div className="product-media">
+                  {product.mainImage ? (
+                    <img src={product.mainImage} alt={getPublicProductTitle(product)} />
+                  ) : (
+                    <div className="image-placeholder">Imagen pendiente</div>
+                  )}
+                </div>
+                <div className="card-body">
+                  <strong>{getPublicProductTitle(product)}</strong>
+                  <span className="price">EUR {product.priceEur}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+      <SupportButton />
+    </>
+  );
+}

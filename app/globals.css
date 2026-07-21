@@ -946,6 +946,12 @@ video {
   justify-self: start;
 }
 
+.guide-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .guide-content {
   display: grid;
   gap: 14px;

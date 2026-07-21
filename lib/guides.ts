@@ -144,6 +144,143 @@ export const guides: Guide[] = [
   }
 ];
 
+export const spanishGuides: Guide[] = [
+  {
+    slug: "sofa-comprimido-piso-pequeno-espana",
+    title: "Sofás Comprimidos para Pisos Pequeños en España",
+    description:
+      "Guía práctica para elegir un sofá comprimido para pisos compactos, alquileres y apartamentos urbanos en España.",
+    intro:
+      "En un piso pequeño, el sofá primero tiene que entrar por la puerta, la escalera o el ascensor. BoxSofa trabaja con sofás de espuma comprimida pensados para entregarse en formato compacto y recuperar su forma tras abrir el paquete.",
+    sections: [
+      {
+        title: "Por qué ayuda el embalaje comprimido",
+        body:
+          "Un sofá comprimido reduce el volumen de entrega y facilita el paso por portales, pasillos, escaleras estrechas y ascensores pequeños. Es útil cuando un sofá tradicional exige transporte especial."
+      },
+      {
+        title: "Qué medir antes de comprar",
+        body:
+          "Mide la habitación, la puerta, el ascensor y el giro más estrecho de la escalera. Compara esas medidas con el tamaño final y el tamaño del paquete indicados en cada producto."
+      },
+      {
+        title: "Entrega y pago",
+        body:
+          "BoxSofa ofrece entrega básica gratuita en España, pago seguro con tarjeta mediante Stripe y entrega estimada en 23-30 días laborables."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-escaleras-estrechas-sin-ascensor",
+    title: "Sofás para Escaleras Estrechas y Edificios sin Ascensor",
+    description:
+      "Cómo elegir un sofá si tu edificio tiene escaleras estrechas, no tiene ascensor o el acceso es complicado.",
+    intro:
+      "Muchos edificios antiguos no están preparados para muebles voluminosos. Un sofá comprimido ofrece más margen porque llega en un paquete más pequeño antes de expandirse.",
+    sections: [
+      {
+        title: "Empieza por la ruta de entrega",
+        body:
+          "Antes de comparar estilos, revisa el punto más estrecho: portal, giro de escalera, pasillo y puerta del piso. El tamaño del paquete importa tanto como el tamaño final."
+      },
+      {
+        title: "Elige formatos flexibles",
+        body:
+          "Los formatos individuales, modulares y sofá cama suelen ser más fáciles de colocar en viviendas difíciles. Si la distribución puede cambiar, evita una estructura demasiado rígida."
+      },
+      {
+        title: "Deja recuperar la espuma",
+        body:
+          "Tras abrir el paquete al vacío, deja 24-72 horas para que la espuma recupere su forma. Mantén espacio alrededor durante el primer periodo de expansión."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-en-caja-europa",
+    title: "Sofá en Caja para Hogares Europeos",
+    description:
+      "Qué significa comprar un sofá en caja, cómo se expande y cuándo conviene este formato en Europa.",
+    intro:
+      "Un sofá en caja prioriza la entrega: primero llega compacto y después recupera su tamaño de uso. Es una opción práctica para alquileres, habitaciones de invitados, estudios y viviendas con acceso limitado.",
+    sections: [
+      {
+        title: "Qué llega a casa",
+        body:
+          "El sofá llega comprimido al vacío en un paquete más manejable. Al abrirlo, la espuma empieza a expandirse hasta acercarse a su forma final."
+      },
+      {
+        title: "Para quién tiene sentido",
+        body:
+          "Funciona especialmente bien para inquilinos, pisos pequeños, habitaciones flexibles, edificios antiguos y casas donde el problema real es la entrega."
+      },
+      {
+        title: "Cómo comprar con menos riesgo",
+        body:
+          "Busca fotos claras, video, medidas, pago seguro y condiciones de devolución publicadas. BoxSofa muestra la entrega, el pago y la política de devoluciones antes del checkout."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "recuperacion-sofa-comprimido-24-72-horas",
+    title: "Entrega y Recuperación de un Sofá Comprimido en 24-72 Horas",
+    description:
+      "Qué ocurre después de recibir un sofá comprimido, cuánto tarda en recuperar la forma y qué debe esperar el comprador.",
+    intro:
+      "Los muebles de espuma comprimida necesitan un periodo corto de recuperación tras abrir el paquete. Entender ese proceso ayuda a comprar con expectativas claras.",
+    sections: [
+      {
+        title: "Abrir el paquete",
+        body:
+          "Coloca el paquete en la habitación donde usarás el sofá, abre con cuidado y deja espacio para que la espuma se expanda. No juzgues la forma final en las primeras horas."
+      },
+      {
+        title: "Tiempo de recuperación",
+        body:
+          "La mayoría de productos BoxSofa indican una expansión de 24-72 horas. La temperatura, el tejido y el grosor de la espuma pueden afectar la velocidad exacta."
+      },
+      {
+        title: "Cuándo contactar con soporte",
+        body:
+          "Si el producto sigue siendo claramente distinto a la página después del periodo de recuperación, escribe a info@boxsofa.eu con el número de pedido y fotos claras."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-cama-piso-alquiler",
+    title: "Sofá Cama de Espuma para Pisos de Alquiler y Habitaciones de Invitados",
+    description:
+      "Guía para elegir un sofá cama comprimido y flexible para pisos de alquiler, habitaciones de invitados y espacios compactos.",
+    intro:
+      "En un piso de alquiler o una habitación de invitados, el mejor sofá suele ser el que se entrega con facilidad, se coloca sin complicaciones y sirve para descansar o recibir visitas.",
+    sections: [
+      {
+        title: "Piensa en el uso real",
+        body:
+          "Decide si se usará para sentarse, tumbarse, recibir invitados o combinar varias funciones. Los formatos plegables o sofá cama ayudan cuando una habitación tiene varios usos."
+      },
+      {
+        title: "Protege la distribución",
+        body:
+          "Mide tanto el modo sofá como el modo extendido. Deja espacio para puertas, armarios y acceso al balcón, de modo que la habitación siga siendo cómoda."
+      },
+      {
+        title: "Ventaja en viviendas de alquiler",
+        body:
+          "Los alquileres suelen tener accesos limitados y distribuciones cambiantes. Un sofá de espuma comprimida reduce la fricción de entrega y es más fácil de recolocar."
+      }
+    ],
+    productSlugs: featured
+  }
+];
+
 export function getGuideBySlug(slug: string) {
   return guides.find((guide) => guide.slug === slug);
+}
+
+export function getSpanishGuideBySlug(slug: string) {
+  return spanishGuides.find((guide) => guide.slug === slug);
 }
