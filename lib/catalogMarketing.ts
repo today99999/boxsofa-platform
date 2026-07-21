@@ -63,9 +63,9 @@ export function getSeoProductTitle(product: Product) {
 
 export function getPublicProductDescription(product: Product) {
   const name = getPublicProductName(product);
-  const dimensions = translateCatalogText(product.dimensions, "en", "dimension");
+  const compactName = name.length > 44 ? `${name.slice(0, 41).trim()}...` : name;
   return cleanSpaces(
-    `${name} is a compressed foam sofa for European apartments, rental homes, narrow staircases and small lifts. Free basic delivery in Spain, secure Stripe payment and estimated cross-border delivery in 23-30 working days. Finished size: ${dimensions}.`
+    `${compactName} is a compressed foam sofa for small apartments, rentals, narrow stairs and compact lifts. Free Spain delivery, Stripe payment and 23-30 working day delivery.`
   );
 }
 
