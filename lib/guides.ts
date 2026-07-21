@@ -388,3 +388,23 @@ export function getGuideBySlug(slug: string) {
 export function getSpanishGuideBySlug(slug: string) {
   return spanishGuides.find((guide) => guide.slug === slug);
 }
+
+export function getRelatedGuides(slug: string, language: "en" | "es", limit = 3) {
+  const source = language === "es" ? spanishGuides : guides;
+  const currentIndex = source.findIndex((guide) => guide.slug === slug);
+  const ordered = currentIndex >= 0
+    ? [...source.slice(currentIndex + 1), ...source.slice(0, currentIndex)]
+    : source;
+
+  return ordered.filter((guide) => guide.slug !== slug).slice(0, limit);
+}
+
+export function getSpanishGuideForEnglishSlug(slug: string) {
+  const index = guides.findIndex((guide) => guide.slug === slug);
+  return index >= 0 ? spanishGuides[index] : undefined;
+}
+
+export function getEnglishGuideForSpanishSlug(slug: string) {
+  const index = spanishGuides.findIndex((guide) => guide.slug === slug);
+  return index >= 0 ? guides[index] : undefined;
+}

@@ -7,7 +7,7 @@ import { SupportButton } from "@/components/SupportButton";
 import { getProductBySlug, type Product } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { buildFaqJsonLd } from "@/lib/conversionFaq";
-import { getGuideBySlug, guides } from "@/lib/guides";
+import { getGuideBySlug, getRelatedGuides, getSpanishGuideForEnglishSlug, guides } from "@/lib/guides";
 
 export function generateStaticParams() {
   return guides.map((guide) => ({ slug: guide.slug }));
@@ -16,12 +16,19 @@ export function generateStaticParams() {
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const guide = getGuideBySlug(params.slug);
   if (!guide) return {};
+  const spanishGuide = getSpanishGuideForEnglishSlug(guide.slug);
 
   return {
     title: `${guide.title} | BoxSofa Guide`,
     description: guide.description,
     alternates: {
-      canonical: `/guides/${guide.slug}`
+      canonical: `/guides/${guide.slug}`,
+      languages: spanishGuide
+        ? {
+            en: `/guides/${guide.slug}`,
+            es: `/es/guias/${spanishGuide.slug}`
+          }
+        : undefined
     },
     openGraph: {
       title: guide.title,
@@ -38,6 +45,8 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
 
   const products = guide.productSlugs.map(getProductBySlug).filter((product): product is Product => Boolean(product));
   const faqJsonLd = buildFaqJsonLd(guide.sections.map((section) => ({ question: section.title, answer: section.body })));
+  const relatedGuides = getRelatedGuides(guide.slug, "en", 3);
+  const spanishGuide = getSpanishGuideForEnglishSlug(guide.slug);
 
   return (
     <>
@@ -51,9 +60,16 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
           <p className="eyebrow">BoxSofa buying guide</p>
           <h1>{guide.title}</h1>
           <p>{guide.intro}</p>
-          <Link className="button primary" href="/category/all">
-            Shop compressed sofas
-          </Link>
+          <div className="guide-action-row">
+            <Link className="button primary" href="/category/all">
+              Shop compressed sofas
+            </Link>
+            {spanishGuide ? (
+              <Link className="button" href={`/es/guias/${spanishGuide.slug}`}>
+                Leer en español
+              </Link>
+            ) : null}
+          </div>
         </section>
 
         <section className="guide-content" aria-label={guide.title}>
@@ -86,6 +102,24 @@ export default function GuidePage({ params }: { params: { slug: string } }) {
                   <strong>{getPublicProductTitle(product)}</strong>
                   <span className="price">EUR {product.priceEur}</span>
                 </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="section related-guides-section">
+          <div className="section-head">
+            <h2>Related buying guides</h2>
+            <Link className="button" href="/guides">
+              All guides
+            </Link>
+          </div>
+          <div className="guide-content home-guide-grid" aria-label="Related compressed sofa guides">
+            {relatedGuides.map((related) => (
+              <Link className="guide-card guide-link-card" href={`/guides/${related.slug}`} key={related.slug}>
+                <span className="eyebrow">Guide</span>
+                <h2>{related.title}</h2>
+                <p>{related.description}</p>
               </Link>
             ))}
           </div>

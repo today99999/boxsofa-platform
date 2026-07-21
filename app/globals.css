@@ -1037,6 +1037,10 @@ video {
   padding-top: 16px;
 }
 
+.related-guides-section {
+  padding-top: 12px;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
