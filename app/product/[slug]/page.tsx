@@ -9,7 +9,12 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { getProductBySlug, products, type CategorySlug, type Product } from "@/lib/catalog";
-import { getPublicProductDescription, getPublicProductName, getPublicProductTitle } from "@/lib/catalogMarketing";
+import {
+  getPublicProductDescription,
+  getPublicProductName,
+  getPublicProductTitle,
+  getSeoProductTitle
+} from "@/lib/catalogMarketing";
 import type { TranslationKey } from "@/lib/i18n";
 
 const siteUrl = "https://boxsofa.eu";
@@ -64,7 +69,7 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   const image = product.mainImage || product.images[0];
 
   return {
-    title: `${publicTitle} | BoxSofa`,
+    title: getSeoProductTitle(product),
     description,
     alternates: {
       canonical: `/product/${product.slug}`

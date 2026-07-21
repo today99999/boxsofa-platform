@@ -52,6 +52,15 @@ export function getMerchantProductTitle(product: Product) {
   return cleanSpaces(`${getPublicProductTitle(product)} for small apartments in Spain`);
 }
 
+export function getSeoProductTitle(product: Product) {
+  const baseName = getPublicProductName(product).replace(/\s+\/\s+/g, " ");
+  const color = getPublicProductColor(product);
+  const colorPart = color && !baseName.toLowerCase().includes(color.toLowerCase()) ? ` ${color}` : "";
+  const compactName = cleanSpaces(`${baseName}${colorPart}`).slice(0, 48).trim();
+
+  return `${compactName} | Compressed Sofa | BoxSofa`;
+}
+
 export function getPublicProductDescription(product: Product) {
   const name = getPublicProductName(product);
   const dimensions = translateCatalogText(product.dimensions, "en", "dimension");
