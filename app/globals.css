@@ -96,10 +96,32 @@ video {
 }
 
 .brand {
-  font-size: 30px;
+  align-items: center;
+  display: inline-flex;
+  font-size: 28px;
   font-weight: 900;
+  gap: 9px;
   letter-spacing: 0;
   line-height: 1;
+}
+
+.brand-mark {
+  flex: 0 0 auto;
+  height: 42px;
+  width: 42px;
+}
+
+.brand-name {
+  color: var(--ink);
+}
+
+.brand-region {
+  align-self: flex-end;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  margin: 0 0 4px -5px;
+  text-transform: uppercase;
 }
 
 .login-link {
@@ -3173,7 +3195,18 @@ video {
   }
 
   .brand {
-    font-size: 27px;
+    font-size: 24px;
+    gap: 7px;
+  }
+
+  .brand-mark {
+    height: 36px;
+    width: 36px;
+  }
+
+  .brand-region {
+    font-size: 9px;
+    margin-bottom: 3px;
   }
 
   .topbar {

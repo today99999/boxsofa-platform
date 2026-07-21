@@ -49,14 +49,14 @@ export default function HomePage() {
           <div className="hero-media hero-ad-media">
             <video
               className="hero-video"
-              src="/assets/video/boxsofa-remy-sofa.mp4"
-              poster={heroProduct?.mainImage || "/assets/catalog/chameleon-mario-sofa/chameleon-mario-sofa-01/main-02.jpg"}
+              src="/assets/video/boxsofa-blue-bubble-hero.mp4"
+              poster="/assets/brand/boxsofa-blue-bubble-hero.jpg"
               autoPlay
               muted
               loop
               playsInline
               preload="metadata"
-              aria-label="BoxSofa compressed sofa unboxing video"
+              aria-label="Blue BoxSofa expanding from its compressed delivery package"
             />
             <div className="hero-badge hero-badge-price">
               <span><TranslatedText id="heroBadgeCompressed" /></span>

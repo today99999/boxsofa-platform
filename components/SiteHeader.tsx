@@ -43,7 +43,9 @@ export function SiteHeader() {
       <header className="site-header">
         <div className="header-top">
           <Link className="brand" href="/">
-            BoxSofa
+            <img className="brand-mark" src="/assets/brand/boxsofa-mark.svg" alt="" width="42" height="42" />
+            <span className="brand-name">BoxSofa</span>
+            <span className="brand-region">Europe</span>
           </Link>
           <div className="header-actions">
             <LanguageSwitcher />

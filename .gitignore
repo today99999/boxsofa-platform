@@ -13,6 +13,7 @@ dev-server.err.log
 tsconfig.tsbuildinfo
 .vercel
 .worktrees/
+tmp/
 
 .vercel
 .env*
