@@ -12,9 +12,9 @@ export const metadata: Metadata = {
     "BoxSofa sells compressed sofas for European apartments, rental homes, old buildings, elevators, staircases, and compact living spaces. Free basic delivery and estimated cross-border delivery in 23-30 days.",
   applicationName: "BoxSofa Europe",
   icons: {
-    icon: "/assets/brand/boxsofa-mark.svg",
-    shortcut: "/assets/brand/boxsofa-mark.svg",
-    apple: "/assets/brand/boxsofa-mark.svg"
+    icon: "/assets/brand/boxsofa-mark.png",
+    shortcut: "/assets/brand/boxsofa-mark.png",
+    apple: "/assets/brand/boxsofa-mark.png"
   },
   keywords: ["BoxSofa", "BoxSofa Europe", "boxsofa.eu", "compressed sofa", "European sofa", "modular sofa", "apartment sofa", "sofa in a box"],
   alternates: {
@@ -54,7 +54,7 @@ const organizationJsonLd = {
   name: "BoxSofa Europe",
   alternateName: ["BoxSofa", "boxsofa.eu"],
   url: "https://boxsofa.eu",
-  logo: "https://boxsofa.eu/assets/brand/boxsofa-mark.svg",
+  logo: "https://boxsofa.eu/assets/brand/boxsofa-logo.png",
   email: "info@boxsofa.eu",
   sameAs: [
     "https://www.facebook.com/profile.php?id=61591789692090",

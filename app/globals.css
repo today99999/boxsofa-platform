@@ -98,21 +98,14 @@ video {
 .brand {
   align-items: center;
   display: inline-flex;
-  font-size: 28px;
-  font-weight: 900;
-  gap: 9px;
-  letter-spacing: 0;
+  gap: 7px;
   line-height: 1;
 }
 
-.brand-mark {
+.brand-logo {
   flex: 0 0 auto;
-  height: 42px;
-  width: 42px;
-}
-
-.brand-name {
-  color: var(--ink);
+  height: auto;
+  width: 176px;
 }
 
 .brand-region {
@@ -3195,13 +3188,12 @@ video {
   }
 
   .brand {
-    font-size: 24px;
-    gap: 7px;
+    gap: 5px;
   }
 
-  .brand-mark {
-    height: 36px;
-    width: 36px;
+  .brand-logo {
+    height: auto;
+    width: 146px;
   }
 
   .brand-region {
