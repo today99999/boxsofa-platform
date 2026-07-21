@@ -25,7 +25,10 @@ export const metadata: Metadata = {
     type: "website"
   },
   verification: {
-    google: "ReHrUQ9HqM1xxiYbP5XKARBVSdAjkZzbq8V-4haDqGI"
+    google: "ReHrUQ9HqM1xxiYbP5XKARBVSdAjkZzbq8V-4haDqGI",
+    other: {
+      "p:domain_verify": "bf28becfb76e46c0a4be311b08876905"
+    }
   },
   robots: {
     index: true,
