@@ -10,7 +10,7 @@ test("builds an English Google Merchant TSV feed for every product", () => {
   const columns = header.split("\t");
 
   assert.equal(rows.length, products.length);
-  assert.deepEqual(columns.slice(0, 8), [
+  for (const column of [
     "id",
     "title",
     "description",
@@ -19,7 +19,9 @@ test("builds an English Google Merchant TSV feed for every product", () => {
     "availability",
     "price",
     "condition"
-  ]);
+  ]) {
+    assert.ok(columns.includes(column), `missing ${column}`);
+  }
 
   const first = Object.fromEntries(columns.map((column, index) => [column, rows[0].split("\t")[index]]));
   assert.equal(first.id, products[0].sku);
@@ -30,11 +32,16 @@ test("builds an English Google Merchant TSV feed for every product", () => {
   assert.equal(first.availability, "in_stock");
   assert.equal(first.price, `${products[0].priceEur.toFixed(2)} EUR`);
   assert.equal(first.condition, "new");
+  assert.equal(first.brand, "BoxSofa");
   assert.equal(first.identifier_exists, "no");
+  assert.equal(first.shipping, "ES:::0 EUR");
+  assert.equal(first.shipping_label, "Free basic delivery in Spain");
+  assert.equal(first.custom_label_0, "compressed sofa");
+  assert.equal(first.custom_label_1, products[0].category);
 
   for (const row of rows) {
     const values = Object.fromEntries(columns.map((column, index) => [column, row.split("\t")[index]]));
-    assert.doesNotMatch(`${values.title} ${values.color}`, /[\u4e00-\u9fff]/);
+    assert.doesNotMatch(`${values.title} ${values.color} ${values.material} ${values.size}`, /[\u4e00-\u9fff]/);
   }
 });
 

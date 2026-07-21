@@ -274,6 +274,110 @@ export const spanishGuides: Guide[] = [
       }
     ],
     productSlugs: featured
+  },
+  {
+    slug: "sofa-comprimido-madrid-piso-pequeno",
+    title: "Sofá Comprimido para Pisos Pequeños en Madrid",
+    description:
+      "Consejos para elegir un sofá comprimido si vives en un piso pequeño, alquiler o edificio con acceso complicado en Madrid.",
+    intro:
+      "En Madrid, muchos pisos tienen portales estrechos, escaleras antiguas o ascensores compactos. Un sofá comprimido ayuda a reducir el problema de entrada antes de convertirse en un sofá de uso diario.",
+    sections: [
+      {
+        title: "Comprueba portal, ascensor y giro de escalera",
+        body:
+          "Antes de comprar, mide el punto más estrecho entre la calle y el salón. El paquete comprimido suele ser más fácil de mover que un sofá rígido, pero las medidas siguen siendo importantes."
+      },
+      {
+        title: "Piensa en pisos de alquiler",
+        body:
+          "Si el piso es temporal o puede cambiar la distribución, un formato individual, modular o sofá cama suele ser más flexible que una pieza grande tradicional."
+      },
+      {
+        title: "Entrega en España",
+        body:
+          "BoxSofa ofrece entrega básica gratuita en España, pago seguro mediante Stripe y entrega estimada en 23-30 días laborables."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-comprimido-barcelona-escaleras-estrechas",
+    title: "Sofá Comprimido para Escaleras Estrechas en Barcelona",
+    description:
+      "Guía para comprar un sofá comprimido en Barcelona cuando el edificio tiene escaleras estrechas, ascensor pequeño o acceso difícil.",
+    intro:
+      "En Barcelona, los pisos urbanos y edificios antiguos pueden complicar la entrega de muebles grandes. Un sofá comprimido llega en un paquete más manejable y recupera su forma después de abrirlo.",
+    sections: [
+      {
+        title: "Mide antes de elegir el modelo",
+        body:
+          "Revisa anchura del portal, escalera, ascensor y puerta del piso. Compara esas medidas con el tamaño del paquete y el tamaño final del sofá."
+      },
+      {
+        title: "Elige formatos que entren mejor",
+        body:
+          "Los sofás individuales, modulares y plegables suelen ser mejores para accesos difíciles porque permiten resolver el problema por partes."
+      },
+      {
+        title: "Recuperación tras abrir",
+        body:
+          "Después de abrir el paquete, deja 24-72 horas para que la espuma se expanda. Evita colocar peso excesivo durante las primeras horas."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-en-caja-valencia-alquiler",
+    title: "Sofá en Caja para Pisos de Alquiler en Valencia",
+    description:
+      "Cómo elegir un sofá en caja para pisos de alquiler, estudios y habitaciones flexibles en Valencia.",
+    intro:
+      "Un piso de alquiler necesita muebles que entren fácil, funcionen en espacios cambiantes y no compliquen la entrega. El formato sofá en caja está pensado para esa realidad.",
+    sections: [
+      {
+        title: "Prioriza flexibilidad",
+        body:
+          "Si el salón también sirve como zona de invitados o teletrabajo, considera un sofá cama o formato modular antes que una estructura rígida."
+      },
+      {
+        title: "Comprueba modo sofá y modo extendido",
+        body:
+          "Mide tanto la posición cerrada como la posición desplegada. Deja espacio para puertas, armarios y paso diario."
+      },
+      {
+        title: "Compra con señales claras",
+        body:
+          "Busca fotos, video, medidas, pago seguro y política de devolución publicada. BoxSofa muestra estas señales antes del checkout."
+      }
+    ],
+    productSlugs: featured
+  },
+  {
+    slug: "sofa-comprimido-malaga-apartamento",
+    title: "Sofá Comprimido para Apartamentos en Málaga",
+    description:
+      "Guía para elegir un sofá comprimido para apartamentos, segundas residencias y viviendas compactas en Málaga.",
+    intro:
+      "En apartamentos compactos o segundas residencias, la entrega y el espacio útil importan tanto como el estilo. Un sofá comprimido permite resolver primero el acceso y después la comodidad.",
+    sections: [
+      {
+        title: "Evita sorpresas con las medidas",
+        body:
+          "Comprueba puerta, pasillo, ascensor y zona final de uso. Las medidas del paquete ayudan a decidir si el sofá puede entrar sin transporte especial."
+      },
+      {
+        title: "Piensa en uso ocasional e invitados",
+        body:
+          "Si el apartamento recibe visitas, un sofá cama o formato flexible puede aportar más valor que un sofá tradicional de una sola función."
+      },
+      {
+        title: "Entrega y soporte",
+        body:
+          "La entrega básica en España es gratuita. Para dudas antes o después del pedido, puedes contactar con BoxSofa en info@boxsofa.eu."
+      }
+    ],
+    productSlugs: featured
   }
 ];
 
