@@ -218,6 +218,8 @@ limit 5;
 - 2026-07-22 20:00 Europe/Madrid 视频发布：新增素材 `D:\压缩沙发\沙发视频\可发布的视频\莱米沙发.mp4` 已快速核验为可访问的 1080 × 1920 竖版、19.2 秒、AAC 双声道；画面为带 `boxsofa.eu` 水印的黄色 Leimi 沙发视觉产品演示。原始文件未做画中画、补边或比例改造，公开发布源为 `https://boxsofa.eu/assets/social/boxsofa-leimi-yellow-sofa.mp4`，提交 `ab10b4c`。
 - AiToEarn 媒体 ID `6a6105f121ca9b5c27c83546`。TikTok 已发布：`https://www.tiktok.com/@boxsofaeurope/video/7665415233934036246`（task `6a61064321ca9b5c27c83642`，flow `194bad94-37f8-4282-b250-947645cc5979`）；YouTube Shorts 已发布：`https://www.youtube.com/watch?v=BTrnw6DWB7s`（task `6a61066f21ca9b5c27c836c0`，flow `fd1f37d3-9cbc-457a-85b7-011d7fe4553f`）；Instagram Reels 已发布：`https://www.instagram.com/reel/DbGsagij0y9/`（task `6a61067021ca9b5c27c836d1`，flow `f0aa859f-769c-45f7-8ded-08d64f485d43`）。各平台使用相应 `leimi_sofa_20260722` UTM，文案均限定为视觉产品演示并说明西班牙免费基础配送、Stripe 安全支付与预计 23–30 个工作日。
 - Pinterest 本次未发布：账户已知但 MCP 仍未暴露必填的 `boardId`；不猜测画板或重复发布。Facebook 本次未发布：AiToEarn 仍无可用主页授权，且已登录 Chrome 扩展连接当前不可用，无法安全完成主页后台手动发布；待浏览器连接恢复后再用同一原片补发，并使用 Facebook UTM。
+- 2026-07-22 21:47 Europe/Madrid 补发：已从上一条公开 Pinterest video Pin 的详情恢复正确画板 ID `1109363389402312698`，并将同一条 Leimi 原始视频成功发布为 Pinterest video Pin：`https://www.pinterest.com/pin/1109363320813643396/`（task `6a611e0a21ca9b5c27c8a1e0`，flow `3dfab525-104c-4db1-902b-12a064567400`）。Pinterest 的视频接口硬性要求封面，因此仅从原片截取一帧作为封面，公开源提交 `d77bb55`；未添加跳转链接，以规避此前 `boxsofa.eu` 外链 spam 判定。
+- Facebook 补发未完成：再次尝试连接已登录 Chrome 主页后台时，Chrome 扩展仍返回不可用；AiToEarn 也仍没有可用的 Facebook 公共主页授权。无需重建 Pinterest 任务；Facebook 待 Chrome 连接恢复后使用同一原片和 Facebook UTM 补发。
 
 ## 11. 自动获客/销售线索承接（2026-07-22）
 
