@@ -212,6 +212,9 @@ limit 5;
 - Facebook 已通过已登录的主页后台按“一条帖子包含 6 张图”发布成功，类型为公开图文帖，链接：`https://www.facebook.com/permalink.php?story_fbid=pfbid08s6wxPCatu75SpBh8DpCXCNod5dGqw1C2JDjGhE55suv2Rw2mgk1YrhtCSw2uqrpl&id=61591789692090`。Facebook 当前未接入 AiToEarn 账号，仍需用 Meta/Facebook 后台手动发布或后续重新授权。
 - 后续海报发布规则：用户已明确不接受“画中画模式”或模糊背景补边效果；除 Pinterest 因单图限制需要做整组拼版外，各平台应直接上传原始海报图，不要先制作方形适配、背景扩展、白边/灰边或画中画版本。`海报2` 发布时使用 6 张正式图，其中含中文的 `图片_2026-07-22_15-24-43-385.png` 必须替换为英文版 `图片_2026-07-22_15-24-43-385_english.png`，不要发布 `_contact_sheet_preview.jpg`。
 
+- 2026-07-22 全平台视频发布：素材 `D:\压缩沙发\沙发视频\可发布的视频\妈妈的怀抱沙发魔法开箱_mama-sofa-final-20s_2026-07-22_12-42.mp4`，竖版 1080 × 1920、20 秒、带音频，适合 Reels/TikTok/Shorts。已复制到网站公开源 `https://boxsofa.eu/assets/social/boxsofa-mama-hug-magic-unboxing-20s.mp4`，提交 `b514f69`；AiToEarn 媒体 ID `6a60e28821ca9b5c27c78ad4`，实际发布资源 `https://assets.aitoearn.ai/6a5cca25f462298aacf8ec53/user/media/202607/ASwyte67KJ1FlW6rzJyAK.mp4`。
+- 本次视频链接：YouTube `https://www.youtube.com/watch?v=BlQcx0-UbwY`（flow `afd497cf-f9db-4fc2-9f5f-6a62852db70a`）；Instagram Reels `https://www.instagram.com/reel/DbGbXEgEYDj/`（flow `79064926-fd14-4103-8986-84fbb201341c`）；TikTok `https://www.tiktok.com/@boxsofaeurope/video/7665376835047410966`（flow `d166bfa2-2ad8-4d86-8d22-cd605d122b86`）；Pinterest video Pin `https://www.pinterest.com/pin/1109363320813627166/`（flow `038514b6-f3ec-42be-9710-63d526538848`）；Facebook Reel `https://www.facebook.com/reel/1301440188731379`（通过已登录 Facebook 公共主页手动发布，Facebook 仍未接入 AiToEarn）。
+
 ## 11. 自动获客/销售线索承接（2026-07-22）
 
 - 已新增低成本销售线索入口：商品页和购物车页显示 `Check if it fits before you order` 表单，收集姓名、邮箱或电话/WhatsApp、首要问题、偏好联系方式和留言，并要求客户同意 BoxSofa 就该请求联系。
