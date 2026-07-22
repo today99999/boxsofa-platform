@@ -220,6 +220,7 @@ limit 5;
 - Pinterest 本次未发布：账户已知但 MCP 仍未暴露必填的 `boardId`；不猜测画板或重复发布。Facebook 本次未发布：AiToEarn 仍无可用主页授权，且已登录 Chrome 扩展连接当前不可用，无法安全完成主页后台手动发布；待浏览器连接恢复后再用同一原片补发，并使用 Facebook UTM。
 - 2026-07-22 21:47 Europe/Madrid 补发：已从上一条公开 Pinterest video Pin 的详情恢复正确画板 ID `1109363389402312698`，并将同一条 Leimi 原始视频成功发布为 Pinterest video Pin：`https://www.pinterest.com/pin/1109363320813643396/`（task `6a611e0a21ca9b5c27c8a1e0`，flow `3dfab525-104c-4db1-902b-12a064567400`）。Pinterest 的视频接口硬性要求封面，因此仅从原片截取一帧作为封面，公开源提交 `d77bb55`；未添加跳转链接，以规避此前 `boxsofa.eu` 外链 spam 判定。
 - Facebook 补发未完成：再次尝试连接已登录 Chrome 主页后台时，Chrome 扩展仍返回不可用；AiToEarn 也仍没有可用的 Facebook 公共主页授权。无需重建 Pinterest 任务；Facebook 待 Chrome 连接恢复后使用同一原片和 Facebook UTM 补发。
+- 2026-07-22 21:55 Europe/Madrid Facebook 补发：已通过已登录的 BoxSofa Europe 主页后台直接上传并发布同一未改动原始竖版 `莱米沙发.mp4`，使用 Facebook `leimi_sofa_20260722` UTM 文案，并开启“添加 AI 标签”；无画中画、补边或方形适配。提交后发布设置面板已关闭，Facebook 尚未在主页时间线返回本条公开 permalink，链接状态待平台生成/可见后补录；不要再次重复上传该素材。
 
 ## 11. 自动获客/销售线索承接（2026-07-22）
 
