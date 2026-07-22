@@ -215,6 +215,10 @@ limit 5;
 - 2026-07-22 全平台视频发布：素材 `D:\压缩沙发\沙发视频\可发布的视频\妈妈的怀抱沙发魔法开箱_mama-sofa-final-20s_2026-07-22_12-42.mp4`，竖版 1080 × 1920、20 秒、带音频，适合 Reels/TikTok/Shorts。已复制到网站公开源 `https://boxsofa.eu/assets/social/boxsofa-mama-hug-magic-unboxing-20s.mp4`，提交 `b514f69`；AiToEarn 媒体 ID `6a60e28821ca9b5c27c78ad4`，实际发布资源 `https://assets.aitoearn.ai/6a5cca25f462298aacf8ec53/user/media/202607/ASwyte67KJ1FlW6rzJyAK.mp4`。
 - 本次视频链接：YouTube `https://www.youtube.com/watch?v=BlQcx0-UbwY`（flow `afd497cf-f9db-4fc2-9f5f-6a62852db70a`）；Instagram Reels `https://www.instagram.com/reel/DbGbXEgEYDj/`（flow `79064926-fd14-4103-8986-84fbb201341c`）；TikTok `https://www.tiktok.com/@boxsofaeurope/video/7665376835047410966`（flow `d166bfa2-2ad8-4d86-8d22-cd605d122b86`）；Pinterest video Pin `https://www.pinterest.com/pin/1109363320813627166/`（flow `038514b6-f3ec-42be-9710-63d526538848`）；Facebook Reel `https://www.facebook.com/reel/1301440188731379`（通过已登录 Facebook 公共主页手动发布，Facebook 仍未接入 AiToEarn）。
 
+- 2026-07-22 20:00 Europe/Madrid 视频发布：新增素材 `D:\压缩沙发\沙发视频\可发布的视频\莱米沙发.mp4` 已快速核验为可访问的 1080 × 1920 竖版、19.2 秒、AAC 双声道；画面为带 `boxsofa.eu` 水印的黄色 Leimi 沙发视觉产品演示。原始文件未做画中画、补边或比例改造，公开发布源为 `https://boxsofa.eu/assets/social/boxsofa-leimi-yellow-sofa.mp4`，提交 `ab10b4c`。
+- AiToEarn 媒体 ID `6a6105f121ca9b5c27c83546`。TikTok 已发布：`https://www.tiktok.com/@boxsofaeurope/video/7665415233934036246`（task `6a61064321ca9b5c27c83642`，flow `194bad94-37f8-4282-b250-947645cc5979`）；YouTube Shorts 已发布：`https://www.youtube.com/watch?v=BTrnw6DWB7s`（task `6a61066f21ca9b5c27c836c0`，flow `fd1f37d3-9cbc-457a-85b7-011d7fe4553f`）；Instagram Reels 已发布：`https://www.instagram.com/reel/DbGsagij0y9/`（task `6a61067021ca9b5c27c836d1`，flow `f0aa859f-769c-45f7-8ded-08d64f485d43`）。各平台使用相应 `leimi_sofa_20260722` UTM，文案均限定为视觉产品演示并说明西班牙免费基础配送、Stripe 安全支付与预计 23–30 个工作日。
+- Pinterest 本次未发布：账户已知但 MCP 仍未暴露必填的 `boardId`；不猜测画板或重复发布。Facebook 本次未发布：AiToEarn 仍无可用主页授权，且已登录 Chrome 扩展连接当前不可用，无法安全完成主页后台手动发布；待浏览器连接恢复后再用同一原片补发，并使用 Facebook UTM。
+
 ## 11. 自动获客/销售线索承接（2026-07-22）
 
 - 已新增低成本销售线索入口：商品页和购物车页显示 `Check if it fits before you order` 表单，收集姓名、邮箱或电话/WhatsApp、首要问题、偏好联系方式和留言，并要求客户同意 BoxSofa 就该请求联系。
