@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CART_KEY, ORDERS_KEY, type CartItem, type LocalOrder } from "@/lib/cart";
 import { trackEvent } from "@/lib/analytics";
 import { CatalogText } from "@/components/CatalogText";
+import { LeadCapture } from "@/components/LeadCapture";
 import { useTranslation } from "@/components/useTranslation";
 
 type CheckoutForm = {
@@ -96,6 +97,10 @@ export function CartClient() {
   }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.priceEur * item.quantity, 0), [items]);
+  const cartSummary = useMemo(
+    () => items.map((item) => `${item.quantity} x ${item.name} (${item.color})`).join("; "),
+    [items]
+  );
   const shipping = 0;
   const total = subtotal + shipping;
 
@@ -277,6 +282,7 @@ export function CartClient() {
           {isSubmitting ? "Submitting..." : t("submitOrder")}
         </button>
       </form>
+      {items.length > 0 ? <LeadCapture source="cart" cartSummary={cartSummary} /> : null}
     </div>
   );
 }

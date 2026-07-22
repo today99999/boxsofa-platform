@@ -56,6 +56,26 @@ type ReviewListResponse = { ok: boolean; mode: "local" | "supabase"; reviews?: P
 type ReviewUpdateResponse = { ok: boolean; mode: "local" | "supabase"; message?: string };
 type SupportListResponse = { ok: boolean; mode: "local" | "supabase"; threads?: ChatThread[]; message?: string };
 type SupportUpdateResponse = { ok: boolean; mode: "local" | "supabase"; message?: string };
+type SalesLead = {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  phone: string;
+  intent: string;
+  preferredContact: string;
+  productName: string;
+  productSlug: string;
+  cartSummary: string;
+  source: string;
+  pageUrl: string;
+  message: string;
+  status: "open" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  needsReply: boolean;
+  automationNote: string;
+};
+type SalesLeadResponse = { ok: boolean; mode: "supabase"; leads?: SalesLead[]; message?: string };
 type AuditLog = {
   id: string;
   actor_id: string | null;
@@ -117,7 +137,7 @@ type TestCustomerResponse = {
 };
 type NotificationStatusFilter = "all" | "queued" | "sent" | "failed" | "skipped";
 type SupportFilter = "all" | "needs_reply" | "open" | "closed";
-type AdminSection = "dashboard" | "launch" | "traffic" | "orders" | "products" | "reviews" | "customers" | "stock" | "audit" | "notifications" | "support";
+type AdminSection = "dashboard" | "launch" | "traffic" | "leads" | "orders" | "products" | "reviews" | "customers" | "stock" | "audit" | "notifications" | "support";
 type AdminAccess = "checking" | "allowed" | "denied";
 
 const PRODUCT_DRAFTS_KEY = "boxsofa_admin_product_drafts_v1";
@@ -134,6 +154,7 @@ const adminSections: Array<{ id: AdminSection; label: string }> = [
   { id: "dashboard", label: "数据看板" },
   { id: "launch", label: "上线检查" },
   { id: "traffic", label: "数据罗盘" },
+  { id: "leads", label: "销售线索" },
   { id: "orders", label: "订单与物流" },
   { id: "products", label: "商品与库存" },
   { id: "reviews", label: "客户评价" },
@@ -222,6 +243,10 @@ function labelSource(source: string) {
   return sourceLabels[source] ?? source;
 }
 
+function isSalesLeadThread(thread: ChatThread) {
+  return thread.messages.some((message) => message.body.includes("[Sales lead]"));
+}
+
 function reviewFingerprint(review: ProductReview) {
   return [review.productSlug, review.customerName, review.country, review.rating, review.comment]
     .map((part) => String(part).trim().toLowerCase())
@@ -253,6 +278,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const [adSpend, setAdSpend] = useState<AdSpendDraft>({});
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [supportThreads, setSupportThreads] = useState<ChatThread[]>([]);
+  const [salesLeads, setSalesLeads] = useState<SalesLead[]>([]);
   const [supportReplyDrafts, setSupportReplyDrafts] = useState<Record<string, string>>({});
   const [supportFilter, setSupportFilter] = useState<SupportFilter>("needs_reply");
   const [orderSource, setOrderSource] = useState<OrderSource>("本地原型数据");
@@ -262,6 +288,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const [productSyncMessage, setProductSyncMessage] = useState("");
   const [reviewSyncMessage, setReviewSyncMessage] = useState("");
   const [supportSyncMessage, setSupportSyncMessage] = useState("");
+  const [leadSyncMessage, setLeadSyncMessage] = useState("");
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditSyncMessage, setAuditSyncMessage] = useState("");
   const [emailNotifications, setEmailNotifications] = useState<EmailNotification[]>([]);
@@ -337,6 +364,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
     void loadReviews();
     void loadProductDrafts();
     void loadSupportThreads();
+    void loadSalesLeads();
     void loadAuditLogs();
     void loadEmailNotifications();
     void loadReadiness();
@@ -365,9 +393,11 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       .channel("boxsofa-admin-support")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_threads" }, () => {
         void loadSupportThreads();
+        void loadSalesLeads();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
         void loadSupportThreads();
+        void loadSalesLeads();
       })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
@@ -540,6 +570,21 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       }
     } catch {
       setSupportSyncMessage("客服会话暂时不可用，请稍后刷新。");
+    }
+  }
+
+  async function loadSalesLeads() {
+    try {
+      const response = await fetch("/api/admin/leads");
+      const result = (await response.json()) as SalesLeadResponse;
+      if (!response.ok || !result.ok) {
+        setLeadSyncMessage(result.message || "销售线索暂时不可用，请稍后刷新。");
+        return;
+      }
+      setSalesLeads(result.leads ?? []);
+      setLeadSyncMessage("销售线索已连接 Supabase。");
+    } catch {
+      setLeadSyncMessage("销售线索暂时不可用，请稍后刷新。");
     }
   }
 
@@ -901,7 +946,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
         return;
       }
       setSupportSyncMessage(result.mode === "supabase" ? "客服会话已同步到 Supabase。" : "客服会话已保存，等待服务端同步。");
-      if (result.mode === "supabase") void loadSupportThreads();
+      if (result.mode === "supabase") {
+        void loadSupportThreads();
+        void loadSalesLeads();
+      }
     } catch {
       setSupportSyncMessage("客服会话已保存在本地，但暂时没有同步到服务端。");
     }
@@ -1110,9 +1158,12 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   const queuedEmailNotifications = emailNotifications.filter((notification) => notification.status === "queued");
   const failedEmailNotifications = emailNotifications.filter((notification) => notification.status === "failed");
 
-  const openSupportThreads = supportThreads.filter((thread) => thread.status === "open");
+  const supportOnlyThreads = supportThreads.filter((thread) => !isSalesLeadThread(thread));
+  const openSupportThreads = supportOnlyThreads.filter((thread) => thread.status === "open");
   const needsReplySupportThreads = openSupportThreads.filter((thread) => thread.messages.at(-1)?.sender === "customer");
-  const closedSupportThreads = supportThreads.filter((thread) => thread.status === "closed");
+  const closedSupportThreads = supportOnlyThreads.filter((thread) => thread.status === "closed");
+  const openSalesLeads = salesLeads.filter((lead) => lead.status === "open");
+  const needsReplySalesLeads = salesLeads.filter((lead) => lead.needsReply);
   const launchSupabaseConnected =
     readinessMode === "supabase" ||
     Boolean(readiness) ||
@@ -1203,7 +1254,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       detail: "Stripe 和欧洲银行账户准备好之前，订单继续进入待确认付款流程。"
     }
   ];
-  const filteredSupportThreads = supportThreads.filter((thread) => {
+  const filteredSupportThreads = supportOnlyThreads.filter((thread) => {
     if (supportFilter === "needs_reply") return thread.status === "open" && thread.messages.at(-1)?.sender === "customer";
     if (supportFilter === "open") return thread.status === "open";
     if (supportFilter === "closed") return thread.status === "closed";
@@ -1305,6 +1356,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
           <div className="stat-card">
             <span>客户评价</span>
             <strong>{visibleReviews.length}</strong>
+          </div>
+          <div className="stat-card">
+            <span>待跟进线索</span>
+            <strong>{needsReplySalesLeads.length}</strong>
           </div>
           <div className="stat-card">
             <span>待回复客服</span>
@@ -1510,6 +1565,110 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
               时，也会放在这个同意开关之后加载。
             </p>
           </div>
+        </section>
+
+        <section className="panel" hidden={activeSection !== "leads"} id="leads">
+          <div className="panel-head">
+            <div>
+              <h2>销售线索</h2>
+              <p>来自商品页和购物车的高意向询盘。优先回复楼梯、电梯、配送和付款问题，把犹豫客户推进成交。</p>
+            </div>
+            <div className="panel-actions">
+              <span className="status">{needsReplySalesLeads.length} 个待跟进</span>
+              <button className="button" type="button" onClick={() => void loadSalesLeads()}>
+                刷新
+              </button>
+            </div>
+          </div>
+          {leadSyncMessage ? <p className="admin-sync-note">{leadSyncMessage}</p> : null}
+          <div className="support-workbench-summary">
+            <article>
+              <span>待跟进</span>
+              <strong>{needsReplySalesLeads.length}</strong>
+            </article>
+            <article>
+              <span>进行中</span>
+              <strong>{openSalesLeads.length}</strong>
+            </article>
+            <article>
+              <span>累计线索</span>
+              <strong>{salesLeads.length}</strong>
+            </article>
+          </div>
+          {salesLeads.length === 0 ? (
+            <div className="empty-state">
+              <strong>暂无销售线索</strong>
+              <p>客户在商品页或购物车提交 fit check 后，会出现在这里，并自动通知 info@boxsofa.eu。</p>
+            </div>
+          ) : (
+            <div className="lead-list">
+              {salesLeads.map((lead) => (
+                <article className={`lead-card ${lead.status} ${lead.needsReply ? "needs-reply" : ""}`} key={lead.id}>
+                  <div className="lead-card-head">
+                    <div>
+                      <strong>{lead.customerName}</strong>
+                      <span>{lead.intent} / {lead.preferredContact || "email"}</span>
+                    </div>
+                    <span className="status">{lead.status === "closed" ? "已关闭" : lead.needsReply ? "待跟进" : "跟进中"}</span>
+                  </div>
+                  <div className="lead-contact-grid">
+                    <div>
+                      <span>Email</span>
+                      <strong>{lead.customerEmail || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Phone / WhatsApp</span>
+                      <strong>{lead.phone || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>Source</span>
+                      <strong>{labelSource(lead.source || "site")}</strong>
+                    </div>
+                    <div>
+                      <span>Created</span>
+                      <strong>{new Date(lead.createdAt).toLocaleString("zh-CN")}</strong>
+                    </div>
+                  </div>
+                  {lead.productName && lead.productName !== "-" ? (
+                    <p className="lead-context">
+                      Product: {lead.productName}
+                      {lead.productSlug && lead.productSlug !== "-" ? ` (${lead.productSlug})` : ""}
+                    </p>
+                  ) : null}
+                  {lead.cartSummary && lead.cartSummary !== "-" ? <p className="lead-context">Cart: {lead.cartSummary}</p> : null}
+                  <blockquote>{lead.message}</blockquote>
+                  <div className="lead-actions">
+                    {lead.customerEmail && lead.customerEmail !== "-" ? (
+                      <a className="button primary" href={`mailto:${lead.customerEmail}?subject=BoxSofa fit check`}>
+                        Email customer
+                      </a>
+                    ) : null}
+                    {lead.phone && lead.phone !== "-" ? (
+                      <a className="button" href={`tel:${lead.phone}`}>
+                        Call
+                      </a>
+                    ) : null}
+                    {lead.pageUrl && lead.pageUrl !== "-" ? (
+                      <a className="button" href={lead.pageUrl} target="_blank" rel="noreferrer">
+                        Open page
+                      </a>
+                    ) : null}
+                    {lead.status === "open" ? (
+                      <button className="button" type="button" onClick={() => closeThread(lead.id)}>
+                        Mark closed
+                      </button>
+                    ) : null}
+                  </div>
+                  {lead.automationNote ? (
+                    <details className="notification-body">
+                      <summary>Automation record</summary>
+                      <pre>{lead.automationNote}</pre>
+                    </details>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="panel" hidden={activeSection !== "orders"} id="orders">
@@ -2132,7 +2291,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
               <span className="status">{needsReplySupportThreads.length} 个待回复</span>
             </div>
             {supportSyncMessage ? <p className="admin-sync-note">{supportSyncMessage}</p> : null}
-            {supportThreads.length === 0 ? (
+            {supportOnlyThreads.length === 0 ? (
               <div className="empty-state">
                 <strong>暂无客户留言</strong>
                 <p>客户点击前台右下角在线客服并提交问题后，会话会出现在这里。</p>
@@ -2159,7 +2318,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
                     { id: "needs_reply", label: "待回复", count: needsReplySupportThreads.length },
                     { id: "open", label: "进行中", count: openSupportThreads.length },
                     { id: "closed", label: "已关闭", count: closedSupportThreads.length },
-                    { id: "all", label: "全部", count: supportThreads.length }
+                    { id: "all", label: "全部", count: supportOnlyThreads.length }
                   ].map((filter) => (
                     <button
                       className={supportFilter === filter.id ? "active" : ""}

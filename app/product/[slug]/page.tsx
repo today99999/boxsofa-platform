@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { AddToCart } from "@/components/AddToCart";
 import { CatalogText } from "@/components/CatalogText";
+import { LeadCapture } from "@/components/LeadCapture";
 import { ProductMedia } from "@/components/ProductMedia";
 import { ProductReviews } from "@/components/ProductReviews";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -251,6 +252,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
             </div>
           </div>
           <AddToCart product={product} />
+          <LeadCapture source="product" productName={publicTitle} productSlug={product.slug} />
         </section>
       </main>
       <section className="section product-detail-section">

@@ -8,6 +8,7 @@ const baseUrl = (
 const protectedChecks = [
   { method: 'GET', path: '/api/admin/readiness' },
   { method: 'GET', path: '/api/admin/audit' },
+  { method: 'GET', path: '/api/admin/leads' },
   { method: 'GET', path: '/api/admin/notifications' },
   { method: 'POST', path: '/api/admin/notifications/test' },
   { method: 'PATCH', path: '/api/admin/notifications/test-notification-id', body: { action: 'requeue' } },
@@ -36,6 +37,7 @@ const protectedChecks = [
 
 const publicChecks = [
   { method: 'GET', path: '/api/health', allowedStatuses: [200] },
+  { method: 'POST', path: '/api/leads', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/orders', body: {}, allowedStatuses: [400] },
   { method: 'GET', path: '/api/orders/BX-AUTH-AUDIT', allowedStatuses: [400, 404, 405, 503] },
   { method: 'GET', path: '/api/support', allowedStatuses: [400] },
