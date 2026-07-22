@@ -173,3 +173,12 @@ limit 5;
 - 每次代码改动后至少跑 `typecheck` 和 `build`；上线相关改动还要跑 `production:verify`。
 - 保持支付关闭：`paymentEnabled` 应为 `false`。
 - 后台和客户 API 必须保持登录保护，匿名访问检查不能放松。
+
+## 10. 社交自动发布记录（2026-07-22）
+
+- 素材：`D:\压缩沙发\沙发视频\可发布的视频\3.mp4`，审核等级 A，720 × 1280 单人椅拆箱与体验；未出现在此前已发布/预约记录。没有使用黑色开箱、`泡泡沙发.mp4` 或审核报告中不建议原样发布的素材。
+- 为 AiToEarn 拉取上传，已将素材提交到网站公开源 `https://boxsofa.eu/assets/social/boxsofa-single-chair-unboxing.mp4`（提交 `22699a9`），并在 AiToEarn 创建媒体 `6a609fce21ca9b5c27c62252`。
+- TikTok 已创建待执行任务 `6a609fdc21ca9b5c27c6229d`（flow `dfda5084-c3c7-4f38-9037-c2f812e81bcf`）；YouTube 已创建待执行任务 `6a609ff921ca9b5c27c6231b`（flow `74a556c2-97e5-4b28-824a-5171010eaf01`）；Instagram Reels 已创建待执行任务 `6a60a00321ca9b5c27c62342`（flow `b3f1cdca-5c14-4db4-81ff-9f94de76f382`）。提交时刻均为 2026-07-22 12:48 左右（西班牙）；AiToEarn 尚未返回已发布链接，`publishChannelTaskNow` 对待执行状态返回“cannot be published now”，因此下次巡检应先查询任务状态/链接，勿重建任务。
+- Instagram 素材为 9:16，符合 Reels 比例；并声明为 visual product demonstration / synthetic media，不表述为客户真实交付或评价。
+- Pinterest 自动同步未完成：平台能力可用，但 MCP 未提供已关联 Pinterest 的 `accountId` 和必填 `boardId`；已登录浏览器会话也处于登录页，无法安全读取这两个参数。Facebook 按既定 AiToEarn 公共主页授权问题保留人工发布，未自动尝试。
+- Pinterest 人工发布（建议次日 20:00 Europe/Madrid）：标题 `Compact Living Room Sofa in a Box for Small Apartments`；English: `Compact living room inspiration: a compressed sofa chair / sofa in a box concept for small apartments, narrow stairs and small lifts. Free basic delivery in Spain, secure Stripe payment, estimated delivery 23–30 working days. Explore compressed sofa Spain ideas.` Español: `Ideas para salón compacto: sofá comprimido o sofá en caja para pisos pequeños, escaleras estrechas y ascensores pequeños. Entrega básica gratuita en España, pago seguro con Stripe y entrega estimada de 23–30 días laborables.` UTM: `https://boxsofa.eu/guides?utm_source=pinterest&utm_medium=social&utm_campaign=organic_guides`。建议关键词：`compact living room`、`small apartment sofa`、`sofa in a box Europe`、`compressed sofa Spain`。
