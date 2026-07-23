@@ -87,6 +87,13 @@ async function checkPage(route) {
     assert(html.includes('application/ld+json'), `${route.path} missing JSON-LD`);
     assert(html.includes('"@type":"Product"'), `${route.path} missing Product JSON-LD`);
     assert(html.includes('"priceCurrency":"EUR"'), `${route.path} missing EUR offer`);
+    assert(html.includes('"shippingDetails"'), `${route.path} missing offer shippingDetails`);
+    assert(html.includes('"@type":"OfferShippingDetails"'), `${route.path} missing OfferShippingDetails JSON-LD`);
+    assert(html.includes('"shippingRate":{"@type":"MonetaryAmount","value":0,"currency":"EUR"}'), `${route.path} missing free EUR shipping rate`);
+    assert(html.includes('"transitTime":{"@type":"QuantitativeValue","minValue":23,"maxValue":30,"unitCode":"d"}'), `${route.path} missing 23-30 day transit time`);
+    assert(html.includes('"hasMerchantReturnPolicy"'), `${route.path} missing offer hasMerchantReturnPolicy`);
+    assert(html.includes('"@type":"MerchantReturnPolicy"'), `${route.path} missing MerchantReturnPolicy JSON-LD`);
+    assert(html.includes('"merchantReturnDays":14'), `${route.path} missing 14-day merchant return window`);
     assert(html.includes('"@type":"FAQPage"'), `${route.path} missing product FAQ JSON-LD`);
     assert(html.includes('"@type":"BreadcrumbList"'), `${route.path} missing BreadcrumbList JSON-LD`);
   }
