@@ -1,7 +1,7 @@
 # BoxSofa Data Center Design
 
 Date: 2026-07-23
-Status: Approved in conversation, pending written-spec review
+Status: Approved
 Audience: BoxSofa owner
 
 ## 1. Objective
