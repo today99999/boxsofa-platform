@@ -16,6 +16,7 @@ import {
   clearAnalyticsServerReady,
   consentSyncMarker,
   enqueueConsentMutation,
+  fetchWithTimeout,
   inferDeviceType,
   isAnalyticsServerReady,
   markAnalyticsServerReady,
@@ -23,7 +24,9 @@ import {
   readStoredAnalyticsConsent,
   shouldSynchronizeConsent,
   sanitizeReferrerDomain,
-  synchronizeAnalyticsConsent
+  synchronizeAnalyticsConsent,
+  AnalyticsRequestTimeoutError,
+  type AnalyticsConsent
 } from "./analytics.ts";
 
 function deferred<T>() {
@@ -131,6 +134,62 @@ test("concurrent consent mounts share one status and POST chain, but a transient
   assert.equal(posts, 1);
 });
 
+test("a delayed background status can never overwrite a newer explicit consent intent", async () => {
+  const status = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  let intent = 0;
+  const writes: string[] = [];
+
+  const background = synchronizeAnalyticsConsent({
+    visitorId: "visitor-delayed-status",
+    consent: "analytics",
+    version: "2026-07-23",
+    getStatus: () => status.promise,
+    persist: () => enqueueConsentMutation("visitor-delayed-status", async () => {
+      if (intent !== 0) return false;
+      writes.push("analytics");
+      return true;
+    }),
+    isCurrent: () => intent === 0
+  });
+
+  // The user choice increments intent before any network work and therefore wins
+  // even when the old GET returns after the necessary POST completes.
+  intent += 1;
+  await enqueueConsentMutation("visitor-delayed-status", async () => { writes.push("necessary"); return true; });
+  status.resolve({ consent: null, version: null });
+
+  assert.equal(await background, "unavailable");
+  assert.deepEqual(writes, ["necessary"]);
+
+  const newestIntent = intent;
+  const latest = await synchronizeAnalyticsConsent({
+    visitorId: "visitor-delayed-status",
+    consent: "analytics",
+    version: "2026-07-23",
+    getStatus: async () => ({ consent: null, version: null }),
+    persist: async () => { writes.push("analytics-final"); return true; },
+    isCurrent: () => intent === newestIntent
+  });
+  assert.equal(latest, "resubmitted");
+  assert.deepEqual(writes, ["necessary", "analytics-final"]);
+
+  const reverseStatus = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  const reverseIntent = { value: 0 };
+  const reverse = synchronizeAnalyticsConsent({
+    visitorId: "visitor-delayed-status-reverse",
+    consent: "necessary",
+    version: "2026-07-23",
+    getStatus: () => reverseStatus.promise,
+    persist: async () => { writes.push("necessary-stale"); return true; },
+    isCurrent: () => reverseIntent.value === 0
+  });
+  reverseIntent.value += 1;
+  writes.push("analytics-latest");
+  reverseStatus.resolve({ consent: null, version: null });
+  assert.equal(await reverse, "unavailable");
+  assert.deepEqual(writes, ["necessary", "analytics-final", "analytics-latest"]);
+});
+
 test("necessary and analytics synchronization remain distinct, and server readiness is explicit", async () => {
   let posts = 0;
   const necessary = await synchronizeAnalyticsConsent({
@@ -198,6 +257,27 @@ test("consent mutations serialize background sync, rapid choices, and failed ope
   assert.equal(await enqueueConsentMutation("failure", async () => "latest-success"), "latest-success");
 });
 
+test("fetch timeouts settle ignored aborts and release the consent mutation tail", async () => {
+  const neverResolvingFetcher = (() => new Promise<Response>(() => undefined)) as typeof fetch;
+  await assert.rejects(
+    fetchWithTimeout("/api/analytics/consent", {}, { fetcher: neverResolvingFetcher, timeoutMs: 5 }),
+    AnalyticsRequestTimeoutError
+  );
+  const externalAbort = new AbortController();
+  const externallyCancelled = fetchWithTimeout("/api/analytics/consent", { signal: externalAbort.signal }, {
+    fetcher: neverResolvingFetcher,
+    timeoutMs: 1_000
+  });
+  externalAbort.abort(new Error("user cancelled"));
+  await assert.rejects(externallyCancelled, /user cancelled/);
+  assert.equal(await readAnalyticsConsentStatus(neverResolvingFetcher, 5), null);
+
+  await assert.rejects(enqueueConsentMutation("timeout-visitor", () =>
+    fetchWithTimeout("/api/analytics/consent", {}, { fetcher: neverResolvingFetcher, timeoutMs: 5 })
+  ), AnalyticsRequestTimeoutError);
+  assert.equal(await enqueueConsentMutation("timeout-visitor", async () => "withdrawal-can-proceed"), "withdrawal-can-proceed");
+});
+
 test("invalid local consent is removed and only valid choices survive runtime validation", () => {
   const values = new Map<string, string>([[ANALYTICS_CONSENT_KEY, "corrupted"]]);
   const storage = {
@@ -210,7 +290,7 @@ test("invalid local consent is removed and only valid choices survive runtime va
   assert.equal(readStoredAnalyticsConsent(storage), "analytics");
 });
 
-test("event delivery drops permanent poison entries and backs off retryable failures", () => {
+test("event delivery retains 403 entries for consent revalidation and drops permanent poison entries", () => {
   const first = queuedEvent("first");
   const next = queuedEvent("next");
   assert.equal(classifyAnalyticsDeliveryStatus(204), "success");
@@ -220,7 +300,11 @@ test("event delivery drops permanent poison entries and backs off retryable fail
   assert.equal(classifyAnalyticsDeliveryStatus(500), "retry");
   assert.equal(classifyAnalyticsDeliveryStatus(null), "retry");
   assert.deepEqual(applyAnalyticsDeliveryDisposition([first, next], "first", "drop"), [next]);
-  assert.deepEqual(applyAnalyticsDeliveryDisposition([first, next], "first", "revalidate"), [next]);
+  const revalidate = applyAnalyticsDeliveryDisposition([first, next], "first", "revalidate", 1_000);
+  assert.equal(revalidate.length, 2);
+  assert.equal(revalidate[0].deliveryAttempts, 1);
+  assert.equal(revalidate[0].nextAttemptAt, 1_000 + analyticsDeliveryBackoffMs(1));
+  assert.deepEqual(applyAnalyticsDeliveryDisposition(revalidate, "first", "success"), [next]);
   const retry = applyAnalyticsDeliveryDisposition([first, next], "first", "retry", 1_000);
   assert.equal(retry[0].deliveryAttempts, 1);
   assert.equal(retry[0].nextAttemptAt, 1_000 + analyticsDeliveryBackoffMs(1));
@@ -231,6 +315,12 @@ test("event delivery drops permanent poison entries and backs off retryable fail
     exhausted = applyAnalyticsDeliveryDisposition(exhausted, "first", "retry", 1_000) as typeof exhausted;
   }
   assert.deepEqual(exhausted, []);
+
+  let forbidden = [first];
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    forbidden = applyAnalyticsDeliveryDisposition(forbidden, "first", "revalidate", 1_000) as typeof forbidden;
+  }
+  assert.deepEqual(forbidden, []);
 });
 
 test("cookie settings dialog keeps labelled focus-management markup", () => {
@@ -252,4 +342,6 @@ test("cookie settings dialog keeps labelled focus-management markup", () => {
 
   const analyticsSource = readFileSync("lib/analytics.ts", "utf8");
   assert.match(analyticsSource, /if \(!isAnalyticsServerReady\(\)\) return;/);
+  assert.match(analyticsSource, /window\.dispatchEvent\(new Event\(ANALYTICS_CONSENT_REVALIDATE_EVENT\)\)/);
+  assert.match(analyticsSource, /fetchWithTimeout\("\/api\/analytics\/events"/);
 });

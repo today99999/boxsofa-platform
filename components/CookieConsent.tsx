@@ -7,6 +7,7 @@ import {
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
   enqueueConsentMutation,
+  fetchWithTimeout,
   getOrCreateVisitorId,
   markAnalyticsServerReady,
   markConsentSynchronized,
@@ -39,15 +40,20 @@ export function CookieConsent() {
     let retryTimer: number | undefined;
 
     const synchronize = async (saved: AnalyticsConsent, syncGeneration: number) => {
-      if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+      const intent = userOperationRef.current;
+      const isCurrent = () => !cancelled
+        && syncGeneration === consentSyncGenerationRef.current
+        && intent === userOperationRef.current;
+      if (!isCurrent()) return;
       const result = await synchronizeAnalyticsConsent({
         visitorId: getOrCreateVisitorId(),
         consent: saved,
         version: CONSENT_VERSION,
         getStatus: () => readAnalyticsConsentStatus(),
-        persist: () => persistConsent(saved)
+        persist: () => persistConsent(saved, isCurrent),
+        isCurrent
       });
-      if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+      if (!isCurrent()) return;
       if (result === "unavailable") {
         clearAnalyticsServerReady();
         setConsent(saved);
@@ -138,20 +144,27 @@ export function CookieConsent() {
     }
   }
 
-  async function persistConsent(nextConsent: AnalyticsConsent): Promise<boolean> {
+  async function persistConsent(nextConsent: AnalyticsConsent, isCurrent: () => boolean = () => true): Promise<boolean> {
     const visitorId = getOrCreateVisitorId();
     return enqueueConsentMutation(visitorId, async () => {
-      const response = await fetch("/api/analytics/consent", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          visitorId,
-          consent: nextConsent,
-          locale: language,
-          version: CONSENT_VERSION
-        })
-      }).catch(() => null);
-      return response?.ok === true;
+      // A queued mount-time sync can become stale while a user choice is waiting
+      // ahead of it. Do not let that stale write run after the explicit choice.
+      if (!isCurrent()) return false;
+      try {
+        const response = await fetchWithTimeout("/api/analytics/consent", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            visitorId,
+            consent: nextConsent,
+            locale: language,
+            version: CONSENT_VERSION
+          })
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
     });
   }
 

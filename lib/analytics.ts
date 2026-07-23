@@ -48,6 +48,7 @@ const MAX_QUEUE_SIZE = 200;
 const MAX_HISTORY_SIZE = 1000;
 const MAX_DELIVERY_ATTEMPTS = 6;
 const MAX_DELIVERY_BACKOFF_MS = 60_000;
+export const ANALYTICS_REQUEST_TIMEOUT_MS = 12_000;
 const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>>();
 const consentMutationQueues = new Map<string, Promise<void>>();
 let queueFlushInFlight: Promise<void> | null = null;
@@ -61,6 +62,60 @@ export type AnalyticsConsentServerStatus = {
 export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavailable";
 
 export type AnalyticsDeliveryDisposition = "success" | "drop" | "retry" | "revalidate";
+
+export class AnalyticsRequestTimeoutError extends Error {
+  constructor() {
+    super("Analytics request timed out");
+    this.name = "AnalyticsRequestTimeoutError";
+  }
+}
+
+type FetchWithTimeoutOptions = {
+  fetcher?: typeof fetch;
+  timeoutMs?: number;
+};
+
+// Abort the underlying request and race it against the timer. The race is deliberate:
+// a mocked or buggy fetch implementation may ignore AbortSignal, but must never hold a
+// consent mutation or analytics delivery queue forever.
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  options: FetchWithTimeoutOptions = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? ANALYTICS_REQUEST_TIMEOUT_MS;
+  const externalSignal = init.signal ?? (input instanceof Request ? input.signal : undefined);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let detachExternalAbort: (() => void) | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new AnalyticsRequestTimeoutError());
+    }, timeoutMs);
+  });
+
+  const externallyAborted = externalSignal ? new Promise<never>((_, reject) => {
+    const abortFromExternalSignal = () => {
+      controller.abort();
+      reject(externalSignal.reason ?? new Error("Analytics request was aborted"));
+    };
+    if (externalSignal.aborted) abortFromExternalSignal();
+    else {
+      externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
+      detachExternalAbort = () => externalSignal.removeEventListener("abort", abortFromExternalSignal);
+    }
+  }) : null;
+
+  try {
+    const request = (options.fetcher ?? fetch)(input, { ...init, signal: controller.signal });
+    return await Promise.race(externallyAborted ? [request, timeout, externallyAborted] : [request, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    detachExternalAbort?.();
+  }
+}
 
 export function isAnalyticsConsent(value: unknown): value is AnalyticsConsent {
   return value === "necessary" || value === "analytics";
@@ -161,13 +216,16 @@ export function isAnalyticsServerReady(storage: Pick<Storage, "getItem"> = sessi
   return storage.getItem(ANALYTICS_SERVER_READY_KEY) === "analytics";
 }
 
-export async function readAnalyticsConsentStatus(fetcher: typeof fetch = fetch): Promise<AnalyticsConsentServerStatus | null> {
+export async function readAnalyticsConsentStatus(
+  fetcher: typeof fetch = fetch,
+  timeoutMs = ANALYTICS_REQUEST_TIMEOUT_MS
+): Promise<AnalyticsConsentServerStatus | null> {
   try {
-    const response = await fetcher("/api/analytics/consent", {
+    const response = await fetchWithTimeout("/api/analytics/consent", {
       method: "GET",
       cache: "no-store",
       headers: { "cache-control": "no-store" }
-    });
+    }, { fetcher, timeoutMs });
     if (!response.ok) return null;
     const value = await response.json() as unknown;
     if (!value || typeof value !== "object") return null;
@@ -186,6 +244,7 @@ export function synchronizeAnalyticsConsent(input: {
   version: string;
   getStatus: () => Promise<AnalyticsConsentServerStatus | null>;
   persist: () => Promise<boolean>;
+  isCurrent?: () => boolean;
 }): Promise<ConsentSynchronizationResult> {
   const key = `${input.visitorId}:${input.consent}:${input.version}`;
   const existing = consentSyncFlights.get(key);
@@ -193,9 +252,14 @@ export function synchronizeAnalyticsConsent(input: {
 
   const flight = (async (): Promise<ConsentSynchronizationResult> => {
     try {
+      if (input.isCurrent && !input.isCurrent()) return "unavailable";
       const status = await input.getStatus();
+      if (input.isCurrent && !input.isCurrent()) return "unavailable";
       if (!status) return "unavailable";
       if (status.consent === input.consent && status.version === input.version) return "matched";
+      // The status read and conditional POST are separated by network time. Re-check
+      // immediately before enqueueing so an explicit withdrawal always wins.
+      if (input.isCurrent && !input.isCurrent()) return "unavailable";
       return await input.persist() ? "resubmitted" : "unavailable";
     } catch {
       return "unavailable";
@@ -250,7 +314,7 @@ export function applyAnalyticsDeliveryDisposition(
   now = Date.now()
 ) {
   const current = queue.find((event) => event.eventKey === eventKey);
-  if (!current || disposition === "success" || disposition === "drop" || disposition === "revalidate") {
+  if (!current || disposition === "success" || disposition === "drop") {
     return queue.filter((event) => event.eventKey !== eventKey);
   }
 
@@ -337,7 +401,7 @@ function scheduleQueueRetry() {
 
 async function deliverEvent(event: QueuedAnalyticsEvent): Promise<AnalyticsDeliveryDisposition> {
   try {
-    const response = await fetch("/api/analytics/events", {
+    const response = await fetchWithTimeout("/api/analytics/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
