@@ -53,7 +53,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               delivery across Europe, secure Stripe payment and a 14-day return window after delivery.
             </p>
           </div>
-          <span>{items.length} <TranslatedText id="stylesCount" /></span>
+          <span className="collection-count">{items.length} <TranslatedText id="stylesCount" /></span>
         </div>
         <div className="product-grid">
           {items.map((product, index) => (
@@ -71,8 +71,8 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
                 )}
               </div>
               <div className="product-card-body">
-                <strong><CatalogText text={product.name} kind="name" /></strong>
-                <span><CatalogText text={product.color} kind="color" /></span>
+                <strong className="product-card-name"><CatalogText text={product.name} kind="name" /></strong>
+                <span className="product-card-color"><CatalogText text={product.color} kind="color" /></span>
                 <span className="product-card-price">EUR {product.priceEur}</span>
               </div>
             </Link>

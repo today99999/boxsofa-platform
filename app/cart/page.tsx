@@ -16,7 +16,7 @@ export default function CartPage() {
   return (
     <>
       <SiteHeader />
-      <main className="section">
+      <main className="section checkout-page">
         <CartClient />
       </main>
       <SiteFooter />

@@ -6,7 +6,7 @@ type OptimizedImageProps = {
   src: string;
 };
 
-const responsiveWidths = [320, 640, 828, 1200, 1920];
+const responsiveWidths = [256, 384, 640, 828, 1200, 1920];
 
 function optimizedImageUrl(src: string, width: number) {
   return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=72`;

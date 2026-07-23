@@ -200,26 +200,36 @@ export function CartClient() {
 
   return (
     <div className="checkout-layout">
-      <section className="panel">
-        <h1>{t("cartTitle")}</h1>
+      <section className="panel cart-panel">
+        <div className="checkout-heading">
+          <p className="eyebrow">Your order</p>
+          <h1>{t("cartTitle")}</h1>
+          <p>Review your sofa and quantity before entering delivery details.</p>
+        </div>
         {items.length === 0 ? (
-          <p>{t("emptyCart")}</p>
+          <div className="checkout-empty">
+            <p>{t("emptyCart")}</p>
+            <a className="button primary" href="/category/all">Browse sofas</a>
+          </div>
         ) : (
           <div className="cart-list">
             {items.map((item) => (
               <article className="cart-row" key={item.id}>
                 <OptimizedImage alt={item.name} sizes="92px" src={item.image} />
-                <div>
+                <div className="cart-item-copy">
                   <strong><CatalogText text={item.name} kind="name" /></strong>
-                  <p><CatalogText text={item.color} kind="color" /></p>
-                  <p>{money(item.priceEur)}</p>
+                  <p className="cart-item-color"><CatalogText text={item.color} kind="color" /></p>
+                  <p className="cart-item-price">{money(item.priceEur)}</p>
                 </div>
-                <input
-                  min={1}
-                  type="number"
-                  value={item.quantity}
-                  onChange={(event) => updateQuantity(item.id, Number(event.target.value))}
-                />
+                <label className="cart-quantity">
+                  <span>{t("quantity")}</span>
+                  <input
+                    min={1}
+                    type="number"
+                    value={item.quantity}
+                    onChange={(event) => updateQuantity(item.id, Number(event.target.value))}
+                  />
+                </label>
                 <button className="button" type="button" onClick={() => removeItem(item.id)}>
                   {t("remove")}
                 </button>
@@ -229,9 +239,11 @@ export function CartClient() {
         )}
       </section>
 
-      <form className="panel checkout-form" onSubmit={submitOrder}>
-        <div>
+      <form className="panel checkout-form checkout-panel" onSubmit={submitOrder}>
+        <div className="checkout-heading">
+          <p className="eyebrow">Secure checkout</p>
           <h2>{t("deliveryInfo")}</h2>
+          <p>Free basic delivery across Europe. Secure card payment with Stripe.</p>
           {profileMessage ? <p className="checkout-profile-note">{profileMessage}</p> : null}
           {profileMode === "local" ? (
             <p className="checkout-profile-note muted">Login as a customer to reuse saved delivery details.</p>
