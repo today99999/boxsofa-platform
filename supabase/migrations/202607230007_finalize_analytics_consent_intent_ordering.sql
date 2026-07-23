@@ -10,6 +10,8 @@ alter table public.analytics_consent_intents
   add constraint analytics_consent_intents_consumed_result_check
   check (consumed_result in ('accepted', 'stale', 'superseded'));
 alter table public.analytics_consent_intents
+  drop constraint if exists analytics_consent_intents_superseded_state_check;
+alter table public.analytics_consent_intents
   add constraint analytics_consent_intents_superseded_state_check
   check (
     superseded_at is null
@@ -121,7 +123,9 @@ begin
 
   insert into public.analytics_consent_intents (visitor_id)
   values (p_visitor_id)
-  returning id, intent_revision, expires_at
+  returning analytics_consent_intents.id,
+    analytics_consent_intents.intent_revision,
+    analytics_consent_intents.expires_at
   into v_intent_id, v_intent_revision, v_expires_at;
 
   update public.analytics_consent_intents
@@ -197,24 +201,24 @@ begin
 
   perform pg_advisory_xact_lock(hashtextextended(p_visitor_id, 0));
 
-  select id, consent, revision, intent_revision
+  select consent_row.id, consent_row.consent, consent_row.revision, consent_row.intent_revision
   into v_current_id, v_current_consent, v_current_revision, v_current_intent_revision
-  from public.analytics_consents
-  where visitor_id = p_visitor_id
-  order by intent_revision desc
+  from public.analytics_consents consent_row
+  where consent_row.visitor_id = p_visitor_id
+  order by consent_row.intent_revision desc
   limit 1
   for update;
 
   select latest_intent_revision
   into v_latest_intent_revision
-  from public.analytics_consent_intent_heads
-  where visitor_id = p_visitor_id
+  from public.analytics_consent_intent_heads head
+  where head.visitor_id = p_visitor_id
   for update;
 
   select * into v_intent
-  from public.analytics_consent_intents
-  where id = p_intent_id
-    and visitor_id = p_visitor_id
+  from public.analytics_consent_intents intent_row
+  where intent_row.id = p_intent_id
+    and intent_row.visitor_id = p_visitor_id
   for update;
 
   if not found then
@@ -229,7 +233,7 @@ begin
     or v_intent.intent_revision <= coalesce(v_current_intent_revision, 0)
   then
     if v_intent.consumed_at is null then
-      update public.analytics_consent_intents
+      update public.analytics_consent_intents intent_row
       set consumed_at = now(),
           consumed_result = case
             when v_latest_intent_revision is not null
@@ -241,9 +245,9 @@ begin
             when v_latest_intent_revision is not null
               and v_intent.intent_revision <> v_latest_intent_revision
               then now()
-            else superseded_at
+            else intent_row.superseded_at
           end
-      where id = v_intent.id;
+      where intent_row.id = v_intent.id;
     end if;
     return query select false, true, v_current_id, v_current_consent, v_current_revision, v_current_intent_revision;
     return;
@@ -264,10 +268,10 @@ begin
   )
   returning * into v_inserted;
 
-  update public.analytics_consent_intents
+  update public.analytics_consent_intents intent_row
   set consumed_at = now(),
       consumed_result = 'accepted'
-  where id = v_intent.id;
+  where intent_row.id = v_intent.id;
 
   return query select true, false, v_inserted.id, v_inserted.consent, v_inserted.revision, v_inserted.intent_revision;
 end;

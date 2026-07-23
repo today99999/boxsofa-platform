@@ -30,6 +30,14 @@ const consentIntentFinalizationMigration = readFileSync(
   new URL("../../supabase/migrations/202607230007_finalize_analytics_consent_intent_ordering.sql", import.meta.url),
   "utf8"
 );
+const consentIntentConstraintReassertionMigration = readFileSync(
+  new URL("../../supabase/migrations/202607230008_reassert_analytics_consent_superseded_constraint.sql", import.meta.url),
+  "utf8"
+);
+const consentIntentRpcOutputFixMigration = readFileSync(
+  new URL("../../supabase/migrations/202607230009_fix_analytics_consent_intent_rpc_output.sql", import.meta.url),
+  "utf8"
+);
 const bootstrapSchema = readFileSync(
   new URL("../../supabase/schema.sql", import.meta.url),
   "utf8"
@@ -229,6 +237,45 @@ test("final intent ordering supersedes old issues and keeps a durable cleanup-sa
       consentIntentFinalizationMigration.toLowerCase(),
       new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     );
+  }
+});
+
+test("superseded intent constraint recreation is rerunnable in migration history and bootstrap", () => {
+  const requiredOrder = [
+    "drop constraint if exists analytics_consent_intents_superseded_state_check",
+    "add constraint analytics_consent_intents_superseded_state_check"
+  ];
+
+  for (const sql of [consentIntentFinalizationMigration, consentIntentConstraintReassertionMigration, bootstrapSchema]) {
+    const lower = sql.toLowerCase();
+    const dropAt = lower.indexOf(requiredOrder[0]);
+    const addAt = lower.indexOf(requiredOrder[1]);
+    assert.ok(dropAt >= 0, "expected the named superseded-state constraint to be dropped safely");
+    assert.ok(addAt > dropAt, "expected the named superseded-state constraint to be added after its safe drop");
+  }
+});
+
+test("intent issuance qualifies output columns so PostgreSQL cannot confuse them with return fields", () => {
+  const required = "returning analytics_consent_intents.id,\n    analytics_consent_intents.intent_revision,\n    analytics_consent_intents.expires_at";
+  for (const sql of [consentIntentFinalizationMigration, consentIntentRpcOutputFixMigration, bootstrapSchema]) {
+    assert.match(sql.toLowerCase(), new RegExp(required.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("consent recording qualifies columns that conflict with its return fields", () => {
+  const required = [
+    "select consent_row.id, consent_row.consent, consent_row.revision, consent_row.intent_revision",
+    "from public.analytics_consents consent_row",
+    "where intent_row.id = v_intent.id"
+  ];
+  const recordFixMigration = readFileSync(
+    new URL("../../supabase/migrations/202607230010_fix_analytics_consent_record_rpc_output.sql", import.meta.url),
+    "utf8"
+  );
+  for (const sql of [consentIntentFinalizationMigration, recordFixMigration, bootstrapSchema]) {
+    for (const contract of required) {
+      assert.match(sql.toLowerCase(), new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
   }
 });
 
