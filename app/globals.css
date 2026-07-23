@@ -238,27 +238,44 @@ video {
 
 .login-page {
   display: grid;
-  gap: 22px;
-  grid-template-columns: minmax(0, 0.75fr) minmax(320px, 1.25fr);
+  gap: clamp(28px, 5vw, 64px);
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  margin: 0 auto;
+  max-width: 1120px;
 }
 
-.login-page h1 {
-  font-size: clamp(32px, 5vw, 56px);
-  line-height: 1.05;
-  margin: 0 0 16px;
+.login-intro {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
 }
 
-.login-page > div > p:not(.eyebrow) {
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1.7;
+.login-intro .eyebrow {
+  font-weight: 650;
   margin: 0;
+}
+
+.login-intro h1 {
+  font-size: clamp(32px, 4vw, 42px);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.login-intro > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 460px;
 }
 
 .login-form {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   margin-bottom: 0;
+  padding: 20px;
 }
 
 .login-mode-toggle {
@@ -278,7 +295,7 @@ video {
   color: var(--muted);
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 650;
   min-height: 40px;
   padding: 9px 10px;
 }
@@ -292,13 +309,17 @@ video {
 .login-form label {
   color: var(--muted);
   display: grid;
-  font-weight: 900;
-  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 6px;
 }
 
 .login-form input {
+  background: #fff;
   border: 1px solid var(--line);
   border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
   min-height: 48px;
   padding: 12px 14px;
   width: 100%;
@@ -320,12 +341,19 @@ video {
 
 .login-role-preview span {
   color: var(--muted);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.login-role-preview strong {
+  font-size: 14px;
+  font-weight: 650;
+  text-align: right;
 }
 
 .login-note {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   margin: 0;
 }
@@ -342,7 +370,8 @@ video {
 }
 
 .customer-login-required strong {
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 700;
 }
 
 .customer-login-required p {
@@ -1741,7 +1770,7 @@ video {
 .member-badge {
   border-radius: 999px;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 650;
   padding: 7px 10px;
 }
 
@@ -2420,7 +2449,8 @@ video {
   border-radius: 999px;
   color: var(--brand);
   display: inline-flex;
-  font-weight: 900;
+  font-size: 13px;
+  font-weight: 650;
   justify-self: start;
   padding: 6px 10px;
 }
@@ -2428,6 +2458,33 @@ video {
 .customer-dashboard {
   display: grid;
   gap: 18px;
+}
+
+.customer-page {
+  margin: 0 auto;
+  max-width: 1320px;
+}
+
+.customer-dashboard .panel {
+  padding: 20px;
+}
+
+.customer-dashboard .panel-head .eyebrow {
+  font-weight: 650;
+  margin: 0 0 5px;
+}
+
+.customer-dashboard .panel-head h1 {
+  font-size: clamp(29px, 3vw, 36px);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.12;
+  margin: 0;
+}
+
+.customer-dashboard .panel-head h2 {
+  font-size: 22px;
+  font-weight: 700;
 }
 
 .customer-overview-panel {
@@ -2457,7 +2514,8 @@ video {
   background: #eef4ed;
   border-radius: 6px;
   color: var(--muted);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 600;
   margin: 0 0 14px;
   padding: 10px 12px;
 }
@@ -2478,7 +2536,14 @@ video {
   justify-content: space-between;
 }
 
+.membership-head strong {
+  font-weight: 650;
+}
+
 .membership-panel p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -2506,7 +2571,7 @@ video {
   color: var(--muted);
   display: grid;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 650;
   gap: 7px;
 }
 
@@ -2554,7 +2619,7 @@ video {
 
 .customer-profile-actions span {
   color: var(--muted);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .customer-order-list {
@@ -2577,12 +2642,13 @@ video {
 .customer-order-info span {
   color: var(--muted);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .customer-order-head strong {
   display: block;
-  font-size: 22px;
+  font-size: 19px;
+  font-weight: 700;
   line-height: 1.15;
   margin-top: 2px;
 }
@@ -2605,7 +2671,7 @@ video {
   border-radius: 999px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 600;
   padding: 8px 10px;
   text-align: center;
 }
@@ -2644,7 +2710,7 @@ video {
   border-radius: 999px;
   color: var(--brand);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.3;
   max-width: 280px;
   padding: 8px 10px;
@@ -2681,7 +2747,8 @@ video {
 }
 
 .customer-order-info strong {
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.25;
 }
 
@@ -4045,9 +4112,81 @@ body:has(.checkout-layout) .chat-button {
     padding-bottom: 48px;
   }
 
-  .product-grid,
   .home-product-grid {
     grid-template-columns: 1fr;
+  }
+
+  .collection-page {
+    padding: 12px 8px 30px;
+  }
+
+  .collection-head {
+    align-items: flex-end;
+    flex-direction: row;
+    gap: 8px;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .collection-head .eyebrow,
+  .collection-intro {
+    display: none;
+  }
+
+  .collection-head h1 {
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  .collection-count {
+    border: 0;
+    font-size: 12px;
+    padding: 0 0 2px;
+  }
+
+  .product-grid {
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-card-body {
+    min-height: 78px;
+    padding: 8px 9px 9px;
+  }
+
+  .product-card-body strong {
+    font-size: 13px;
+    line-height: 1.28;
+  }
+
+  .product-card-color {
+    font-size: 12px !important;
+  }
+
+  .product-card-price {
+    font-size: 14px !important;
+    margin-top: 2px;
+  }
+
+  .login-page {
+    gap: 18px;
+  }
+
+  .login-intro {
+    gap: 7px;
+    padding-top: 0;
+  }
+
+  .login-intro h1 {
+    font-size: 28px;
+  }
+
+  .login-form {
+    padding: 16px;
+  }
+
+  .customer-dashboard .panel {
+    padding: 16px;
   }
 
   .site-header {

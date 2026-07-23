@@ -16,7 +16,7 @@ export default function OrdersPage() {
   return (
     <>
       <SiteHeader />
-      <main className="section">
+      <main className="section customer-page">
         <OrdersClient />
       </main>
       <SiteFooter />

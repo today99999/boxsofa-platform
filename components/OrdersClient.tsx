@@ -258,22 +258,22 @@ export function OrdersClient() {
             <p className="eyebrow">BoxSofa Customer</p>
             <h1>{t("customerDashboard")}</h1>
           </div>
-          <div className="customer-sync-actions">
+          <div className="customer-sync-actions" hidden={loginRequired}>
             <span className="status">{orderSource}</span>
             <button className="button" disabled={isLoadingOrders} onClick={loadCustomerOrders} type="button">
               {isLoadingOrders ? "Updating..." : "Refresh status"}
             </button>
           </div>
         </div>
-        {lastOrderSyncAt ? <p className="customer-sync-note">Last updated: {formatDate(lastOrderSyncAt)}</p> : null}
-        {syncMessage ? <p className="customer-sync-note">{syncMessage}</p> : null}
+        {!loginRequired && lastOrderSyncAt ? <p className="customer-sync-note">Last updated: {formatDate(lastOrderSyncAt)}</p> : null}
+        {!loginRequired && syncMessage ? <p className="customer-sync-note">{syncMessage}</p> : null}
 
         {loginRequired ? (
           <div className="customer-login-required">
-            <strong>请先登录买家账号</strong>
-            <p>正式上线后，客户订单、会员折扣和收货资料只会显示给当前登录的买家。</p>
+            <strong>Sign in to view your orders</strong>
+            <p>Your orders, member discount progress and saved delivery details are available only after customer login.</p>
             <Link className="button primary" href="/login">
-              去登录
+              Sign in
             </Link>
           </div>
         ) : null}
