@@ -18,6 +18,10 @@ const analyticsFinalizationMigration = readFileSync(
   new URL("../../supabase/migrations/202607230004_finalize_analytics_consent_lock.sql", import.meta.url),
   "utf8"
 );
+const analyticsSecurityMigration = readFileSync(
+  new URL("../../supabase/migrations/202607230005_secure_analytics_attribution_and_maintenance.sql", import.meta.url),
+  "utf8"
+);
 const bootstrapSchema = readFileSync(
   new URL("../../supabase/schema.sql", import.meta.url),
   "utf8"
@@ -79,7 +83,7 @@ test("bootstrap schema matches the final owner-only data center policy state", (
 });
 
 test("analytics hardening migration keeps consent ordering, atomic ingestion, and service-only limits", () => {
-  const finalAnalyticsMigration = `${analyticsHardeningMigration}\n${analyticsFinalizationMigration}`;
+  const finalAnalyticsMigration = `${analyticsHardeningMigration}\n${analyticsFinalizationMigration}\n${analyticsSecurityMigration}`;
   for (const contract of [
     "add column if not exists revision bigint",
     "create unique index if not exists idx_analytics_consents_revision",
@@ -88,7 +92,7 @@ test("analytics hardening migration keeps consent ordering, atomic ingestion, an
     "create or replace function public.consume_analytics_rate_limit",
     "create or replace function public.ingest_analytics_event",
     "pg_advisory_xact_lock(hashtextextended(p_visitor_id, 0))",
-    "insert into public.analytics_rate_limit_buckets (bucket_key, window_started_at, request_count)",
+    "insert into public.analytics_rate_limit_buckets (bucket_key, window_started_at, request_count, expires_at)",
     "on conflict (bucket_key) do nothing",
     "order by revision desc",
     "on conflict (event_key) do nothing",
@@ -107,11 +111,39 @@ test("analytics hardening migration keeps consent ordering, atomic ingestion, an
   }
 });
 
+test("analytics security migration deterministically repairs historical consent order and limits owner reads", () => {
+  for (const contract of [
+    "lock table public.analytics_consents in access exclusive mode",
+    "row_number() over (order by visitor_id, created_at, id)",
+    "perform setval(",
+    "analytics_consents_revision_seq",
+    "create policy \"owners read analytics consents\"",
+    "create policy \"owners read analytics events\"",
+    "using ((select public.is_owner()))",
+    "add column if not exists expires_at timestamptz",
+    "create index if not exists idx_analytics_rate_limit_buckets_expires_at",
+    "create or replace function public.cleanup_analytics_rate_limit_buckets",
+    "for update skip locked",
+    "exception when others then",
+    "grant execute on function public.cleanup_analytics_rate_limit_buckets(integer) to service_role"
+  ]) {
+    assert.match(
+      analyticsSecurityMigration.toLowerCase(),
+      new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    );
+  }
+});
+
 test("bootstrap schema includes the hardened analytics ingestion contract", () => {
   for (const contract of [
     "create sequence if not exists public.analytics_consents_revision_seq",
     "add column if not exists revision bigint",
     "create table if not exists public.analytics_rate_limit_buckets",
+    "create policy \"owners read analytics consents\"",
+    "create policy \"owners read analytics events\"",
+    "row_number() over (order by visitor_id, created_at, id)",
+    "add column if not exists expires_at timestamptz",
+    "create or replace function public.cleanup_analytics_rate_limit_buckets",
     "create or replace function public.record_analytics_consent",
     "create or replace function public.consume_analytics_rate_limit",
     "create or replace function public.ingest_analytics_event",

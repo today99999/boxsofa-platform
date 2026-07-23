@@ -140,9 +140,16 @@ async function deliverEvent(event: QueuedAnalyticsEvent) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      ...event,
-      referrerDomain: sanitizeReferrerDomain(event.referrer ?? ""),
-      deviceType: inferDeviceType(window.innerWidth)
+      eventKey: event.eventKey,
+      type: event.type,
+      createdAt: event.createdAt,
+      visitorId: event.visitorId,
+      sessionId: event.sessionId,
+      path: event.path,
+      deviceType: inferDeviceType(window.innerWidth),
+      productId: event.productId,
+      productName: event.productName,
+      valueEur: event.valueEur
     }),
     keepalive: true
   });

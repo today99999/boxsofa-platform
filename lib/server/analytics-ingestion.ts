@@ -1,26 +1,16 @@
-import { createHash } from "crypto";
 import { z } from "zod";
-import { resolveAttribution } from "../data-center/metrics.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ATTRIBUTION_COOKIE_NAME,
+  type AnalyticsAttributionService,
+  type TrustedAttribution
+} from "./analytics-attribution.ts";
 
 const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 15 * 60 * 1000;
 const MAX_EVENT_VALUE_EUR = 100_000;
-const LEGACY_UTM_SOURCES = new Set([
-  "tiktok", "tik-tok", "instagram", "ig", "facebook", "fb",
-  "youtube", "yt", "pinterest", "pin", "google", "x", "twitter"
-]);
-
 const boundedText = (max: number) => z.string().trim().min(1).max(max);
 const optionalBoundedText = (max: number) => boundedText(max).optional();
-
-const rawUtmSchema = z.object({
-  source: optionalBoundedText(80),
-  medium: optionalBoundedText(80),
-  campaign: optionalBoundedText(160),
-  content: optionalBoundedText(160),
-  term: optionalBoundedText(160)
-}).strict();
 
 const consentSchema = z.object({
   visitorId: boundedText(120),
@@ -36,15 +26,8 @@ const eventSchema = z.object({
   visitorId: boundedText(120),
   sessionId: boundedText(120),
   path: boundedText(500),
-  // `source` remains optional for the currently deployed storefront payload, but is never canonical input.
-  source: optionalBoundedText(80),
-  medium: optionalBoundedText(80),
-  campaign: optionalBoundedText(160),
-  rawUtm: rawUtmSchema.optional(),
-  utmSource: optionalBoundedText(80),
-  utmMedium: optionalBoundedText(80),
-  utmCampaign: optionalBoundedText(160),
-  referrerDomain: optionalBoundedText(255),
+  // Unknown legacy attribution fields are intentionally stripped. Canonical
+  // source data is read only from the signed HttpOnly attribution cookie.
   deviceType: z.enum(["desktop", "mobile", "tablet"]).optional(),
   productId: boundedText(120).optional(),
   productName: optionalBoundedText(300),
@@ -92,16 +75,26 @@ export type AnalyticsIngestionRepository = {
 
 type HandlerDependencies = {
   repository: AnalyticsIngestionRepository;
+  attributionService: AnalyticsAttributionService | null;
 };
 
-export function createAnalyticsConsentHandler({ repository }: HandlerDependencies) {
+export function createAnalyticsConsentHandler({ repository, attributionService }: HandlerDependencies) {
   return async function postAnalyticsConsent(request: Request): Promise<Response> {
     const payload = consentSchema.safeParse(await readJson(request));
     if (!payload.success) {
       return invalidPayloadResponse();
     }
 
-    const limit = await checkPersistentRateLimit(repository, request, "analytics:consent", payload.data.visitorId);
+    if (!attributionService) return unavailableResponse();
+
+    const limit = await checkPersistentRateLimit(
+      repository,
+      request,
+      "analytics:consent",
+      payload.data.visitorId,
+      undefined,
+      attributionService
+    );
     if (!limit.ok) {
       return limit.response;
     }
@@ -115,14 +108,21 @@ export function createAnalyticsConsentHandler({ repository }: HandlerDependencie
   };
 }
 
-export function createAnalyticsEventHandler({ repository }: HandlerDependencies) {
+export function createAnalyticsEventHandler({ repository, attributionService }: HandlerDependencies) {
   return async function postAnalyticsEvent(request: Request): Promise<Response> {
     const parsed = eventSchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return invalidPayloadResponse();
     }
 
-    const canonical = canonicalizeEvent(parsed.data);
+    if (!attributionService) return unavailableResponse();
+
+    const attribution = await attributionService.verify(readCookie(request, ATTRIBUTION_COOKIE_NAME));
+    if (!attribution) {
+      return invalidPayloadResponse();
+    }
+
+    const canonical = canonicalizeEvent(parsed.data, attribution);
     if (!canonical) {
       return invalidPayloadResponse();
     }
@@ -132,7 +132,8 @@ export function createAnalyticsEventHandler({ repository }: HandlerDependencies)
       request,
       "analytics:event",
       canonical.visitorId,
-      canonical.sessionId
+      canonical.sessionId,
+      attributionService
     );
     if (!limit.ok) {
       return limit.response;
@@ -246,7 +247,10 @@ export function createUnavailableAnalyticsRepository(): AnalyticsIngestionReposi
   };
 }
 
-function canonicalizeEvent(event: z.infer<typeof eventSchema>): Omit<IngestedAnalyticsEvent, "productId" | "consentId"> | null {
+function canonicalizeEvent(
+  event: z.infer<typeof eventSchema>,
+  attribution: TrustedAttribution
+): Omit<IngestedAnalyticsEvent, "productId" | "consentId"> | null {
   const createdAt = new Date(event.createdAt);
   const skew = createdAt.getTime() - Date.now();
   if (!Number.isFinite(createdAt.getTime()) || skew < -MAX_EVENT_AGE_MS || skew > MAX_FUTURE_SKEW_MS) {
@@ -257,13 +261,6 @@ function canonicalizeEvent(event: z.infer<typeof eventSchema>): Omit<IngestedAna
     return null;
   }
 
-  const rawUtm = normalizeRawUtm(event);
-  const referrerDomain = normalizeReferrerDomain(event.referrerDomain);
-  const attribution = resolveAttribution({
-    utmSource: rawUtm.source,
-    referrer: referrerDomain ? `https://${referrerDomain}/` : null
-  });
-
   return {
     eventKey: event.eventKey,
     eventType: event.type,
@@ -272,59 +269,14 @@ function canonicalizeEvent(event: z.infer<typeof eventSchema>): Omit<IngestedAna
     sessionId: event.sessionId,
     path: event.path,
     source: attribution.source,
-    medium: rawUtm.medium ?? null,
-    campaign: rawUtm.campaign ?? null,
-    referrerDomain,
+    medium: attribution.medium,
+    campaign: attribution.campaign,
+    referrerDomain: attribution.referrerDomain,
     deviceType: event.deviceType ?? null,
     productName: event.productName ?? null,
     valueEur: event.valueEur ?? null,
-    rawUtm
+    rawUtm: attribution.rawUtm
   };
-}
-
-function normalizeRawUtm(event: z.infer<typeof eventSchema>): Record<string, string> {
-  const explicit = event.rawUtm ?? {};
-  // The legacy storefront sends source/medium/campaign. It is a UTM record only
-  // for known marketing channels when medium or campaign is present.
-  const legacySource = event.medium || event.campaign
-    ? knownLegacyUtmSource(event.source)
-    : undefined;
-  const candidates = {
-    source: explicit.source ?? event.utmSource ?? legacySource,
-    medium: explicit.medium ?? event.utmMedium ?? event.medium,
-    campaign: explicit.campaign ?? event.utmCampaign ?? event.campaign,
-    content: explicit.content,
-    term: explicit.term
-  };
-
-  const normalized: Record<string, string> = {};
-  for (const [key, value] of Object.entries(candidates)) {
-    if (typeof value === "string" && value) {
-      normalized[key] = value;
-    }
-  }
-  return normalized;
-}
-
-function knownLegacyUtmSource(value: string | undefined): string | undefined {
-  const source = value?.toLowerCase();
-  return source && LEGACY_UTM_SOURCES.has(source) ? source : undefined;
-}
-
-function normalizeReferrerDomain(value: string | undefined): string | null {
-  if (!value || /[\\\u0000-\u001F\u007F]/.test(value)) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(value.includes("://") ? value : `https://${value}`);
-    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) {
-      return null;
-    }
-    return parsed.hostname.toLowerCase();
-  } catch {
-    return null;
-  }
 }
 
 function isSafeSameSitePath(value: string): boolean {
@@ -345,14 +297,15 @@ async function checkPersistentRateLimit(
   request: Request,
   scope: string,
   visitorId: string,
-  sessionId?: string
+  sessionId: string | undefined,
+  attributionService: AnalyticsAttributionService
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
   const options = scope === "analytics:consent"
     ? { limit: 30, windowSeconds: 60 }
     : { limit: 120, windowSeconds: 60 };
-  const bucketKeys = createRateLimitBucketKeys(request, scope, visitorId, sessionId);
 
   try {
+    const bucketKeys = await createRateLimitBucketKeys(request, scope, visitorId, sessionId, attributionService);
     for (const bucketKey of bucketKeys) {
       const result = await repository.consumeRateLimit({ bucketKey, ...options });
       if (!result.allowed) {
@@ -372,28 +325,41 @@ async function checkPersistentRateLimit(
   return { ok: true };
 }
 
-function createRateLimitBucketKeys(request: Request, scope: string, visitorId: string, sessionId?: string): string[] {
+async function createRateLimitBucketKeys(
+  request: Request,
+  scope: string,
+  visitorId: string,
+  sessionId: string | undefined,
+  attributionService: AnalyticsAttributionService
+): Promise<string[]> {
+  const address = getTrustedClientAddress(request);
   const identifiers = [
-    `address:${getTrustedClientAddress(request) ?? "unavailable"}`,
+    address ? `address:${address}` : null,
     `visitor:${visitorId}`,
     sessionId ? `session:${sessionId}` : null
   ].filter((value): value is string => Boolean(value));
 
-  return [...new Set(identifiers.map((identifier) => hashRateLimitIdentifier(`${scope}:${identifier}`)))];
+  const keys = await Promise.all(
+    identifiers.map((identifier) => attributionService.hmacHex("analytics-rate-limit:v1", `${scope}:${identifier}`))
+  );
+  return [...new Set(keys)];
 }
 
 function getTrustedClientAddress(request: Request): string | null {
-  for (const header of ["x-vercel-forwarded-for", "cf-connecting-ip", "x-forwarded-for", "x-real-ip"]) {
-    const value = request.headers.get(header)?.split(",")[0]?.trim();
-    if (value && value.length <= 120 && !/[\\\u0000-\u001F\u007F]/.test(value)) {
-      return value;
-    }
-  }
-  return null;
+  // This header is injected by the Vercel edge/proxy layer for production traffic.
+  // Generic forwarding headers are intentionally ignored because clients can forge them.
+  const value = request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+  return value && value.length <= 120 && !/[\\\u0000-\u001F\u007F]/.test(value) ? value : null;
 }
 
-function hashRateLimitIdentifier(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+function readCookie(request: Request, name: string): string | null {
+  const header = request.headers.get("cookie");
+  if (!header || header.length > 8192) return null;
+  for (const item of header.split(";")) {
+    const [key, ...value] = item.trim().split("=");
+    if (key === name && value.length) return value.join("=");
+  }
+  return null;
 }
 
 function isUuid(value: string): boolean {

@@ -6,9 +6,11 @@ import {
   type AnalyticsIngestionRepository,
   type IngestedAnalyticsEvent
 } from "./analytics-ingestion.ts";
+import { createAnalyticsAttributionService } from "./analytics-attribution.ts";
 
 const PRODUCT_SKU = "BS-CHAMELEONMARIOSOFA-01";
 const PRODUCT_UUID = "11111111-1111-4111-8111-111111111111";
+const TEST_SIGNING_SECRET = "test-only-analytics-signing-secret-with-at-least-thirty-two-bytes";
 
 type Consent = {
   id: string;
@@ -68,10 +70,12 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
 }
 
 function handlers(repository = new InMemoryAnalyticsRepository()) {
+  const attributionService = createAnalyticsAttributionService(TEST_SIGNING_SECRET);
   return {
     repository,
-    consent: createAnalyticsConsentHandler({ repository }),
-    event: createAnalyticsEventHandler({ repository })
+    consent: createAnalyticsConsentHandler({ repository, attributionService }),
+    event: createAnalyticsEventHandler({ repository, attributionService }),
+    attributionService
   };
 }
 
@@ -85,6 +89,23 @@ function jsonRequest(path: string, body: unknown, headers: HeadersInit = {}) {
     },
     body: JSON.stringify(body)
   });
+}
+
+async function analyticsEventRequest(
+  path: string,
+  body: unknown,
+  source = "google",
+  rawUtm: Record<string, string> = {}
+) {
+  const service = createAnalyticsAttributionService(TEST_SIGNING_SECRET);
+  const token = await service.issue({
+    source,
+    medium: rawUtm.medium ?? null,
+    campaign: rawUtm.campaign ?? null,
+    referrerDomain: source === "google" ? "news.google.de" : null,
+    rawUtm
+  });
+  return jsonRequest(path, body, { cookie: `boxsofa_attribution_v1=${token}` });
 }
 
 function validEvent(overrides: Record<string, unknown> = {}) {
@@ -131,7 +152,7 @@ test("analytics endpoints reject malformed JSON without reaching persistence", a
 
 test("analytics event requires current analytics consent", async () => {
   const { consent, event } = handlers();
-  const absent = await event(jsonRequest("/api/analytics/events", validEvent()));
+  const absent = await event(await analyticsEventRequest("/api/analytics/events", validEvent()));
   assert.equal(absent.status, 403);
 
   await consent(jsonRequest("/api/analytics/consent", {
@@ -140,7 +161,7 @@ test("analytics event requires current analytics consent", async () => {
     locale: "en",
     version: "2026-07-23"
   }));
-  const necessary = await event(jsonRequest("/api/analytics/events", validEvent()));
+  const necessary = await event(await analyticsEventRequest("/api/analytics/events", validEvent()));
   assert.equal(necessary.status, 403);
 });
 
@@ -153,7 +174,12 @@ test("analytics event persists canonical payload after analytics consent", async
     locale: "en",
     version: "2026-07-23"
   }));
-  const eventResponse = await event(jsonRequest("/api/analytics/events", input));
+  const eventResponse = await event(await analyticsEventRequest(
+    "/api/analytics/events",
+    input,
+    "tiktok",
+    { source: "tiktok", medium: "social", campaign: "summer" }
+  ));
 
   assert.equal(consentResponse.status, 200);
   assert.deepEqual(await body(consentResponse), { ok: true });
@@ -169,7 +195,7 @@ test("analytics event persists canonical payload after analytics consent", async
   assert.equal(stored.valueEur, 399);
 });
 
-test("legacy storefront UTM fields remain compatible without trusting a bare source field", async () => {
+test("signed UTM attribution remains compatible while client UTM fields are ignored", async () => {
   const { consent, event, repository } = handlers();
   const input = validEvent({
     eventKey: "evt-12121212-1212-4212-8212-121212121212",
@@ -185,7 +211,12 @@ test("legacy storefront UTM fields remain compatible without trusting a bare sou
     version: "2026-07-23"
   }));
 
-  assert.equal((await event(jsonRequest("/api/analytics/events", input))).status, 200);
+  assert.equal((await event(await analyticsEventRequest(
+    "/api/analytics/events",
+    input,
+    "pinterest",
+    { source: "pinterest", medium: "social", campaign: "summer" }
+  ))).status, 200);
   const stored = repository.events.get(input.eventKey)!;
   assert.equal(stored.source, "pinterest");
   assert.deepEqual(stored.rawUtm, { source: "pinterest", medium: "social", campaign: "summer" });
@@ -200,8 +231,8 @@ test("withdrawn analytics consent rejects later events and duplicate keys stay i
     locale: "en",
     version: "2026-07-23"
   }));
-  assert.equal((await event(jsonRequest("/api/analytics/events", input))).status, 200);
-  assert.equal((await event(jsonRequest("/api/analytics/events", input))).status, 200);
+  assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
+  assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
   assert.equal(repository.events.size, 1);
 
   await consent(jsonRequest("/api/analytics/consent", {
@@ -210,17 +241,24 @@ test("withdrawn analytics consent rejects later events and duplicate keys stay i
     locale: "en",
     version: "2026-07-23"
   }));
-  assert.equal((await event(jsonRequest("/api/analytics/events", validEvent({ eventKey: "evt-22222222-2222-4222-8222-222222222222" })))).status, 403);
+  assert.equal((await event(await analyticsEventRequest(
+    "/api/analytics/events",
+    validEvent({ eventKey: "evt-22222222-2222-4222-8222-222222222222" })
+  ))).status, 403);
 });
 
-test("analytics event sanitizes forged source and rejects unsafe timestamps and paths", async () => {
+test("analytics event ignores client attribution and rejects invalid signed attribution, timestamps, and paths", async () => {
   const { consent, event, repository } = handlers();
   const input = validEvent({
     eventKey: "evt-33333333-3333-4333-8333-333333333333",
     medium: undefined,
     campaign: undefined,
     referrerDomain: "untrusted.example",
-    source: "facebook"
+    source: "facebook",
+    utmSource: "facebook",
+    utmMedium: "social",
+    utmCampaign: "forged-campaign",
+    rawUtm: { source: "facebook", medium: "social", campaign: "forged-campaign" }
   });
   await consent(jsonRequest("/api/analytics/consent", {
     visitorId: input.visitorId,
@@ -228,10 +266,10 @@ test("analytics event sanitizes forged source and rejects unsafe timestamps and 
     locale: "en",
     version: "2026-07-23"
   }));
-  assert.equal((await event(jsonRequest("/api/analytics/events", input))).status, 200);
-  assert.equal(repository.events.get(input.eventKey)?.source, "referral");
+  assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
+  assert.equal(repository.events.get(input.eventKey)?.source, "google");
 
-  const forgedLegacy = await event(jsonRequest("/api/analytics/events", validEvent({
+  const forgedLegacy = await event(await analyticsEventRequest("/api/analytics/events", validEvent({
     eventKey: "evt-34343434-3434-4434-8434-343434343434",
     source: "forged-network",
     medium: "social",
@@ -241,11 +279,16 @@ test("analytics event sanitizes forged source and rejects unsafe timestamps and 
   assert.equal(forgedLegacy.status, 200);
   assert.equal(repository.events.get("evt-34343434-3434-4434-8434-343434343434")?.source, "google");
 
-  const stale = await event(jsonRequest("/api/analytics/events", validEvent({
+  const invalidToken = await event(jsonRequest("/api/analytics/events", validEvent({
+    eventKey: "evt-35353535-3535-4535-8535-353535353535"
+  }), { cookie: "boxsofa_attribution_v1=forged.payload" }));
+  assert.equal(invalidToken.status, 400);
+
+  const stale = await event(await analyticsEventRequest("/api/analytics/events", validEvent({
     eventKey: "evt-44444444-4444-4444-8444-444444444444",
     createdAt: "2000-01-01T00:00:00.000Z"
   })));
-  const unsafePath = await event(jsonRequest("/api/analytics/events", validEvent({
+  const unsafePath = await event(await analyticsEventRequest("/api/analytics/events", validEvent({
     eventKey: "evt-55555555-5555-4555-8555-555555555555",
     path: "//evil.example/path"
   })));
@@ -263,7 +306,7 @@ test("analytics database failures are redacted and persistent limit keys are has
     version: "2026-07-23"
   }));
   repository.failNext = "event";
-  const response = await event(jsonRequest("/api/analytics/events", input));
+  const response = await event(await analyticsEventRequest("/api/analytics/events", input));
   const responseBody = await body(response);
 
   assert.equal(response.status, 503);
