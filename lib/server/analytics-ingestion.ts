@@ -120,7 +120,9 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
 
       const attribution = await resolveTrustedAttribution({
         ...trustedConsentEntry(request),
-        existingToken: null,
+        // The attribution token is HttpOnly, so only the server can safely
+        // validate and carry forward the last non-direct source on consent refreshes.
+        existingToken: readCookie(request, ATTRIBUTION_COOKIE_NAME),
         ownHosts: getOwnedAnalyticsHosts(),
         service: attributionService
       });

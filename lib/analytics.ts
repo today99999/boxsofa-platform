@@ -37,6 +37,7 @@ export const ANALYTICS_QUEUE_KEY = "boxsofa_analytics_queue_v1";
 export const ANALYTICS_VISITOR_KEY = "boxsofa_visitor_id_v1";
 export const ANALYTICS_SESSION_KEY = "boxsofa_analytics_session_v1";
 export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
+export const ANALYTICS_CONSENT_SYNC_KEY = "boxsofa_cookie_consent_server_sync_v1";
 export const OPEN_COOKIE_SETTINGS_EVENT = "boxsofa-open-cookie-settings";
 
 const MAX_QUEUE_SIZE = 200;
@@ -101,6 +102,26 @@ export function clearAnalyticsClientState(storage: Pick<Storage, "removeItem"> =
   ]) {
     storage.removeItem(key);
   }
+}
+
+export function consentSyncMarker(consent: AnalyticsConsent, version: string) {
+  return `${version}:${consent}`;
+}
+
+export function shouldSynchronizeConsent(
+  storage: Pick<Storage, "getItem">,
+  consent: AnalyticsConsent,
+  version: string
+) {
+  return storage.getItem(ANALYTICS_CONSENT_SYNC_KEY) !== consentSyncMarker(consent, version);
+}
+
+export function markConsentSynchronized(
+  storage: Pick<Storage, "setItem">,
+  consent: AnalyticsConsent,
+  version: string
+) {
+  storage.setItem(ANALYTICS_CONSENT_SYNC_KEY, consentSyncMarker(consent, version));
 }
 
 export function openCookieSettings() {

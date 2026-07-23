@@ -132,6 +132,12 @@ async function body(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+function responseCookieValue(response: Response, name: string): string | null {
+  const header = response.headers.get("set-cookie") ?? "";
+  const match = header.match(new RegExp(`${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 test("analytics endpoints reject malformed JSON without reaching persistence", async () => {
   const { consent, event, repository } = handlers();
   const malformedConsent = await consent(new Request("https://boxsofa.eu/api/analytics/consent", {
@@ -200,6 +206,95 @@ test("consent only writes server cookies after persistence and withdrawal expire
   assert.match(withdrawnCookies, /boxsofa_analytics_consent_v1=necessary/);
   assert.match(withdrawnCookies, /boxsofa_attribution_v1=;/);
   assert.match(withdrawnCookies, /Max-Age=0/);
+});
+
+test("repeated analytics consent preserves a valid last-non-direct attribution on page refresh", async () => {
+  const { consent, attributionService } = handlers();
+  const existingToken = await attributionService.issue({
+    source: "pinterest",
+    medium: "social",
+    campaign: "summer",
+    referrerDomain: null,
+    rawUtm: { source: "pinterest", medium: "social", campaign: "summer" }
+  });
+  const request = () => jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23"
+  }, {
+    cookie: `boxsofa_attribution_v1=${existingToken}`,
+    referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01"
+  });
+
+  const refreshed = await consent(request());
+  const repeated = await consent(request());
+
+  assert.equal(refreshed.status, 200);
+  assert.equal(repeated.status, 200);
+  assert.equal(responseCookieValue(refreshed, "boxsofa_attribution_v1"), existingToken);
+  assert.equal(responseCookieValue(repeated, "boxsofa_attribution_v1"), existingToken);
+  assert.equal((await attributionService.verify(existingToken))?.source, "pinterest");
+});
+
+test("analytics consent replaces prior attribution for a new trusted campaign", async () => {
+  const { consent, attributionService } = handlers();
+  const existingToken = await attributionService.issue({
+    source: "google",
+    medium: null,
+    campaign: null,
+    referrerDomain: "news.google.de",
+    rawUtm: {}
+  });
+
+  const response = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23"
+  }, {
+    cookie: `boxsofa_attribution_v1=${existingToken}`,
+    referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social&utm_campaign=autumn"
+  }));
+  const replacement = responseCookieValue(response, "boxsofa_attribution_v1");
+
+  assert.equal(response.status, 200);
+  assert.ok(replacement);
+  assert.deepEqual(await attributionService.verify(replacement), {
+    source: "tiktok",
+    medium: "social",
+    campaign: "autumn",
+    referrerDomain: null,
+    rawUtm: { source: "tiktok", medium: "social", campaign: "autumn" },
+    issuedAt: (await attributionService.verify(replacement))!.issuedAt,
+    expiresAt: (await attributionService.verify(replacement))!.expiresAt
+  });
+});
+
+test("analytics consent rejects invalid attribution and falls back to direct while withdrawal deletes it", async () => {
+  const { consent, attributionService } = handlers();
+  const response = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23"
+  }, {
+    cookie: "boxsofa_attribution_v1=forged.payload",
+    referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01"
+  }));
+  const replacement = responseCookieValue(response, "boxsofa_attribution_v1");
+
+  assert.equal(response.status, 200);
+  assert.equal((await attributionService.verify(replacement))?.source, "direct");
+
+  const withdrawal = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "necessary",
+    locale: "en",
+    version: "2026-07-23"
+  }, { cookie: `boxsofa_attribution_v1=${replacement}` }));
+  assert.match(withdrawal.headers.get("set-cookie") ?? "", /boxsofa_attribution_v1=;/);
+  assert.match(withdrawal.headers.get("set-cookie") ?? "", /Max-Age=0/);
 });
 
 test("analytics event persists canonical payload after analytics consent", async () => {
