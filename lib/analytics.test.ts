@@ -212,6 +212,99 @@ test("a stale Strict Mode mount never poisons a current caller sharing its conse
   callerBCurrent = false;
 });
 
+test("a stale status-flight starter cannot prevent a current subscriber from starting the needed POST", async () => {
+  const status = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  let statusCalls = 0;
+  let posts = 0;
+  let callerACurrent = true;
+  let callerBCurrent = true;
+  const input = {
+    visitorId: "visitor-stale-status-starter",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return status.promise;
+    },
+    persist: async () => { posts += 1; return true; }
+  };
+
+  const callerA = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerACurrent });
+  callerACurrent = false;
+  const callerB = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerBCurrent });
+  status.resolve({ consent: null, version: null });
+
+  assert.equal(await callerA, "unavailable");
+  assert.equal(await callerB, "resubmitted");
+  assert.equal(statusCalls, 1);
+  assert.equal(posts, 1);
+  callerBCurrent = false;
+});
+
+test("a current subscriber receives a shared POST result after its starter becomes stale", async () => {
+  const status = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  const post = deferred<boolean>();
+  const postStarted = deferred<void>();
+  let statusCalls = 0;
+  let posts = 0;
+  let callerACurrent = true;
+  let callerBCurrent = true;
+  let callerCCurrent = true;
+  const input = {
+    visitorId: "visitor-stale-post-starter",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return status.promise;
+    },
+    persist: async () => {
+      posts += 1;
+      postStarted.resolve();
+      return post.promise;
+    }
+  };
+
+  const callerA = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerACurrent });
+  callerACurrent = false;
+  const callerB = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerBCurrent });
+  const callerC = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerCCurrent });
+  status.resolve({ consent: null, version: null });
+  await postStarted.promise;
+  assert.equal(posts, 1);
+
+  callerBCurrent = false;
+  post.resolve(true);
+
+  assert.deepEqual(await Promise.all([callerA, callerB, callerC]), ["unavailable", "unavailable", "resubmitted"]);
+  assert.equal(statusCalls, 1);
+  assert.equal(posts, 1);
+  callerCCurrent = false;
+});
+
+test("a failed raw POST clears its flight so the next current caller can retry immediately", async () => {
+  let statusCalls = 0;
+  let posts = 0;
+  const input = {
+    visitorId: "visitor-persist-retry",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return { consent: null, version: null };
+    },
+    persist: async () => {
+      posts += 1;
+      return posts > 1;
+    }
+  };
+
+  assert.equal(await synchronizeAnalyticsConsent(input), "unavailable");
+  assert.equal(await synchronizeAnalyticsConsent(input), "resubmitted");
+  assert.equal(statusCalls, 2);
+  assert.equal(posts, 2);
+});
+
 test("synchronization, recovery readiness, and route tracking preserve withdrawal and re-opt-in lifecycle", async () => {
   const storage = new Map<string, string>();
   const adapter = {

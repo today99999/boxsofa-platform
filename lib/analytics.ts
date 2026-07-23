@@ -60,14 +60,11 @@ type ConsentSynchronizationInput = {
   isCurrent?: () => boolean;
 };
 
-type ConsentSynchronizationSubscriber = Pick<ConsentSynchronizationInput, "persist" | "isCurrent">;
-
-type ConsentSynchronizationFlight = {
-  subscribers: ConsentSynchronizationSubscriber[];
-  result: Promise<ConsentSynchronizationResult>;
-};
-
-const consentSyncFlights = new Map<string, ConsentSynchronizationFlight>();
+// These flights intentionally carry only network results. Component lifecycle is
+// per-caller state, so it must never be captured by a promise that other mounts
+// join during Strict Mode or a fast remount.
+const consentStatusFlights = new Map<string, Promise<AnalyticsConsentServerStatus | null>>();
+const consentPersistFlights = new Map<string, Promise<boolean>>();
 const consentMutationQueues = new Map<string, Promise<void>>();
 let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let consentRecoveryHandler: (() => Promise<AnalyticsConsentRecoveryOutcome>) | null = null;
@@ -365,37 +362,56 @@ export async function readAnalyticsConsentStatus(
   }
 }
 
-export function synchronizeAnalyticsConsent(input: ConsentSynchronizationInput): Promise<ConsentSynchronizationResult> {
+function isConsentSynchronizationCurrent(input: ConsentSynchronizationInput) {
+  return !input.isCurrent || input.isCurrent();
+}
+
+function getConsentStatusFlight(input: ConsentSynchronizationInput) {
   const key = `${input.visitorId}:${input.consent}:${input.version}`;
-  const existing = consentSyncFlights.get(key);
-  if (existing) {
-    existing.subscribers.push({ persist: input.persist, isCurrent: input.isCurrent });
-    return existing.result.then((result) => input.isCurrent && !input.isCurrent() ? "unavailable" : result);
-  }
+  const existing = consentStatusFlights.get(key);
+  if (existing) return existing;
 
-  const subscribers: ConsentSynchronizationSubscriber[] = [{ persist: input.persist, isCurrent: input.isCurrent }];
-
-  const flight = (async (): Promise<ConsentSynchronizationResult> => {
-    try {
-      const status = await input.getStatus();
-      if (!status) return "unavailable";
-      if (status.consent === input.consent && status.version === input.version) return "matched";
-      // Network work is shared, but component lifetime is deliberately not. Choose
-      // the newest still-current subscriber for a needed mutation, then let every
-      // caller decide whether it may apply the shared result after awaiting it.
-      const currentSubscriber = [...subscribers].reverse().find((subscriber) => !subscriber.isCurrent || subscriber.isCurrent());
-      if (!currentSubscriber) return "unavailable";
-      return await currentSubscriber.persist() ? "resubmitted" : "unavailable";
-    } catch {
-      return "unavailable";
-    }
-  })();
-  const entry: ConsentSynchronizationFlight = { subscribers, result: flight };
-  consentSyncFlights.set(key, entry);
+  const flight = Promise.resolve()
+    .then(input.getStatus)
+    .catch(() => null);
+  consentStatusFlights.set(key, flight);
   void flight.finally(() => {
-    if (consentSyncFlights.get(key) === entry) consentSyncFlights.delete(key);
+    if (consentStatusFlights.get(key) === flight) consentStatusFlights.delete(key);
   });
-  return flight.then((result) => input.isCurrent && !input.isCurrent() ? "unavailable" : result);
+  return flight;
+}
+
+function getConsentPersistFlight(input: ConsentSynchronizationInput) {
+  const key = `${input.visitorId}:${input.consent}:${input.version}`;
+  const existing = consentPersistFlights.get(key);
+  if (existing) return existing;
+
+  const flight = Promise.resolve()
+    .then(input.persist)
+    .then((persisted) => persisted === true)
+    .catch(() => false);
+  consentPersistFlights.set(key, flight);
+  void flight.finally(() => {
+    if (consentPersistFlights.get(key) === flight) consentPersistFlights.delete(key);
+  });
+  return flight;
+}
+
+export async function synchronizeAnalyticsConsent(input: ConsentSynchronizationInput): Promise<ConsentSynchronizationResult> {
+  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+
+  const status = await getConsentStatusFlight(input);
+  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+  if (!status) return "unavailable";
+  if (status.consent === input.consent && status.version === input.version) return "matched";
+
+  // A needed mutation is also a raw, shared result. Each caller checks its own
+  // generation before joining and after awaiting it, so a stale starter cannot
+  // turn a current subscriber into an unavailable result.
+  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+  const persisted = await getConsentPersistFlight(input);
+  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+  return persisted ? "resubmitted" : "unavailable";
 }
 
 export function consentSyncMarker(consent: AnalyticsConsent, version: string) {

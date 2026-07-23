@@ -53,7 +53,10 @@ export function CookieConsent() {
         consent: saved,
         version: CONSENT_VERSION,
         getStatus: () => readAnalyticsConsentStatus(),
-        persist: () => persistConsent(saved, isCurrent),
+        // The shared persistence flight is deliberately lifecycle-free. This
+        // component decides whether it can use the result before and after it
+        // awaits; database intent ordering still protects explicit choices.
+        persist: () => persistConsent(saved),
         isCurrent
       });
       if (!isCurrent()) return;
@@ -97,7 +100,7 @@ export function CookieConsent() {
         && recoveryGeneration === consentSyncGenerationRef.current
         && recoveryOperation === userOperationRef.current
         && readStoredAnalyticsConsent(localStorage) === "analytics";
-      const persisted = await persistConsent("analytics", isCurrent);
+      const persisted = await persistConsent("analytics");
       if (!persisted || !isCurrent()) {
         return readStoredAnalyticsConsent(localStorage) === "analytics" ? "temporary" : "withdrawn";
       }
@@ -140,7 +143,7 @@ export function CookieConsent() {
     consentSyncGenerationRef.current += 1;
     const operation = ++userOperationRef.current;
     resetAnalyticsConsentRecovery();
-    const persisted = await persistConsent(nextConsent, () => operation === userOperationRef.current);
+    const persisted = await persistConsent(nextConsent);
     if (operation !== userOperationRef.current) return;
     if (!persisted) {
       setSaveError(true);
@@ -157,19 +160,16 @@ export function CookieConsent() {
     }
   }
 
-  async function persistConsent(nextConsent: AnalyticsConsent, isCurrent: () => boolean = () => true): Promise<boolean> {
+  async function persistConsent(nextConsent: AnalyticsConsent): Promise<boolean> {
     const visitorId = getOrCreateVisitorId();
     return enqueueConsentMutation(visitorId, async () => {
-      // A queued mount-time sync can become stale while a user choice is waiting
-      // ahead of it. Do not let that stale write run after the explicit choice.
-      if (!isCurrent()) return false;
       try {
         const intentResponse = await fetchWithTimeout("/api/analytics/consent/intent", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ visitorId })
         });
-        if (!intentResponse.ok || !isCurrent()) return false;
+        if (!intentResponse.ok) return false;
         const intentPayload = await intentResponse.json() as { intentId?: unknown };
         if (typeof intentPayload.intentId !== "string") return false;
         const response = await fetchWithTimeout("/api/analytics/consent", {
