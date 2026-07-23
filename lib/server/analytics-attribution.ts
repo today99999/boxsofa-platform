@@ -198,21 +198,27 @@ export async function resolveOrderAttribution(input: {
   service: AnalyticsAttributionService | null;
   now?: number;
 }): Promise<OrderAttributionFields> {
-  const signed = input.service
-    ? await input.service.verify(readCookie(input.request, ATTRIBUTION_COOKIE_NAME), input.now)
-    : null;
-
-  if (signed) {
-    return {
-      source: signed.source,
-      utm_source: signed.rawUtm.source ?? signed.source,
-      utm_medium: signed.medium,
-      utm_campaign: signed.campaign,
-      referrer: signed.referrerDomain
-    };
+  // Orders never infer attribution from a request URL or headers. The only
+  // non-direct path is a server-issued analytics consent cookie plus a valid,
+  // signed HttpOnly attribution token from the same browser context.
+  if (readCookie(input.request, ANALYTICS_CONSENT_COOKIE_NAME) !== "analytics" || !input.service) {
+    return directOrderAttribution();
   }
 
-  return sanitizedRequestOrderAttribution(input.request);
+  try {
+    const signed = await input.service.verify(readCookie(input.request, ATTRIBUTION_COOKIE_NAME), input.now);
+    if (!signed) return directOrderAttribution();
+    return {
+      source: signed.source,
+      utm_source: signed.rawUtm.source ?? null,
+      utm_medium: signed.rawUtm.medium ?? null,
+      utm_campaign: signed.rawUtm.campaign ?? null,
+      referrer: signed.referrerDomain
+    };
+  } catch {
+    // Attribution must never be able to prevent an order from being created.
+    return directOrderAttribution();
+  }
 }
 
 export function serializeAnalyticsCookie(name: string, value: string, maxAge: number): string {
@@ -244,22 +250,13 @@ function extractRawUtm(url: URL): Record<string, string> {
   return raw;
 }
 
-function sanitizedRequestOrderAttribution(request: Request): OrderAttributionFields {
-  const url = new URL(request.url);
-  const rawUtm = extractRawUtm(url);
-  const ownHosts = getOwnedAnalyticsHosts();
-  const externalReferrer = trustedExternalReferrer(request.headers.get("referer"), ownHosts);
-  const canonical = resolveAttribution({
-    utmSource: rawUtm.source,
-    referrer: externalReferrer?.url ?? null
-  });
-
+function directOrderAttribution(): OrderAttributionFields {
   return {
-    source: canonical.source,
-    utm_source: rawUtm.source ?? null,
-    utm_medium: rawUtm.medium ?? null,
-    utm_campaign: rawUtm.campaign ?? null,
-    referrer: externalReferrer?.domain ?? null
+    source: "direct",
+    utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    referrer: null
   };
 }
 

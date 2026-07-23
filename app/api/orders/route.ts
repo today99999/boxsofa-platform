@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdminAccess } from "@/lib/server/admin-auth";
 import { resolveOrderAttribution } from "@/lib/server/analytics-attribution";
 import { createRuntimeAnalyticsSecurity } from "@/lib/server/analytics-security";
+import { readOrderRequestJson } from "@/lib/server/order-request";
 import { buildOrderEmailPreview } from "@/lib/email-notifications";
 import { queueOrderEmailPreview } from "@/lib/server/email-notification-queue";
 import { ADMIN_ORDER_WITH_ITEMS_SELECT, type OrderRow, toLocalOrder } from "@/lib/server/orders";
@@ -152,7 +153,12 @@ export async function POST(request: Request) {
     return rateLimitResponse(rateLimit.resetAt);
   }
 
-  const payload = createOrderSchema.safeParse(await request.json());
+  const requestBody = await readOrderRequestJson(request);
+  if (!requestBody.ok) {
+    return NextResponse.json({ ok: false, message: "Order information is incomplete." }, { status: 400 });
+  }
+
+  const payload = createOrderSchema.safeParse(requestBody.value);
 
   if (!payload.success) {
     return NextResponse.json(

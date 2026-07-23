@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { CookieConsent } from "@/components/CookieConsent";
+import { AnalyticsRouteTracker } from "@/components/AnalyticsRouteTracker";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://boxsofa.eu"),
@@ -91,6 +93,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         {children}
         <CookieConsent />
+        <Suspense fallback={null}>
+          <AnalyticsRouteTracker />
+        </Suspense>
       </body>
     </html>
   );

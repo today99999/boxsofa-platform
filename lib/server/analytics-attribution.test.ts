@@ -9,8 +9,16 @@ import {
   resolveAttributionForConsentState,
   resolveTrustedAttribution
 } from "./analytics-attribution.ts";
+import type { AnalyticsAttributionService } from "./analytics-attribution.ts";
 
 const SECRET = "test-only-analytics-signing-secret-with-at-least-thirty-two-bytes";
+const DIRECT_ORDER_ATTRIBUTION = {
+  source: "direct",
+  utm_source: null,
+  utm_medium: null,
+  utm_campaign: null,
+  referrer: null
+};
 
 test("trusted entry attribution accepts utm_source-only URLs and preserves direct follow-up traffic", async () => {
   const service = createAnalyticsAttributionService(SECRET);
@@ -172,11 +180,16 @@ test("rate-limit identifiers use purpose-separated HMAC output", async () => {
   assert.equal(first.includes("203.0.113.44"), false);
 });
 
-test("order attribution ignores forged body attribution and falls back to server-observed request fields", async () => {
+test("order attribution ignores forged browser URL, referrer, and body data without trusted consent and token", async () => {
   const service = createAnalyticsAttributionService(SECRET);
   const request = new Request("https://boxsofa.eu/api/orders?utm_source=google&utm_medium=cpc&utm_campaign=chairs", {
     method: "POST",
-    headers: { referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01" },
+    headers: {
+      referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01",
+      origin: "https://forged.example",
+      "x-forwarded-for": "203.0.113.42",
+      "x-forwarded-host": "forged.example"
+    },
     body: JSON.stringify({
       attribution: {
         source: "forged-affiliate",
@@ -187,16 +200,10 @@ test("order attribution ignores forged body attribution and falls back to server
     })
   });
 
-  assert.deepEqual(await resolveOrderAttribution({ request, service }), {
-    source: "google",
-    utm_source: "google",
-    utm_medium: "cpc",
-    utm_campaign: "chairs",
-    referrer: null
-  });
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), DIRECT_ORDER_ATTRIBUTION);
 });
 
-test("order attribution persists valid signed HttpOnly attribution before request fallbacks", async () => {
+test("order attribution persists only a consented valid signed HttpOnly attribution", async () => {
   const service = createAnalyticsAttributionService(SECRET);
   const token = await service.issue({
     source: "pinterest",
@@ -208,7 +215,7 @@ test("order attribution persists valid signed HttpOnly attribution before reques
   const request = new Request("https://boxsofa.eu/api/orders?utm_source=google", {
     method: "POST",
     headers: {
-      cookie: `${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+      cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics; ${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
       referer: "https://boxsofa.eu/cart"
     }
   });
@@ -222,7 +229,45 @@ test("order attribution persists valid signed HttpOnly attribution before reques
   });
 });
 
-test("order attribution treats invalid expired or cross-context signed cookies as fallback-only", async () => {
+test("order attribution returns direct for necessary consent even with a valid signed token", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const token = await service.issue({
+    source: "pinterest",
+    medium: "social",
+    campaign: "summer",
+    referrerDomain: "news.google.de",
+    rawUtm: { source: "pinterest" }
+  });
+  const request = new Request("https://boxsofa.eu/api/orders?utm_source=forged", {
+    method: "POST",
+    headers: {
+      cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=necessary; ${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+      referer: "https://www.google.com/search?q=boxsofa"
+    }
+  });
+
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), DIRECT_ORDER_ATTRIBUTION);
+});
+
+test("order attribution returns direct for a malformed server consent state", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const token = await service.issue({
+    source: "tiktok",
+    medium: "social",
+    campaign: "summer",
+    referrerDomain: null,
+    rawUtm: { source: "tiktok" }
+  });
+  const request = new Request("https://boxsofa.eu/api/orders", {
+    method: "POST",
+    headers: {
+      cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics-but-invalid; ${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`
+    }
+  });
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), DIRECT_ORDER_ATTRIBUTION);
+});
+
+test("order attribution returns direct for invalid, expired, cross-context, missing, or throwing verification", async () => {
   const service = createAnalyticsAttributionService(SECRET);
   const otherService = createAnalyticsAttributionService(`${SECRET}-other-context-secret`);
   const expiredToken = await service.issue({
@@ -240,29 +285,57 @@ test("order attribution treats invalid expired or cross-context signed cookies a
     rawUtm: { source: "affiliate" }
   });
 
-  for (const token of ["forged.payload", expiredToken, crossContextToken]) {
+  for (const token of [null, "forged.payload", expiredToken, crossContextToken]) {
     const request = new Request("https://boxsofa.eu/api/orders", {
       method: "POST",
       headers: {
-        cookie: `${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics${token ? `; ${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}` : ""}`,
         referer: "https://www.google.com/search?q=boxsofa"
       }
     });
 
-    assert.deepEqual(await resolveOrderAttribution({ request, service, now: 31 * 24 * 60 * 60 * 1000 }), {
-      source: "google",
-      utm_source: null,
-      utm_medium: null,
-      utm_campaign: null,
-      referrer: "www.google.com"
-    });
+    assert.deepEqual(await resolveOrderAttribution({ request, service, now: 31 * 24 * 60 * 60 * 1000 }), DIRECT_ORDER_ATTRIBUTION);
   }
+
+  const throwingService = {
+    verify: async () => { throw new Error("verification unavailable"); }
+  } as unknown as AnalyticsAttributionService;
+  const request = new Request("https://boxsofa.eu/api/orders?utm_source=forged", {
+    method: "POST",
+    headers: { cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics; ${ATTRIBUTION_COOKIE_NAME}=looks-signed` }
+  });
+  assert.deepEqual(await resolveOrderAttribution({ request, service: throwingService }), DIRECT_ORDER_ATTRIBUTION);
+});
+
+test("order attribution keeps canonical source separate from verified raw UTM fields", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const token = await service.issue({
+    source: "google",
+    medium: null,
+    campaign: null,
+    referrerDomain: "www.google.com",
+    rawUtm: {}
+  });
+  const request = new Request("https://boxsofa.eu/api/orders", {
+    method: "POST",
+    headers: {
+      cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics; ${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`
+    }
+  });
+
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), {
+    source: "google",
+    utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    referrer: "www.google.com"
+  });
 });
 
 test("order attribution remains backward compatible with old payload attribution shapes", async () => {
   const request = new Request("https://boxsofa.eu/api/orders", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", cookie: `${ANALYTICS_CONSENT_COOKIE_NAME}=analytics` },
     body: JSON.stringify({
       attribution: {
         source: "old-browser-storage",
@@ -274,11 +347,5 @@ test("order attribution remains backward compatible with old payload attribution
     })
   });
 
-  assert.deepEqual(await resolveOrderAttribution({ request, service: null }), {
-    source: "direct",
-    utm_source: null,
-    utm_medium: null,
-    utm_campaign: null,
-    referrer: null
-  });
+  assert.deepEqual(await resolveOrderAttribution({ request, service: null }), DIRECT_ORDER_ATTRIBUTION);
 });

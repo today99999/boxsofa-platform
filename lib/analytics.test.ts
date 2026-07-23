@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   ANALYTICS_ATTRIBUTION_KEY,
+  ANALYTICS_BEGIN_CHECKOUT_KEY,
   ANALYTICS_CONSENT_KEY,
   ANALYTICS_CONSENT_SYNC_KEY,
   ANALYTICS_EVENTS_KEY,
@@ -11,9 +12,11 @@ import {
   ANALYTICS_VISITOR_KEY,
   applyAnalyticsDeliveryDisposition,
   analyticsDeliveryBackoffMs,
+  checkoutFunnelStateKey,
   classifyAnalyticsDeliveryStatus,
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
+  createAnalyticsQueueDrainCoordinator,
   consentSyncMarker,
   createAnalyticsConsentRecoveryCoordinator,
   enqueueConsentMutation,
@@ -26,6 +29,7 @@ import {
   shouldSynchronizeConsent,
   sanitizeReferrerDomain,
   synchronizeAnalyticsConsent,
+  trackBeginCheckoutOnce,
   AnalyticsRequestTimeoutError,
   type AnalyticsConsent
 } from "./analytics.ts";
@@ -108,6 +112,7 @@ test("withdrawing analytics clears queued, attributed, and session-scoped client
 
   assert.deepEqual(removed.sort(), [
     ANALYTICS_ATTRIBUTION_KEY,
+    ANALYTICS_BEGIN_CHECKOUT_KEY,
     ANALYTICS_EVENTS_KEY,
     ANALYTICS_QUEUE_KEY,
     ANALYTICS_SESSION_KEY,
@@ -272,6 +277,8 @@ test("checkout payload does not send browser-stored attribution to the order API
 
   assert.doesNotMatch(source, /getStoredAttribution/);
   assert.doesNotMatch(source, /attribution:\s*getStoredAttribution\(\)/);
+  assert.doesNotMatch(source, /window\.location\.search/);
+  assert.match(source, /fetch\("\/api\/orders"/);
 });
 
 test("consent mutations serialize background sync, rapid choices, and failed operations", async () => {
@@ -370,6 +377,67 @@ test("event delivery retains 403 entries for consent revalidation and drops perm
   assert.deepEqual(forbidden, []);
 });
 
+test("queue drain delivers events added while the first delivery is in flight", async () => {
+  const firstDelivery = deferred<void>();
+  const queue = ["first"];
+  const delivered: string[] = [];
+  let passes = 0;
+  const drain = createAnalyticsQueueDrainCoordinator({
+    isReady: () => true,
+    hasSendableEvents: () => queue.length > 0,
+    drainPass: async () => {
+      passes += 1;
+      for (const event of [...queue]) {
+        delivered.push(event);
+        if (event === "first") await firstDelivery.promise;
+        queue.splice(queue.indexOf(event), 1);
+      }
+      return "complete";
+    },
+    scheduleRetry: () => undefined
+  });
+
+  const flushing = drain.flush();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(delivered, ["first"]);
+  queue.push("second");
+  void drain.flush();
+  firstDelivery.resolve();
+  await flushing;
+
+  assert.deepEqual(delivered, ["first", "second"]);
+  assert.equal(passes, 2);
+});
+
+test("begin-checkout funnel tracking is once per cart state and waits for analytics readiness", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value)
+  };
+  const events: Array<{ type: string; fields?: Record<string, unknown> }> = [];
+  const cart = [{
+    id: "product-a",
+    slug: "sofa-a",
+    name: "Sofa A",
+    priceEur: 499,
+    quantity: 1
+  }];
+  const track = (type: string, fields?: Record<string, unknown>) => {
+    events.push({ type, fields });
+    return true;
+  };
+
+  assert.equal(checkoutFunnelStateKey(cart), "product-a:1");
+  assert.equal(trackBeginCheckoutOnce(cart, { storage, track }), true);
+  assert.equal(trackBeginCheckoutOnce(cart, { storage, track }), false);
+  assert.equal(trackBeginCheckoutOnce([{ ...cart[0], quantity: 2 }], { storage, track }), true);
+  assert.equal(trackBeginCheckoutOnce(cart, { storage, track: () => false }), false);
+  assert.deepEqual(events.map((event) => event.type), ["begin_checkout", "begin_checkout"]);
+  assert.equal(events[0].fields?.valueEur, 499);
+  assert.equal(events[1].fields?.valueEur, 998);
+});
+
 test("cookie settings dialog keeps labelled focus-management markup", () => {
   const source = readFileSync("components/CookieConsent.tsx", "utf8");
 
@@ -388,8 +456,18 @@ test("cookie settings dialog keeps labelled focus-management markup", () => {
   assert.match(source, /markAnalyticsServerReady\(\);/);
 
   const analyticsSource = readFileSync("lib/analytics.ts", "utf8");
-  assert.match(analyticsSource, /if \(!isAnalyticsServerReady\(\)\) return;/);
+  assert.match(analyticsSource, /if \(!isAnalyticsServerReady\(\)\) return false;/);
   assert.match(analyticsSource, /revalidateAnalyticsConsentAfterForbidden\(event\)/);
   assert.match(analyticsSource, /registerAnalyticsConsentRecoveryHandler/);
   assert.match(analyticsSource, /fetchWithTimeout\("\/api\/analytics\/events"/);
+
+  const routeTrackerSource = readFileSync("components/AnalyticsRouteTracker.tsx", "utf8");
+  assert.match(routeTrackerSource, /usePathname\(\)/);
+  assert.match(routeTrackerSource, /useSearchParams\(\)/);
+  assert.match(routeTrackerSource, /isAnalyticsServerReady\(\)/);
+  assert.doesNotMatch(source, /trackCurrentPage/);
+
+  const layoutSource = readFileSync("app/layout.tsx", "utf8");
+  assert.match(layoutSource, /<Suspense fallback=\{null\}>/);
+  assert.match(layoutSource, /<AnalyticsRouteTracker \/>/);
 });

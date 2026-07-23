@@ -41,6 +41,8 @@ export const ANALYTICS_SESSION_KEY = "boxsofa_analytics_session_v1";
 export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
 export const ANALYTICS_CONSENT_SYNC_KEY = "boxsofa_cookie_consent_server_sync_v1";
 export const ANALYTICS_SERVER_READY_KEY = "boxsofa_analytics_server_ready_v1";
+export const ANALYTICS_SERVER_READY_EVENT = "boxsofa-analytics-server-ready";
+export const ANALYTICS_BEGIN_CHECKOUT_KEY = "boxsofa_analytics_begin_checkout_v1";
 export const OPEN_COOKIE_SETTINGS_EVENT = "boxsofa-open-cookie-settings";
 export const ANALYTICS_CONSENT_REVALIDATE_EVENT = "boxsofa-analytics-revalidate-consent";
 
@@ -51,7 +53,6 @@ const MAX_DELIVERY_BACKOFF_MS = 60_000;
 export const ANALYTICS_REQUEST_TIMEOUT_MS = 12_000;
 const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>>();
 const consentMutationQueues = new Map<string, Promise<void>>();
-let queueFlushInFlight: Promise<void> | null = null;
 let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let consentRecoveryHandler: (() => Promise<boolean>) | null = null;
 
@@ -267,7 +268,8 @@ export function clearAnalyticsClientState(storage?: Pick<Storage, "removeItem">)
     ANALYTICS_EVENTS_KEY,
     ANALYTICS_QUEUE_KEY,
     ANALYTICS_SESSION_KEY,
-    ANALYTICS_VISITOR_KEY
+    ANALYTICS_VISITOR_KEY,
+    ANALYTICS_BEGIN_CHECKOUT_KEY
   ]) {
     target.removeItem(key);
   }
@@ -276,10 +278,12 @@ export function clearAnalyticsClientState(storage?: Pick<Storage, "removeItem">)
 
 export function markAnalyticsServerReady(storage: Pick<Storage, "setItem"> = sessionStorage) {
   storage.setItem(ANALYTICS_SERVER_READY_KEY, "analytics");
+  dispatchAnalyticsReadinessChange();
 }
 
 export function clearAnalyticsServerReady(storage: Pick<Storage, "removeItem"> = sessionStorage) {
   storage.removeItem(ANALYTICS_SERVER_READY_KEY);
+  dispatchAnalyticsReadinessChange();
 }
 
 export function isAnalyticsServerReady(storage: Pick<Storage, "getItem"> = sessionStorage) {
@@ -395,9 +399,54 @@ export function applyAnalyticsDeliveryDisposition(
     : event);
 }
 
+export type CheckoutFunnelItem = {
+  id: string;
+  slug: string;
+  name: string;
+  priceEur: number;
+  quantity: number;
+};
+
+export function checkoutFunnelStateKey(items: readonly CheckoutFunnelItem[]) {
+  return items
+    .map((item) => `${item.id}:${item.quantity}`)
+    .sort()
+    .join("|");
+}
+
+export function trackBeginCheckoutOnce(
+  items: readonly CheckoutFunnelItem[],
+  options: {
+    storage?: Pick<Storage, "getItem" | "setItem">;
+    track?: (type: AnalyticsEventType, fields?: Partial<AnalyticsEvent>) => boolean;
+  } = {}
+) {
+  if (items.length === 0) return false;
+  const storage = options.storage ?? sessionStorage;
+  const stateKey = checkoutFunnelStateKey(items);
+  const seen = readCheckoutFunnelStates(storage);
+  if (seen.includes(stateKey)) return false;
+
+  const primary = items[0];
+  const tracked = (options.track ?? trackEvent)("begin_checkout", {
+    productId: primary.id,
+    productSlug: primary.slug,
+    productName: primary.name,
+    valueEur: items.reduce((total, item) => total + item.priceEur * item.quantity, 0)
+  });
+  if (!tracked) return false;
+
+  try {
+    storage.setItem(ANALYTICS_BEGIN_CHECKOUT_KEY, JSON.stringify([...seen, stateKey].slice(-100)));
+  } catch {
+    // Delivery can still proceed when session storage is unavailable.
+  }
+  return true;
+}
+
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {
-  if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return;
-  if (!isAnalyticsServerReady()) return;
+  if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return false;
+  if (!isAnalyticsServerReady()) return false;
 
   const url = new URL(window.location.href);
   const eventKey = `evt-${crypto.randomUUID()}`;
@@ -424,6 +473,7 @@ export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEv
   writeAttribution(event);
   window.dispatchEvent(new Event("boxsofa-analytics-updated"));
   void flushAnalyticsQueue();
+  return true;
 }
 
 function getSessionId() {
@@ -434,15 +484,55 @@ function getSessionId() {
   return next;
 }
 
-export function flushAnalyticsQueue() {
-  if (!queueFlushInFlight) {
-    queueFlushInFlight = flushQueue().finally(() => { queueFlushInFlight = null; });
-  }
-  return queueFlushInFlight;
+export type AnalyticsQueueDrainCoordinator = {
+  flush: () => Promise<void>;
+};
+
+export function createAnalyticsQueueDrainCoordinator(options: {
+  isReady: () => boolean;
+  hasSendableEvents: () => boolean;
+  drainPass: () => Promise<"complete" | "blocked">;
+  scheduleRetry: () => void;
+}): AnalyticsQueueDrainCoordinator {
+  let inFlight: Promise<void> | null = null;
+  let pending = false;
+
+  const flush = () => {
+    pending = true;
+    if (!inFlight) {
+      inFlight = (async () => {
+        if (!options.isReady()) return;
+        while (pending && options.hasSendableEvents()) {
+          pending = false;
+          if (await options.drainPass() === "blocked") return;
+        }
+        options.scheduleRetry();
+      })().finally(() => {
+        inFlight = null;
+        const shouldDrain = pending && options.isReady() && options.hasSendableEvents();
+        pending = false;
+        if (shouldDrain) void flush();
+        else options.scheduleRetry();
+      });
+    }
+    return inFlight;
+  };
+
+  return { flush };
 }
 
-async function flushQueue() {
-  if (!isAnalyticsServerReady()) return;
+const analyticsQueueDrain = createAnalyticsQueueDrainCoordinator({
+  isReady: () => isAnalyticsServerReady(),
+  hasSendableEvents: () => readQueue().some((event) => (event.nextAttemptAt ?? 0) <= Date.now()),
+  drainPass: flushQueuePass,
+  scheduleRetry: scheduleQueueRetry
+});
+
+export function flushAnalyticsQueue() {
+  return analyticsQueueDrain.flush();
+}
+
+async function flushQueuePass(): Promise<"complete" | "blocked"> {
   for (const event of readQueue()) {
     if ((event.nextAttemptAt ?? 0) > Date.now()) continue;
     const disposition = await deliverEvent(event);
@@ -453,10 +543,10 @@ async function flushQueue() {
       if (nextQueue.some((queued) => queued.eventKey === event.eventKey)) {
         void revalidateAnalyticsConsentAfterForbidden(event);
       }
-      return;
+      return "blocked";
     }
   }
-  scheduleQueueRetry();
+  return "complete";
 }
 
 function scheduleQueueRetry() {
@@ -521,6 +611,23 @@ function writeQueue(events: QueuedAnalyticsEvent[]) {
 function writeEventHistory(event: AnalyticsEvent) {
   const events = readStorageArray<AnalyticsEvent>(ANALYTICS_EVENTS_KEY);
   localStorage.setItem(ANALYTICS_EVENTS_KEY, JSON.stringify([event, ...events].slice(0, MAX_HISTORY_SIZE)));
+}
+
+function readCheckoutFunnelStates(storage: Pick<Storage, "getItem">): string[] {
+  try {
+    const parsed = JSON.parse(storage.getItem(ANALYTICS_BEGIN_CHECKOUT_KEY) || "[]") as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string" && value.length > 0 && value.length <= 2_000)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function dispatchAnalyticsReadinessChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ANALYTICS_SERVER_READY_EVENT));
+  }
 }
 
 function readStorageArray<T>(key: string): T[] {

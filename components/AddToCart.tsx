@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CART_KEY, productToCartItem } from "@/lib/cart";
 import type { Product } from "@/lib/catalog";
-import { trackEvent } from "@/lib/analytics";
+import { trackBeginCheckoutOnce, trackEvent } from "@/lib/analytics";
 import { translateCatalogText } from "@/lib/catalogI18n";
 import { useTranslation } from "@/components/useTranslation";
 
@@ -25,12 +25,16 @@ export function AddToCart({ product }: Props) {
       existing.push(productToCartItem(product, quantity));
     }
     localStorage.setItem(CART_KEY, JSON.stringify(existing));
-    trackEvent(goToCart ? "begin_checkout" : "add_to_cart", {
-      productId: product.id,
-      productSlug: product.slug,
-      productName: product.name,
-      valueEur: product.priceEur * quantity
-    });
+    if (goToCart) {
+      trackBeginCheckoutOnce(existing);
+    } else {
+      trackEvent("add_to_cart", {
+        productId: product.id,
+        productSlug: product.slug,
+        productName: product.name,
+        valueEur: product.priceEur * quantity
+      });
+    }
     setMessage(`${translateCatalogText(product.name, language, "name")} ${t("addedToCart")}`);
     window.dispatchEvent(new Event("boxsofa-cart-updated"));
     if (goToCart) window.location.href = "/cart";

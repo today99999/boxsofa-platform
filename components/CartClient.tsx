@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CART_KEY, ORDERS_KEY, type CartItem, type LocalOrder } from "@/lib/cart";
-import { trackEvent } from "@/lib/analytics";
+import { ANALYTICS_SERVER_READY_EVENT, trackBeginCheckoutOnce, trackEvent } from "@/lib/analytics";
 import { CatalogText } from "@/components/CatalogText";
 import { LeadCapture } from "@/components/LeadCapture";
 import { useTranslation } from "@/components/useTranslation";
@@ -109,6 +109,14 @@ export function CartClient() {
   const shipping = 0;
   const total = subtotal + shipping;
 
+  useEffect(() => {
+    if (items.length === 0) return;
+    const trackCheckout = () => trackBeginCheckoutOnce(items);
+    trackCheckout();
+    window.addEventListener(ANALYTICS_SERVER_READY_EVENT, trackCheckout);
+    return () => window.removeEventListener(ANALYTICS_SERVER_READY_EVENT, trackCheckout);
+  }, [items]);
+
   function updateCheckoutField<Field extends keyof CheckoutForm>(field: Field, value: CheckoutForm[Field]) {
     setCheckoutForm((current) => ({ ...current, [field]: value }));
   }
@@ -148,7 +156,7 @@ export function CartClient() {
     setOrderError("");
 
     try {
-      const response = await fetch(`/api/orders${window.location.search}`, {
+      const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

@@ -16,10 +16,8 @@ import {
   registerAnalyticsConsentRecoveryHandler,
   resetAnalyticsConsentRecovery,
   synchronizeAnalyticsConsent,
-  type AnalyticsConsent,
-  trackEvent
+  type AnalyticsConsent
 } from "@/lib/analytics";
-import { products } from "@/lib/catalog";
 import { useTranslation } from "@/components/useTranslation";
 
 const CONSENT_VERSION = "2026-07-23";
@@ -39,6 +37,9 @@ export function CookieConsent() {
   useEffect(() => {
     let cancelled = false;
     let retryTimer: number | undefined;
+    // A prior session marker cannot authorize tracking until this mount has
+    // confirmed the HttpOnly server consent state again.
+    clearAnalyticsServerReady();
 
     const synchronize = async (saved: AnalyticsConsent, syncGeneration: number) => {
       const intent = userOperationRef.current;
@@ -136,19 +137,6 @@ export function CookieConsent() {
     return () => window.cancelAnimationFrame(frame);
   }, [consent]);
 
-  function trackCurrentPage() {
-    trackEvent("page_view");
-    const match = window.location.pathname.match(/^\/product\/([^/]+)/);
-    if (match) {
-      const product = products.find((item) => item.slug === match[1]);
-      trackEvent("product_view", {
-        productId: product?.id,
-        productSlug: match[1],
-        productName: product?.name
-      });
-    }
-  }
-
   async function saveConsent(nextConsent: AnalyticsConsent) {
     // A user decision always wins over a pending mount-time resynchronization.
     consentSyncGenerationRef.current += 1;
@@ -166,7 +154,6 @@ export function CookieConsent() {
     setConsent(nextConsent);
     if (nextConsent === "analytics") {
       markAnalyticsServerReady();
-      trackCurrentPage();
     } else {
       clearAnalyticsClientState();
     }
@@ -210,7 +197,6 @@ export function CookieConsent() {
     setConsent(nextConsent);
     if (nextConsent === "analytics") {
       markAnalyticsServerReady();
-      trackCurrentPage();
     } else {
       clearAnalyticsClientState();
     }
