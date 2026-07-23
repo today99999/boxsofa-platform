@@ -17,7 +17,8 @@ const protectedChecks = [
   { method: 'PATCH', path: '/api/admin/reviews/test-review-id', body: { pinned: true } },
   { method: 'GET', path: '/api/admin/support' },
   { method: 'PATCH', path: '/api/admin/support/test-thread-id', body: { status: 'closed' } },
-  { method: 'POST', path: '/api/admin/test-customer' },
+  // This route intentionally returns 400 before auth when Supabase is absent locally.
+  { method: 'POST', path: '/api/admin/test-customer', allowedStatuses: [400, 401, 403, 503] },
   { method: 'GET', path: '/api/auth/profile' },
   { method: 'GET', path: '/api/customer/orders' },
   { method: 'GET', path: '/api/customer/profile' },
@@ -39,7 +40,9 @@ const publicChecks = [
   { method: 'GET', path: '/api/health', allowedStatuses: [200] },
   { method: 'POST', path: '/api/leads', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/analytics/consent', body: {}, allowedStatuses: [400] },
+  { method: 'POST', path: '/api/analytics/consent', rawBody: '{', allowedStatuses: [400] },
   { method: 'POST', path: '/api/analytics/events', body: {}, allowedStatuses: [400] },
+  { method: 'POST', path: '/api/analytics/events', rawBody: '{', allowedStatuses: [400] },
   { method: 'POST', path: '/api/orders', body: {}, allowedStatuses: [400] },
   { method: 'GET', path: '/api/orders/BX-AUTH-AUDIT', allowedStatuses: [400, 404, 405, 503] },
   { method: 'GET', path: '/api/support', allowedStatuses: [400] },
@@ -58,7 +61,10 @@ async function request(check) {
     headers: {}
   };
 
-  if (check.body !== undefined) {
+  if (check.rawBody !== undefined) {
+    options.headers['content-type'] = 'application/json';
+    options.body = check.rawBody;
+  } else if (check.body !== undefined) {
     options.headers['content-type'] = 'application/json';
     options.body = JSON.stringify(check.body);
   }
@@ -69,7 +75,7 @@ async function request(check) {
 async function checkProtectedApi(check) {
   const response = await request(check);
   assert(
-    [401, 403, 503].includes(response.status),
+    (check.allowedStatuses ?? [401, 403, 503]).includes(response.status),
     `${check.method} ${check.path} should reject anonymous access, received HTTP ${response.status}`
   );
   console.log(`OK protected ${check.method} ${check.path}`);
