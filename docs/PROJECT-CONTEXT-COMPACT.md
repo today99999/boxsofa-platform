@@ -233,7 +233,7 @@ limit 5;
 
 - 素材：`D:\压缩沙发\沙发视频\可发布的视频\爆款视频生成产品演示_美图设计室.mp4`；快速核验为可访问的 720 × 1280、15.069 秒、H.264 + AAC 双声道竖版。审核等级 A，未出现在此前发布/预约记录；原文件未进行画中画、补边或比例改造。公开源提交：`68ee701`；Pinterest 因硬性封面要求仅从原片提取一帧，提交：`daba61d`。
 - AiToEarn 媒体 ID：`6a620aa3b35dbe3991379d8d`。TikTok 已发布：`https://www.tiktok.com/@boxsofaeurope/video/7665701709016075542`（task `6a620b06b35dbe3991379f48`，flow `7ff5b0a3-53b8-4007-862b-0050cc7535a0`）；YouTube Shorts 已发布：`https://www.youtube.com/watch?v=iCe8ntnfp0U`（task `6a620b2fb35dbe399137a035`，flow `a3fb26a3-4855-4358-af27-d7c07f9f1dfc`）；Instagram Reels 已发布：`https://www.instagram.com/reel/DbIruoRj2Uy/`（task `6a620b31b35dbe399137a03f`，flow `891e0daa-0b10-4c63-ad59-cd164e3e09eb`）。三者使用各自 `white_modular_unboxing_20260723` UTM，并标注为视觉产品演示及 AI 合成媒体。
-- Pinterest video Pin 已创建并触发（task `6a620b35b35dbe399137a05c`，flow `28a39447-4fb9-4190-9d8d-3f08354b9b4a`），状态为 publishing；使用已知画板 `1109363389402312698`，未添加外链以避免既有 spam 拒绝，待平台返回链接后补录。Facebook 因 AiToEarn 无公共主页授权，已登录 `BoxSofa Europe` 主页后台已就绪；待一次浏览器侧的最终公开上传确认后，以同一原始视频和 Facebook UTM 补发，未上传未发布。
+- Pinterest video Pin 已创建并触发（task `6a620b35b35dbe399137a05c`，flow `28a39447-4fb9-4190-9d8d-3f08354b9b4a`），状态为 publishing；使用已知画板 `1109363389402312698`，未添加外链以避免既有 spam 拒绝，待平台返回链接后补录。Facebook Reel 已于 2026-07-23 14:45 左右（Europe/Madrid）通过已登录 `BoxSofa Europe` 主页后台发布：`https://www.facebook.com/reel/3622628724535455`；使用同一未改动原始视频、Facebook `white_modular_unboxing_20260723` UTM 文案，并开启“添加 AI 标签”。
 
 ## 13. 海报2发布记录（2026-07-23）
 
