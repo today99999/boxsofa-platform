@@ -1,7 +1,14 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  ANALYTICS_CONSENT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
+  ATTRIBUTION_TOKEN_MAX_AGE_SECONDS,
+  getConfiguredAnalyticsSiteUrl,
+  getOwnedAnalyticsHosts,
+  isOwnedAnalyticsUrl,
+  resolveTrustedAttribution,
+  serializeAnalyticsCookie,
   type AnalyticsAttributionService,
   type TrustedAttribution
 } from "./analytics-attribution.ts";
@@ -101,11 +108,42 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
 
     try {
       await repository.recordConsent(payload.data);
-      return Response.json({ ok: true });
+      const response = Response.json({ ok: true });
+      response.headers.append(
+        "set-cookie",
+        serializeAnalyticsCookie(ANALYTICS_CONSENT_COOKIE_NAME, payload.data.consent, ATTRIBUTION_TOKEN_MAX_AGE_SECONDS)
+      );
+      if (payload.data.consent === "necessary") {
+        response.headers.append("set-cookie", serializeAnalyticsCookie(ATTRIBUTION_COOKIE_NAME, "", 0));
+        return response;
+      }
+
+      const attribution = await resolveTrustedAttribution({
+        ...trustedConsentEntry(request),
+        existingToken: null,
+        ownHosts: getOwnedAnalyticsHosts(),
+        service: attributionService
+      });
+      if (attribution.token) {
+        response.headers.append(
+          "set-cookie",
+          serializeAnalyticsCookie(ATTRIBUTION_COOKIE_NAME, attribution.token, ATTRIBUTION_TOKEN_MAX_AGE_SECONDS)
+        );
+      }
+      return response;
     } catch {
       return unavailableResponse();
     }
   };
+}
+
+function trustedConsentEntry(request: Request): { url: string; referrer: string | null } {
+  const referrer = request.headers.get("referer");
+  const ownHosts = getOwnedAnalyticsHosts();
+  if (isOwnedAnalyticsUrl(referrer, ownHosts)) {
+    return { url: referrer!, referrer: null };
+  }
+  return { url: getConfiguredAnalyticsSiteUrl(), referrer };
 }
 
 export function createAnalyticsEventHandler({ repository, attributionService }: HandlerDependencies) {

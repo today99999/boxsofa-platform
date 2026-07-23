@@ -1,7 +1,10 @@
 import { resolveAttribution } from "../data-center/metrics.ts";
 
 export const ATTRIBUTION_COOKIE_NAME = "boxsofa_attribution_v1";
+export const ANALYTICS_CONSENT_COOKIE_NAME = "boxsofa_analytics_consent_v1";
 export const ATTRIBUTION_TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+const BOXSOFA_OWNED_HOSTS = ["boxsofa.eu", "www.boxsofa.eu"];
 
 const TOKEN_VERSION = 1;
 const MAX_SOURCE_LENGTH = 80;
@@ -28,6 +31,35 @@ export type AnalyticsAttributionService = {
   verify(token: string | null | undefined, now?: number): Promise<TrustedAttribution | null>;
   hmacHex(purpose: string, value: string): Promise<string>;
 };
+
+export type AnalyticsConsentState = "necessary" | "analytics";
+
+export function getOwnedAnalyticsHosts(canonicalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL): Set<string> {
+  const hosts = new Set(BOXSOFA_OWNED_HOSTS);
+  const configuredHost = hostFromUrl(canonicalSiteUrl);
+  if (configuredHost) hosts.add(configuredHost);
+  if (process.env.NODE_ENV !== "production") {
+    hosts.add("localhost");
+    hosts.add("127.0.0.1");
+  }
+  return hosts;
+}
+
+export function isOwnedAnalyticsUrl(value: string | null | undefined, ownHosts = getOwnedAnalyticsHosts()): boolean {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return isHttpUrl(parsed) && ownHosts.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+export function getConfiguredAnalyticsSiteUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configured && isOwnedAnalyticsUrl(configured)) return configured.replace(/\/$/, "");
+  return "https://boxsofa.eu";
+}
 
 export function createAnalyticsAttributionService(secret: string): AnalyticsAttributionService {
   if (encoder.encode(secret).byteLength < 32) {
@@ -93,14 +125,16 @@ export async function resolveTrustedAttribution(input: {
   url: string;
   referrer: string | null;
   existingToken: string | null;
-  siteOrigin: string;
+  siteOrigin?: string;
+  ownHosts?: ReadonlySet<string>;
   service: AnalyticsAttributionService;
   now?: number;
 }): Promise<{ attribution: TrustedAttribution; token: string | null; shouldSetCookie: boolean }> {
   const now = input.now ?? Date.now();
   const url = new URL(input.url);
   const rawUtm = extractRawUtm(url);
-  const externalReferrer = trustedExternalReferrer(input.referrer, input.siteOrigin);
+  const ownHosts = input.ownHosts ?? getOwnedAnalyticsHosts(input.siteOrigin);
+  const externalReferrer = trustedExternalReferrer(input.referrer, ownHosts);
   const existing = await input.service.verify(input.existingToken, now);
 
   if (!rawUtm.source && !externalReferrer && existing) {
@@ -126,6 +160,42 @@ export async function resolveTrustedAttribution(input: {
   return { attribution: verified, token, shouldSetCookie: true };
 }
 
+export async function resolveAttributionForConsentState(input: {
+  consentState: string | null | undefined;
+  url: string;
+  referrer: string | null;
+  existingToken: string | null;
+  ownHosts?: ReadonlySet<string>;
+  service: AnalyticsAttributionService;
+  now?: number;
+}): Promise<{ shouldClearAttribution: boolean; token: string | null; shouldSetCookie: boolean }> {
+  if (input.consentState === "necessary") {
+    return { shouldClearAttribution: true, token: null, shouldSetCookie: false };
+  }
+  if (input.consentState !== "analytics") {
+    return { shouldClearAttribution: false, token: null, shouldSetCookie: false };
+  }
+
+  const resolved = await resolveTrustedAttribution(input);
+  return {
+    shouldClearAttribution: false,
+    token: resolved.token,
+    shouldSetCookie: resolved.shouldSetCookie
+  };
+}
+
+export function serializeAnalyticsCookie(name: string, value: string, maxAge: number): string {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    "HttpOnly",
+    "SameSite=Lax"
+  ];
+  if (process.env.NODE_ENV === "production") parts.push("Secure");
+  return parts.join("; ");
+}
+
 function extractRawUtm(url: URL): Record<string, string> {
   const limits = {
     source: MAX_SOURCE_LENGTH,
@@ -143,13 +213,22 @@ function extractRawUtm(url: URL): Record<string, string> {
   return raw;
 }
 
-function trustedExternalReferrer(referrer: string | null, siteOrigin: string): { url: string; domain: string } | null {
+function trustedExternalReferrer(referrer: string | null, ownHosts: ReadonlySet<string>): { url: string; domain: string } | null {
   if (!referrer || referrer.length > 2000) return null;
   try {
     const parsed = new URL(referrer);
-    const site = new URL(siteOrigin);
-    if (!isHttpUrl(parsed) || parsed.origin === site.origin || !isSafeDomain(parsed.hostname)) return null;
+    if (!isHttpUrl(parsed) || ownHosts.has(parsed.hostname.toLowerCase()) || !isSafeDomain(parsed.hostname)) return null;
     return { url: parsed.toString(), domain: parsed.hostname.toLowerCase() };
+  } catch {
+    return null;
+  }
+}
+
+function hostFromUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return isHttpUrl(parsed) && isSafeDomain(parsed.hostname) ? parsed.hostname.toLowerCase() : null;
   } catch {
     return null;
   }

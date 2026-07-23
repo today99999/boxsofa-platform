@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   ANALYTICS_CONSENT_KEY,
+  clearStoredAttribution,
   getOrCreateVisitorId,
   type AnalyticsConsent,
   trackEvent
@@ -16,12 +17,15 @@ export function CookieConsent() {
 
   useEffect(() => {
     const saved = localStorage.getItem(ANALYTICS_CONSENT_KEY) as AnalyticsConsent | null;
-    setConsent(saved);
     if (saved) {
-      void persistConsent(saved).finally(() => {
-        if (saved === "analytics") {
-          trackCurrentPage();
+      void persistConsent(saved).then((persisted) => {
+        if (!persisted) {
+          localStorage.removeItem(ANALYTICS_CONSENT_KEY);
+          return;
         }
+        setConsent(saved);
+        if (saved === "analytics") trackCurrentPage();
+        else clearStoredAttribution();
       });
     }
   }, []);
@@ -40,16 +44,19 @@ export function CookieConsent() {
   }
 
   async function saveConsent(nextConsent: AnalyticsConsent) {
+    const persisted = await persistConsent(nextConsent);
+    if (!persisted) return;
     localStorage.setItem(ANALYTICS_CONSENT_KEY, nextConsent);
     setConsent(nextConsent);
-    await persistConsent(nextConsent);
     if (nextConsent === "analytics") {
       trackCurrentPage();
+    } else {
+      clearStoredAttribution();
     }
   }
 
-  async function persistConsent(nextConsent: AnalyticsConsent) {
-    await fetch("/api/analytics/consent", {
+  async function persistConsent(nextConsent: AnalyticsConsent): Promise<boolean> {
+    const response = await fetch("/api/analytics/consent", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -58,7 +65,8 @@ export function CookieConsent() {
         locale: language,
         version: "2026-07-23"
       })
-    }).catch(() => undefined);
+    }).catch(() => null);
+    return response?.ok === true;
   }
 
   if (consent) return null;

@@ -86,6 +86,10 @@ export function getStoredAttribution(): StoredAttribution | null {
   }
 }
 
+export function clearStoredAttribution() {
+  localStorage.removeItem(ANALYTICS_ATTRIBUTION_KEY);
+}
+
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {
   if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return;
 

@@ -165,6 +165,43 @@ test("analytics event requires current analytics consent", async () => {
   assert.equal(necessary.status, 403);
 });
 
+test("consent only writes server cookies after persistence and withdrawal expires attribution", async () => {
+  const { consent, repository } = handlers();
+  repository.failNext = "consent";
+  const failed = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23"
+  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" }));
+  assert.equal(failed.status, 503);
+  assert.equal(failed.headers.get("set-cookie"), null);
+
+  const accepted = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23"
+  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" }));
+  const acceptedCookies = accepted.headers.get("set-cookie") ?? "";
+  assert.equal(accepted.status, 200);
+  assert.match(acceptedCookies, /boxsofa_analytics_consent_v1=analytics/);
+  assert.match(acceptedCookies, /boxsofa_attribution_v1=/);
+  assert.match(acceptedCookies, /HttpOnly/);
+
+  const withdrawn = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: validEvent().visitorId,
+    consent: "necessary",
+    locale: "en",
+    version: "2026-07-23"
+  }));
+  const withdrawnCookies = withdrawn.headers.get("set-cookie") ?? "";
+  assert.equal(withdrawn.status, 200);
+  assert.match(withdrawnCookies, /boxsofa_analytics_consent_v1=necessary/);
+  assert.match(withdrawnCookies, /boxsofa_attribution_v1=;/);
+  assert.match(withdrawnCookies, /Max-Age=0/);
+});
+
 test("analytics event persists canonical payload after analytics consent", async () => {
   const { consent, event, repository } = handlers();
   const input = validEvent({ rawUtm: { source: "tiktok", medium: "social", campaign: "summer" } });

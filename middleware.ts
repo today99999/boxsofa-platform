@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  ANALYTICS_CONSENT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   ATTRIBUTION_TOKEN_MAX_AGE_SECONDS,
-  resolveTrustedAttribution
+  getOwnedAnalyticsHosts,
+  resolveAttributionForConsentState
 } from "./lib/server/analytics-attribution";
 import { createRuntimeAnalyticsSecurity } from "./lib/server/analytics-security";
 
@@ -13,14 +15,26 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const resolved = await resolveTrustedAttribution({
+    const resolved = await resolveAttributionForConsentState({
+      consentState: request.cookies.get(ANALYTICS_CONSENT_COOKIE_NAME)?.value,
       url: request.url,
       referrer: request.headers.get("referer"),
       existingToken: request.cookies.get(ATTRIBUTION_COOKIE_NAME)?.value ?? null,
-      siteOrigin: request.nextUrl.origin,
+      ownHosts: getOwnedAnalyticsHosts(),
       service: security
     });
     const response = NextResponse.next();
+    if (resolved.shouldClearAttribution) {
+      response.cookies.set({
+        name: ATTRIBUTION_COOKIE_NAME,
+        value: "",
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0
+      });
+    }
     if (resolved.shouldSetCookie && resolved.token) {
       response.cookies.set({
         name: ATTRIBUTION_COOKIE_NAME,
