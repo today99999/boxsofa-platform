@@ -26,6 +26,8 @@ type ConsentIntent = {
   visitorId: string;
   revision: number;
   consumed: boolean;
+  expiresAt: number;
+  outcome: "accepted" | "stale" | "superseded" | null;
 };
 
 class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
@@ -36,6 +38,7 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
   failNext: "rate" | "consent" | "product" | "event" | null = null;
   nextRevision = 0;
   nextIntentRevision = 0;
+  latestIssuedIntentRevisions = new Map<string, number>();
 
   async consumeRateLimit(input: { bucketKey: string; limit: number; windowSeconds: number }) {
     if (this.failNext === "rate") {
@@ -49,7 +52,21 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
   async issueConsentIntent(input: { visitorId: string }) {
     const revision = ++this.nextIntentRevision;
     const id = `00000000-0000-4000-8000-${String(revision).padStart(12, "0")}`;
-    this.intents.set(id, { id, visitorId: input.visitorId, revision, consumed: false });
+    for (const intent of this.intents.values()) {
+      if (intent.visitorId === input.visitorId && !intent.consumed) {
+        intent.consumed = true;
+        intent.outcome = "superseded";
+      }
+    }
+    this.intents.set(id, {
+      id,
+      visitorId: input.visitorId,
+      revision,
+      consumed: false,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      outcome: null
+    });
+    this.latestIssuedIntentRevisions.set(input.visitorId, revision);
     return { id, revision };
   }
 
@@ -66,8 +83,18 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
     }
     const intent = this.intents.get(input.intentId);
     const current = this.consents.get(input.visitorId) ?? null;
-    if (!intent || intent.consumed || intent.visitorId !== input.visitorId || intent.revision <= (current?.intentRevision ?? 0)) {
-      if (intent && intent.visitorId === input.visitorId) intent.consumed = true;
+    if (
+      !intent
+      || intent.consumed
+      || intent.expiresAt <= Date.now()
+      || intent.visitorId !== input.visitorId
+      || intent.revision !== this.latestIssuedIntentRevisions.get(input.visitorId)
+      || intent.revision <= (current?.intentRevision ?? 0)
+    ) {
+      if (intent && intent.visitorId === input.visitorId && !intent.consumed) {
+        intent.consumed = true;
+        intent.outcome = "stale";
+      }
       return {
         accepted: false,
         stale: true,
@@ -78,6 +105,7 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
       };
     }
     intent.consumed = true;
+    intent.outcome = "accepted";
     const consent = {
       id: `consent-${++this.nextRevision}`,
       consent: input.consent,
@@ -86,6 +114,18 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
     };
     this.consents.set(input.visitorId, consent);
     return { accepted: true, stale: false, ...consent };
+  }
+
+  cleanupConsentIntents(now = Date.now(), limit = 25) {
+    let deleted = 0;
+    for (const [id, intent] of this.intents) {
+      if (deleted >= limit) break;
+      if (intent.consumed || intent.expiresAt <= now) {
+        this.intents.delete(id);
+        deleted += 1;
+      }
+    }
+    return deleted;
   }
 
   async resolveProductId(identifier: string) {
@@ -205,11 +245,22 @@ async function submitConsent(
   return instance.consent(jsonRequest("/api/analytics/consent", { ...input, intentId }, headers));
 }
 
-test("server-issued consent intents reject a late old choice without changing cookies", async () => {
+test("only the latest issued intent can mutate consent or response cookies", async () => {
   const { consent, intent, repository } = handlers();
   const visitorId = validEvent().visitorId;
   const oldIntent = await issueConsentIntent(intent, visitorId);
   const newerIntent = await issueConsentIntent(intent, visitorId);
+
+  const lateOld = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId,
+    consent: "analytics" as const,
+    locale: "en",
+    version: "2026-07-23",
+    intentId: oldIntent
+  }));
+  assert.equal(lateOld.status, 409);
+  assert.equal(lateOld.headers.get("set-cookie"), null);
+  assert.equal(repository.consents.has(visitorId), false);
 
   const newest = await consent(jsonRequest("/api/analytics/consent", {
     visitorId,
@@ -218,17 +269,8 @@ test("server-issued consent intents reject a late old choice without changing co
     version: "2026-07-23",
     intentId: newerIntent
   }));
-  const lateOld = await consent(jsonRequest("/api/analytics/consent", {
-    visitorId,
-    consent: "analytics" as const,
-    locale: "en",
-    version: "2026-07-23",
-    intentId: oldIntent
-  }));
 
   assert.equal(newest.status, 200);
-  assert.equal(lateOld.status, 409);
-  assert.equal(lateOld.headers.get("set-cookie"), null);
   assert.equal(repository.consents.get(visitorId)?.consent, "necessary");
 
   const replay = await consent(jsonRequest("/api/analytics/consent", {
@@ -251,6 +293,69 @@ test("server-issued consent intents reject a late old choice without changing co
   assert.equal(swapped.status, 409);
   assert.equal(swapped.headers.get("set-cookie"), null);
   assert.equal(repository.consents.has(otherVisitor), false);
+});
+
+test("concurrently issued intents leave only the highest revision eligible to record consent", async () => {
+  const repository = new InMemoryAnalyticsRepository();
+  const visitorId = validEvent().visitorId;
+  const issued = await Promise.all([
+    repository.issueConsentIntent({ visitorId }),
+    repository.issueConsentIntent({ visitorId }),
+    repository.issueConsentIntent({ visitorId })
+  ]);
+  const ordered = [...issued].sort((left, right) => left.revision - right.revision);
+
+  for (const intent of ordered.slice(0, -1)) {
+    const result = await repository.recordConsent({
+      visitorId,
+      consent: "analytics",
+      locale: "en",
+      version: "2026-07-23",
+      intentId: intent.id
+    });
+    assert.equal(result.accepted, false);
+    assert.equal(result.stale, true);
+  }
+
+  const accepted = await repository.recordConsent({
+    visitorId,
+    consent: "necessary",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: ordered.at(-1)!.id
+  });
+  assert.equal(accepted.accepted, true);
+  assert.equal(repository.consents.get(visitorId)?.intentRevision, ordered.at(-1)!.revision);
+});
+
+test("expired and cleaned intents remain stale while a new latest intent can succeed", async () => {
+  const repository = new InMemoryAnalyticsRepository();
+  const visitorId = validEvent().visitorId;
+  const expired = await repository.issueConsentIntent({ visitorId });
+  repository.intents.get(expired.id)!.expiresAt = 0;
+  assert.equal(repository.cleanupConsentIntents(), 1);
+  assert.equal(repository.latestIssuedIntentRevisions.get(visitorId), expired.revision);
+
+  const stale = await repository.recordConsent({
+    visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: expired.id
+  });
+  assert.equal(stale.accepted, false);
+  assert.equal(repository.consents.has(visitorId), false);
+
+  const replacement = await repository.issueConsentIntent({ visitorId });
+  const accepted = await repository.recordConsent({
+    visitorId,
+    consent: "necessary",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: replacement.id
+  });
+  assert.equal(accepted.accepted, true);
+  assert.equal(repository.latestIssuedIntentRevisions.get(visitorId), replacement.revision);
 });
 
 test("a consent persistence failure leaves the client free to issue and use a fresh intent", async () => {

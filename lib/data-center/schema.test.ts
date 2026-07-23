@@ -26,6 +26,10 @@ const consentIntentMigration = readFileSync(
   new URL("../../supabase/migrations/202607230006_database_ordered_consent_intents.sql", import.meta.url),
   "utf8"
 );
+const consentIntentFinalizationMigration = readFileSync(
+  new URL("../../supabase/migrations/202607230007_finalize_analytics_consent_intent_ordering.sql", import.meta.url),
+  "utf8"
+);
 const bootstrapSchema = readFileSync(
   new URL("../../supabase/schema.sql", import.meta.url),
   "utf8"
@@ -195,6 +199,49 @@ test("bootstrap schema matches the final database-ordered consent intent contrac
     "consumed_at is not null",
     "grant execute on function public.issue_analytics_consent_intent(text) to service_role",
     "grant execute on function public.record_analytics_consent(text, text, text, text, uuid) to service_role"
+  ]) {
+    assert.match(
+      bootstrapSchema.toLowerCase(),
+      new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    );
+  }
+});
+
+test("final intent ordering supersedes old issues and keeps a durable cleanup-safe visitor head", () => {
+  for (const contract of [
+    "create table if not exists public.analytics_consent_intent_heads",
+    "latest_intent_revision bigint not null",
+    "add column if not exists superseded_at timestamptz",
+    "consumed_result in ('accepted', 'stale', 'superseded')",
+    "update public.analytics_consent_intents",
+    "set consumed_at = now(),",
+    "consumed_result = 'superseded',",
+    "superseded_at = now()",
+    "create or replace function public.cleanup_analytics_consent_intents",
+    "for update skip locked",
+    "limit v_limit",
+    "exception when others then",
+    "v_intent.intent_revision <> v_latest_intent_revision",
+    "grant execute on function public.cleanup_analytics_consent_intents(integer) to service_role",
+    "revoke all on table public.analytics_consent_intent_heads from public, anon, authenticated"
+  ]) {
+    assert.match(
+      consentIntentFinalizationMigration.toLowerCase(),
+      new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    );
+  }
+});
+
+test("bootstrap schema preserves final intent supersession and bounded cleanup contracts", () => {
+  for (const contract of [
+    "create table if not exists public.analytics_consent_intent_heads",
+    "latest_intent_revision bigint not null",
+    "add column if not exists superseded_at timestamptz",
+    "create or replace function public.cleanup_analytics_consent_intents",
+    "v_intent.intent_revision <> v_latest_intent_revision",
+    "grant execute on function public.issue_analytics_consent_intent(text) to service_role",
+    "grant execute on function public.record_analytics_consent(text, text, text, text, uuid) to service_role",
+    "grant execute on function public.cleanup_analytics_consent_intents(integer) to service_role"
   ]) {
     assert.match(
       bootstrapSchema.toLowerCase(),
