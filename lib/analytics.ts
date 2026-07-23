@@ -18,13 +18,32 @@ export type AnalyticsEvent = {
   valueEur?: number;
 };
 
+export type StoredAttribution = {
+  source: string;
+  medium?: string;
+  campaign?: string;
+  referrer?: string;
+  occurredAt: string;
+};
+
+type QueuedAnalyticsEvent = AnalyticsEvent & {
+  eventKey: string;
+  sessionId: string;
+};
+
 export const ANALYTICS_CONSENT_KEY = "boxsofa_cookie_consent_v1";
 export const ANALYTICS_EVENTS_KEY = "boxsofa_analytics_events_v1";
+export const ANALYTICS_QUEUE_KEY = "boxsofa_analytics_queue_v1";
 export const ANALYTICS_VISITOR_KEY = "boxsofa_visitor_id_v1";
+export const ANALYTICS_SESSION_KEY = "boxsofa_analytics_session_v1";
+export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
+
+const MAX_QUEUE_SIZE = 200;
+const MAX_HISTORY_SIZE = 1000;
 
 export function inferTrafficSource(url: URL, referrer = "") {
   const utmSource = url.searchParams.get("utm_source");
-  if (utmSource) return utmSource.toLowerCase();
+  if (utmSource) return utmSource.trim().toLowerCase();
 
   const text = referrer.toLowerCase();
   if (!text) return "direct";
@@ -32,24 +51,48 @@ export function inferTrafficSource(url: URL, referrer = "") {
   if (text.includes("instagram")) return "instagram";
   if (text.includes("facebook") || text.includes("fb.")) return "facebook";
   if (text.includes("youtube") || text.includes("youtu.be")) return "youtube";
+  if (text.includes("pinterest")) return "pinterest";
   if (text.includes("x.com") || text.includes("twitter")) return "x";
   if (text.includes("google")) return "google";
   return "referral";
 }
 
+export function inferDeviceType(width: number) {
+  return width < 768 ? "mobile" : width < 1200 ? "tablet" : "desktop";
+}
+
+export function sanitizeReferrerDomain(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 export function getOrCreateVisitorId() {
   const existing = localStorage.getItem(ANALYTICS_VISITOR_KEY);
   if (existing) return existing;
-  const next = `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const next = `v-${crypto.randomUUID()}`;
   localStorage.setItem(ANALYTICS_VISITOR_KEY, next);
   return next;
 }
 
+export function getStoredAttribution(): StoredAttribution | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem(ANALYTICS_ATTRIBUTION_KEY) || "null") as StoredAttribution | null;
+    return stored?.source ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {
   if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return;
+
   const url = new URL(window.location.href);
+  const eventKey = `evt-${crypto.randomUUID()}`;
   const event: AnalyticsEvent = {
-    id: `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    id: eventKey,
     type,
     createdAt: new Date().toISOString(),
     path: url.pathname,
@@ -60,7 +103,90 @@ export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEv
     visitorId: getOrCreateVisitorId(),
     ...fields
   };
-  const events = JSON.parse(localStorage.getItem(ANALYTICS_EVENTS_KEY) || "[]") as AnalyticsEvent[];
-  localStorage.setItem(ANALYTICS_EVENTS_KEY, JSON.stringify([event, ...events].slice(0, 1000)));
+  const queuedEvent: QueuedAnalyticsEvent = {
+    ...event,
+    eventKey,
+    sessionId: getSessionId()
+  };
+
+  writeEventHistory(event);
+  writeQueue([queuedEvent, ...readQueue()].slice(0, MAX_QUEUE_SIZE));
+  writeAttribution(event);
   window.dispatchEvent(new Event("boxsofa-analytics-updated"));
+  void flushQueue();
+}
+
+function getSessionId() {
+  const existing = sessionStorage.getItem(ANALYTICS_SESSION_KEY);
+  if (existing) return existing;
+  const next = `s-${crypto.randomUUID()}`;
+  sessionStorage.setItem(ANALYTICS_SESSION_KEY, next);
+  return next;
+}
+
+async function flushQueue() {
+  for (const event of readQueue()) {
+    try {
+      await deliverEvent(event);
+      removeFromQueue(event.eventKey);
+    } catch {
+      return;
+    }
+  }
+}
+
+async function deliverEvent(event: QueuedAnalyticsEvent) {
+  const response = await fetch("/api/analytics/events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...event,
+      referrerDomain: sanitizeReferrerDomain(event.referrer ?? ""),
+      deviceType: inferDeviceType(window.innerWidth)
+    }),
+    keepalive: true
+  });
+
+  if (!response.ok) {
+    throw new Error(`Analytics delivery failed: ${response.status}`);
+  }
+}
+
+function writeAttribution(event: AnalyticsEvent) {
+  if (event.source === "direct") return;
+
+  const attribution: StoredAttribution = {
+    source: event.source,
+    medium: event.medium,
+    campaign: event.campaign,
+    referrer: event.referrer,
+    occurredAt: event.createdAt
+  };
+  localStorage.setItem(ANALYTICS_ATTRIBUTION_KEY, JSON.stringify(attribution));
+}
+
+function readQueue(): QueuedAnalyticsEvent[] {
+  return readStorageArray<QueuedAnalyticsEvent>(ANALYTICS_QUEUE_KEY);
+}
+
+function removeFromQueue(eventKey: string) {
+  writeQueue(readQueue().filter((event) => event.eventKey !== eventKey));
+}
+
+function writeQueue(events: QueuedAnalyticsEvent[]) {
+  localStorage.setItem(ANALYTICS_QUEUE_KEY, JSON.stringify(events));
+}
+
+function writeEventHistory(event: AnalyticsEvent) {
+  const events = readStorageArray<AnalyticsEvent>(ANALYTICS_EVENTS_KEY);
+  localStorage.setItem(ANALYTICS_EVENTS_KEY, JSON.stringify([event, ...events].slice(0, MAX_HISTORY_SIZE)));
+}
+
+function readStorageArray<T>(key: string): T[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value as T[] : [];
+  } catch {
+    return [];
+  }
 }

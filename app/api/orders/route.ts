@@ -27,6 +27,14 @@ const orderItemSchema = z.object({
   quantity: z.number().int().positive()
 });
 
+const attributionSchema = z.object({
+  source: z.string().trim().min(1).max(80),
+  medium: z.string().trim().max(80).optional(),
+  campaign: z.string().trim().max(160).optional(),
+  referrer: z.string().url().max(500).optional(),
+  occurredAt: z.string().datetime()
+});
+
 const createOrderSchema = z.object({
   customerName: z.string().trim().min(1),
   phone: z.string().trim().min(1),
@@ -42,7 +50,8 @@ const createOrderSchema = z.object({
   subtotalEur: z.number().nonnegative(),
   discountEur: z.number().nonnegative().default(0),
   shippingEur: z.number().nonnegative(),
-  totalEur: z.number().nonnegative()
+  totalEur: z.number().nonnegative(),
+  attribution: attributionSchema.nullable().optional()
 });
 
 function createOrderNumber() {
@@ -194,7 +203,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
-  const attribution = trackOrderEventFields(request);
+  const requestAttribution = trackOrderEventFields(request);
+  const attribution = order.attribution
+    ? {
+        source: order.attribution.source,
+        utm_source: order.attribution.source,
+        utm_medium: order.attribution.medium ?? null,
+        utm_campaign: order.attribution.campaign ?? null,
+        referrer: order.attribution.referrer ?? null
+      }
+    : requestAttribution;
   const supabase = createSupabaseServiceRoleClient();
   const quantitiesBySku = aggregateOrderQuantities(order.items);
   const requestedSkus = Object.keys(quantitiesBySku);

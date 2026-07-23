@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CART_KEY, ORDERS_KEY, type CartItem, type LocalOrder } from "@/lib/cart";
-import { trackEvent } from "@/lib/analytics";
+import { getStoredAttribution, trackEvent } from "@/lib/analytics";
 import { CatalogText } from "@/components/CatalogText";
 import { LeadCapture } from "@/components/LeadCapture";
 import { useTranslation } from "@/components/useTranslation";
@@ -141,7 +141,8 @@ export function CartClient() {
       subtotalEur: subtotal,
       discountEur: 0,
       shippingEur: shipping,
-      totalEur: total
+      totalEur: total,
+      attribution: getStoredAttribution()
     };
 
     setIsSubmitting(true);
