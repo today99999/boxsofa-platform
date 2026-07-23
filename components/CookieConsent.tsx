@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   ANALYTICS_CONSENT_KEY,
   clearAnalyticsClientState,
+  clearAnalyticsServerReady,
   getOrCreateVisitorId,
+  markAnalyticsServerReady,
   markConsentSynchronized,
   OPEN_COOKIE_SETTINGS_EVENT,
-  shouldSynchronizeConsent,
+  readAnalyticsConsentStatus,
+  synchronizeAnalyticsConsent,
   type AnalyticsConsent,
   trackEvent
 } from "@/lib/analytics";
@@ -25,24 +28,12 @@ export function CookieConsent() {
   const [shouldFocusSettings, setShouldFocusSettings] = useState(false);
   const necessaryButtonRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const consentSyncGenerationRef = useRef(0);
 
   useEffect(() => {
-    const saved = localStorage.getItem(ANALYTICS_CONSENT_KEY) as AnalyticsConsent | null;
-    if (saved) {
-      if (shouldSynchronizeConsent(localStorage, saved, CONSENT_VERSION)) {
-        // Existing local-only consent is migrated once. Modern clients already
-        // have a server confirmation marker and must not create a consent row per mount.
-        void persistConsent(saved).then((persisted) => {
-          if (!persisted) {
-            localStorage.removeItem(ANALYTICS_CONSENT_KEY);
-            return;
-          }
-          applyPersistedConsent(saved);
-        });
-      } else {
-        applyPersistedConsent(saved);
-      }
-    }
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const syncGeneration = consentSyncGenerationRef.current;
 
     function openSettings() {
       const activeElement = document.activeElement;
@@ -53,7 +44,34 @@ export function CookieConsent() {
     }
 
     window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
-    return () => window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
+    const saved = localStorage.getItem(ANALYTICS_CONSENT_KEY) as AnalyticsConsent | null;
+    if (saved) {
+      const synchronize = async () => {
+        if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+        const result = await synchronizeAnalyticsConsent({
+          visitorId: getOrCreateVisitorId(),
+          consent: saved,
+          version: CONSENT_VERSION,
+          getStatus: () => readAnalyticsConsentStatus(),
+          persist: () => persistConsent(saved)
+        });
+        if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+        if (result === "unavailable") {
+          clearAnalyticsServerReady();
+          setConsent(saved);
+          retryTimer = window.setTimeout(() => void synchronize(), 60_000);
+          return;
+        }
+        applyConfirmedConsent(saved);
+      };
+      void synchronize();
+    }
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
+    };
   }, []);
 
   useEffect(() => {
@@ -85,6 +103,8 @@ export function CookieConsent() {
   }
 
   async function saveConsent(nextConsent: AnalyticsConsent) {
+    // A user decision always wins over a pending mount-time resynchronization.
+    consentSyncGenerationRef.current += 1;
     const persisted = await persistConsent(nextConsent);
     if (!persisted) {
       setSaveError(true);
@@ -95,6 +115,7 @@ export function CookieConsent() {
     markConsentSynchronized(localStorage, nextConsent, CONSENT_VERSION);
     setConsent(nextConsent);
     if (nextConsent === "analytics") {
+      markAnalyticsServerReady();
       trackCurrentPage();
     } else {
       clearAnalyticsClientState();
@@ -115,11 +136,15 @@ export function CookieConsent() {
     return response?.ok === true;
   }
 
-  function applyPersistedConsent(nextConsent: AnalyticsConsent) {
+  function applyConfirmedConsent(nextConsent: AnalyticsConsent) {
     markConsentSynchronized(localStorage, nextConsent, CONSENT_VERSION);
     setConsent(nextConsent);
-    if (nextConsent === "analytics") trackCurrentPage();
-    else clearAnalyticsClientState();
+    if (nextConsent === "analytics") {
+      markAnalyticsServerReady();
+      trackCurrentPage();
+    } else {
+      clearAnalyticsClientState();
+    }
   }
 
   if (consent) return null;

@@ -38,10 +38,19 @@ export const ANALYTICS_VISITOR_KEY = "boxsofa_visitor_id_v1";
 export const ANALYTICS_SESSION_KEY = "boxsofa_analytics_session_v1";
 export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
 export const ANALYTICS_CONSENT_SYNC_KEY = "boxsofa_cookie_consent_server_sync_v1";
+export const ANALYTICS_SERVER_READY_KEY = "boxsofa_analytics_server_ready_v1";
 export const OPEN_COOKIE_SETTINGS_EVENT = "boxsofa-open-cookie-settings";
 
 const MAX_QUEUE_SIZE = 200;
 const MAX_HISTORY_SIZE = 1000;
+const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>>();
+
+export type AnalyticsConsentServerStatus = {
+  consent: AnalyticsConsent | null;
+  version: string | null;
+};
+
+export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavailable";
 
 export function inferTrafficSource(url: URL, referrer = "") {
   const utmSource = url.searchParams.get("utm_source");
@@ -92,7 +101,8 @@ export function clearStoredAttribution() {
   localStorage.removeItem(ANALYTICS_ATTRIBUTION_KEY);
 }
 
-export function clearAnalyticsClientState(storage: Pick<Storage, "removeItem"> = localStorage) {
+export function clearAnalyticsClientState(storage?: Pick<Storage, "removeItem">) {
+  const target = storage ?? localStorage;
   for (const key of [
     ANALYTICS_ATTRIBUTION_KEY,
     ANALYTICS_EVENTS_KEY,
@@ -100,8 +110,68 @@ export function clearAnalyticsClientState(storage: Pick<Storage, "removeItem"> =
     ANALYTICS_SESSION_KEY,
     ANALYTICS_VISITOR_KEY
   ]) {
-    storage.removeItem(key);
+    target.removeItem(key);
   }
+  if (!storage) clearAnalyticsServerReady();
+}
+
+export function markAnalyticsServerReady(storage: Pick<Storage, "setItem"> = sessionStorage) {
+  storage.setItem(ANALYTICS_SERVER_READY_KEY, "analytics");
+}
+
+export function clearAnalyticsServerReady(storage: Pick<Storage, "removeItem"> = sessionStorage) {
+  storage.removeItem(ANALYTICS_SERVER_READY_KEY);
+}
+
+export function isAnalyticsServerReady(storage: Pick<Storage, "getItem"> = sessionStorage) {
+  return storage.getItem(ANALYTICS_SERVER_READY_KEY) === "analytics";
+}
+
+export async function readAnalyticsConsentStatus(fetcher: typeof fetch = fetch): Promise<AnalyticsConsentServerStatus | null> {
+  try {
+    const response = await fetcher("/api/analytics/consent", {
+      method: "GET",
+      cache: "no-store",
+      headers: { "cache-control": "no-store" }
+    });
+    if (!response.ok) return null;
+    const value = await response.json() as unknown;
+    if (!value || typeof value !== "object") return null;
+    const status = value as Partial<AnalyticsConsentServerStatus>;
+    const consent = status.consent === "necessary" || status.consent === "analytics" ? status.consent : null;
+    const version = typeof status.version === "string" && status.version.length > 0 && status.version.length <= 40 ? status.version : null;
+    return { consent, version };
+  } catch {
+    return null;
+  }
+}
+
+export function synchronizeAnalyticsConsent(input: {
+  visitorId: string;
+  consent: AnalyticsConsent;
+  version: string;
+  getStatus: () => Promise<AnalyticsConsentServerStatus | null>;
+  persist: () => Promise<boolean>;
+}): Promise<ConsentSynchronizationResult> {
+  const key = `${input.visitorId}:${input.consent}:${input.version}`;
+  const existing = consentSyncFlights.get(key);
+  if (existing) return existing;
+
+  const flight = (async (): Promise<ConsentSynchronizationResult> => {
+    try {
+      const status = await input.getStatus();
+      if (!status) return "unavailable";
+      if (status.consent === input.consent && status.version === input.version) return "matched";
+      return await input.persist() ? "resubmitted" : "unavailable";
+    } catch {
+      return "unavailable";
+    }
+  })();
+  consentSyncFlights.set(key, flight);
+  void flight.finally(() => {
+    if (consentSyncFlights.get(key) === flight) consentSyncFlights.delete(key);
+  });
+  return flight;
 }
 
 export function consentSyncMarker(consent: AnalyticsConsent, version: string) {
@@ -130,6 +200,7 @@ export function openCookieSettings() {
 
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {
   if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return;
+  if (!isAnalyticsServerReady()) return;
 
   const url = new URL(window.location.href);
   const eventKey = `evt-${crypto.randomUUID()}`;

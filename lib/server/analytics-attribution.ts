@@ -2,6 +2,7 @@ import { resolveAttribution } from "../data-center/metrics.ts";
 
 export const ATTRIBUTION_COOKIE_NAME = "boxsofa_attribution_v1";
 export const ANALYTICS_CONSENT_COOKIE_NAME = "boxsofa_analytics_consent_v1";
+export const ANALYTICS_CONSENT_VERSION_COOKIE_NAME = "boxsofa_analytics_consent_version_v1";
 export const ATTRIBUTION_TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 const BOXSOFA_OWNED_HOSTS = ["boxsofa.eu", "www.boxsofa.eu"];

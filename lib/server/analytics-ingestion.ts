@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ANALYTICS_CONSENT_COOKIE_NAME,
+  ANALYTICS_CONSENT_VERSION_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   ATTRIBUTION_TOKEN_MAX_AGE_SECONDS,
   getConfiguredAnalyticsSiteUrl,
@@ -113,6 +114,10 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
         "set-cookie",
         serializeAnalyticsCookie(ANALYTICS_CONSENT_COOKIE_NAME, payload.data.consent, ATTRIBUTION_TOKEN_MAX_AGE_SECONDS)
       );
+      response.headers.append(
+        "set-cookie",
+        serializeAnalyticsCookie(ANALYTICS_CONSENT_VERSION_COOKIE_NAME, payload.data.version, ATTRIBUTION_TOKEN_MAX_AGE_SECONDS)
+      );
       if (payload.data.consent === "necessary") {
         response.headers.append("set-cookie", serializeAnalyticsCookie(ATTRIBUTION_COOKIE_NAME, "", 0));
         return response;
@@ -136,6 +141,28 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
     } catch {
       return unavailableResponse();
     }
+  };
+}
+
+export function createAnalyticsConsentStatusHandler({ attributionService }: Pick<HandlerDependencies, "attributionService">) {
+  return async function getAnalyticsConsentStatus(request: Request): Promise<Response> {
+    const headers = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
+    const consent = readAnalyticsConsentCookie(request);
+    const version = readBoundedCookie(request, ANALYTICS_CONSENT_VERSION_COOKIE_NAME, 40);
+
+    if (!consent || !version) {
+      return Response.json({ consent: null, version: null }, { headers });
+    }
+
+    if (consent === "analytics") {
+      if (!attributionService) return unavailableResponse(headers);
+      const attribution = await attributionService.verify(readCookie(request, ATTRIBUTION_COOKIE_NAME));
+      if (!attribution) {
+        return Response.json({ consent: null, version: null }, { headers });
+      }
+    }
+
+    return Response.json({ consent, version }, { headers });
   };
 }
 
@@ -397,9 +424,25 @@ function readCookie(request: Request, name: string): string | null {
   if (!header || header.length > 8192) return null;
   for (const item of header.split(";")) {
     const [key, ...value] = item.trim().split("=");
-    if (key === name && value.length) return value.join("=");
+    if (key === name && value.length) {
+      try {
+        return decodeURIComponent(value.join("="));
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
+}
+
+function readAnalyticsConsentCookie(request: Request): "necessary" | "analytics" | null {
+  const value = readCookie(request, ANALYTICS_CONSENT_COOKIE_NAME);
+  return value === "necessary" || value === "analytics" ? value : null;
+}
+
+function readBoundedCookie(request: Request, name: string, max: number): string | null {
+  const value = readCookie(request, name);
+  return value && value.length <= max && !/[\\\u0000-\u001F\u007F]/.test(value) ? value : null;
 }
 
 function isUuid(value: string): boolean {
@@ -418,6 +461,6 @@ function invalidPayloadResponse() {
   return Response.json({ ok: false, message: "Invalid analytics payload." }, { status: 400 });
 }
 
-function unavailableResponse() {
-  return Response.json({ ok: false, message: "Analytics is temporarily unavailable." }, { status: 503 });
+function unavailableResponse(headers?: HeadersInit) {
+  return Response.json({ ok: false, message: "Analytics is temporarily unavailable." }, { status: 503, headers });
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAnalyticsConsentHandler,
+  createAnalyticsConsentStatusHandler,
   createAnalyticsEventHandler,
   type AnalyticsIngestionRepository,
   type IngestedAnalyticsEvent
@@ -74,6 +75,7 @@ function handlers(repository = new InMemoryAnalyticsRepository()) {
   return {
     repository,
     consent: createAnalyticsConsentHandler({ repository, attributionService }),
+    status: createAnalyticsConsentStatusHandler({ attributionService }),
     event: createAnalyticsEventHandler({ repository, attributionService }),
     attributionService
   };
@@ -156,6 +158,57 @@ test("analytics endpoints reject malformed JSON without reaching persistence", a
   assert.equal(repository.rateLimitRequests.length, 0);
 });
 
+test("consent status is a no-store cookie-only view that exposes no attribution", async () => {
+  const { status, repository, attributionService } = handlers();
+  const token = await attributionService.issue({
+    source: "tiktok",
+    medium: "social",
+    campaign: "status-test",
+    referrerDomain: null,
+    rawUtm: { source: "tiktok" }
+  });
+  const request = new Request("https://boxsofa.eu/api/analytics/consent", {
+    headers: {
+      cookie: `boxsofa_analytics_consent_v1=analytics; boxsofa_analytics_consent_version_v1=2026-07-23; boxsofa_attribution_v1=${token}`
+    }
+  });
+
+  const response = await status(request);
+  const payload = await body(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store, private");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.deepEqual(payload, { consent: "analytics", version: "2026-07-23" });
+  assert.equal(JSON.stringify(payload).includes("tiktok"), false);
+  assert.equal(repository.consents.size, 0);
+  assert.equal(repository.rateLimitRequests.length, 0);
+});
+
+test("consent status treats expired or separately cleared trusted cookies as absent", async () => {
+  const { status, attributionService } = handlers();
+  const expiredToken = await attributionService.issue({
+    source: "google",
+    medium: null,
+    campaign: null,
+    referrerDomain: "google.com",
+    rawUtm: {}
+  }, 0);
+  const missingAttribution = await status(new Request("https://boxsofa.eu/api/analytics/consent", {
+    headers: { cookie: "boxsofa_analytics_consent_v1=analytics; boxsofa_analytics_consent_version_v1=2026-07-23" }
+  }));
+  const expiredAttribution = await status(new Request("https://boxsofa.eu/api/analytics/consent", {
+    headers: { cookie: `boxsofa_analytics_consent_v1=analytics; boxsofa_analytics_consent_version_v1=2026-07-23; boxsofa_attribution_v1=${expiredToken}` }
+  }));
+  const necessary = await status(new Request("https://boxsofa.eu/api/analytics/consent", {
+    headers: { cookie: "boxsofa_analytics_consent_v1=necessary; boxsofa_analytics_consent_version_v1=2026-07-23" }
+  }));
+
+  assert.deepEqual(await body(missingAttribution), { consent: null, version: null });
+  assert.deepEqual(await body(expiredAttribution), { consent: null, version: null });
+  assert.deepEqual(await body(necessary), { consent: "necessary", version: "2026-07-23" });
+});
+
 test("analytics event requires current analytics consent", async () => {
   const { consent, event } = handlers();
   const absent = await event(await analyticsEventRequest("/api/analytics/events", validEvent()));
@@ -192,6 +245,7 @@ test("consent only writes server cookies after persistence and withdrawal expire
   const acceptedCookies = accepted.headers.get("set-cookie") ?? "";
   assert.equal(accepted.status, 200);
   assert.match(acceptedCookies, /boxsofa_analytics_consent_v1=analytics/);
+  assert.match(acceptedCookies, /boxsofa_analytics_consent_version_v1=2026-07-23/);
   assert.match(acceptedCookies, /boxsofa_attribution_v1=/);
   assert.match(acceptedCookies, /HttpOnly/);
 
