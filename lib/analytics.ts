@@ -61,6 +61,13 @@ export type AnalyticsConsentServerStatus = {
   version: string | null;
 };
 
+export type AnalyticsReadinessReason = "initial" | "ready" | "temporary" | "withdrawn";
+
+export type AnalyticsReadinessSnapshot = {
+  ready: boolean;
+  reason: AnalyticsReadinessReason;
+};
+
 export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavailable";
 
 export type AnalyticsDeliveryDisposition = "success" | "drop" | "retry" | "revalidate";
@@ -197,6 +204,9 @@ const consentRecoveryCoordinator = createAnalyticsConsentRecoveryCoordinator({
   stopTracking: () => clearAnalyticsServerReady()
 });
 
+let analyticsReadinessSnapshot: AnalyticsReadinessSnapshot = { ready: false, reason: "initial" };
+const analyticsReadinessListeners = new Set<(snapshot: AnalyticsReadinessSnapshot) => void>();
+
 export function registerAnalyticsConsentRecoveryHandler(handler: () => Promise<boolean>) {
   consentRecoveryHandler = handler;
   return () => {
@@ -273,21 +283,38 @@ export function clearAnalyticsClientState(storage?: Pick<Storage, "removeItem">)
   ]) {
     target.removeItem(key);
   }
-  if (!storage) clearAnalyticsServerReady();
+  if (!storage) clearAnalyticsServerReady("withdrawn");
 }
 
 export function markAnalyticsServerReady(storage: Pick<Storage, "setItem"> = sessionStorage) {
   storage.setItem(ANALYTICS_SERVER_READY_KEY, "analytics");
-  dispatchAnalyticsReadinessChange();
+  setAnalyticsReadinessSnapshot({ ready: true, reason: "ready" });
 }
 
-export function clearAnalyticsServerReady(storage: Pick<Storage, "removeItem"> = sessionStorage) {
-  storage.removeItem(ANALYTICS_SERVER_READY_KEY);
-  dispatchAnalyticsReadinessChange();
+export function clearAnalyticsServerReady(
+  reasonOrStorage: Exclude<AnalyticsReadinessReason, "ready"> | Pick<Storage, "removeItem"> = "temporary",
+  storage?: Pick<Storage, "removeItem">
+) {
+  const reason = typeof reasonOrStorage === "string" ? reasonOrStorage : "temporary";
+  const target = typeof reasonOrStorage === "string" ? (storage ?? sessionStorage) : reasonOrStorage;
+  target.removeItem(ANALYTICS_SERVER_READY_KEY);
+  setAnalyticsReadinessSnapshot({ ready: false, reason });
 }
 
 export function isAnalyticsServerReady(storage: Pick<Storage, "getItem"> = sessionStorage) {
   return storage.getItem(ANALYTICS_SERVER_READY_KEY) === "analytics";
+}
+
+export function getAnalyticsReadinessSnapshot(): AnalyticsReadinessSnapshot {
+  return analyticsReadinessSnapshot;
+}
+
+export function subscribeAnalyticsReadiness(listener: (snapshot: AnalyticsReadinessSnapshot) => void) {
+  analyticsReadinessListeners.add(listener);
+  listener(analyticsReadinessSnapshot);
+  return () => {
+    analyticsReadinessListeners.delete(listener);
+  };
 }
 
 export async function readAnalyticsConsentStatus(
@@ -624,9 +651,11 @@ function readCheckoutFunnelStates(storage: Pick<Storage, "getItem">): string[] {
   }
 }
 
-function dispatchAnalyticsReadinessChange() {
+function setAnalyticsReadinessSnapshot(snapshot: AnalyticsReadinessSnapshot) {
+  analyticsReadinessSnapshot = snapshot;
+  for (const listener of analyticsReadinessListeners) listener(snapshot);
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(ANALYTICS_SERVER_READY_EVENT));
+    window.dispatchEvent(new CustomEvent<AnalyticsReadinessSnapshot>(ANALYTICS_SERVER_READY_EVENT, { detail: snapshot }));
   }
 }
 

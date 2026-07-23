@@ -39,7 +39,7 @@ export function CookieConsent() {
     let retryTimer: number | undefined;
     // A prior session marker cannot authorize tracking until this mount has
     // confirmed the HttpOnly server consent state again.
-    clearAnalyticsServerReady();
+    clearAnalyticsServerReady("temporary");
 
     const synchronize = async (saved: AnalyticsConsent, syncGeneration: number) => {
       const intent = userOperationRef.current;
@@ -57,7 +57,7 @@ export function CookieConsent() {
       });
       if (!isCurrent()) return;
       if (result === "unavailable") {
-        clearAnalyticsServerReady();
+        clearAnalyticsServerReady("temporary");
         setConsent(saved);
         retryTimer = window.setTimeout(() => void synchronize(saved, syncGeneration), 60_000);
         return;
@@ -68,7 +68,7 @@ export function CookieConsent() {
     const synchronizeStoredConsent = () => {
       const saved = readStoredAnalyticsConsent(localStorage);
       if (!saved) {
-        clearAnalyticsServerReady();
+        clearAnalyticsServerReady("withdrawn");
         setConsent(null);
         return;
       }
@@ -87,7 +87,7 @@ export function CookieConsent() {
     const unregisterRecoveryHandler = registerAnalyticsConsentRecoveryHandler(async () => {
       const saved = readStoredAnalyticsConsent(localStorage);
       if (saved !== "analytics") {
-        clearAnalyticsServerReady();
+        clearAnalyticsServerReady("withdrawn");
         return false;
       }
 
@@ -99,7 +99,7 @@ export function CookieConsent() {
         && readStoredAnalyticsConsent(localStorage) === "analytics";
       const persisted = await persistConsent("analytics", isCurrent);
       if (!persisted || !isCurrent()) {
-        clearAnalyticsServerReady();
+        clearAnalyticsServerReady("temporary");
         return false;
       }
 

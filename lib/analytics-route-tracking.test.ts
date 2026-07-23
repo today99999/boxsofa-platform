@@ -33,3 +33,46 @@ test("product route tracking emits trusted catalog metadata with the page view",
   assert.deepEqual(events.map((event) => event.type), ["page_view", "product_view"]);
   assert.deepEqual(events[1].fields, fields);
 });
+
+test("route lifecycle preserves an unchanged route through temporary 403 recovery", () => {
+  const events: Array<{ type: string; fields?: unknown }> = [];
+  const coordinator = createNavigationTrackingCoordinator((type, fields) => events.push({ type, fields }));
+
+  assert.equal(coordinator.reconcile("/category/all", "", { ready: true, reason: "ready" }), true);
+  assert.equal(coordinator.reconcile("/category/all", "", { ready: false, reason: "temporary" }), false);
+  assert.equal(coordinator.reconcile("/category/all", "", { ready: true, reason: "ready" }), false);
+
+  assert.deepEqual(events.map((event) => event.type), ["page_view"]);
+});
+
+test("route lifecycle tracks one newer navigation after temporary recovery", () => {
+  const events: Array<{ type: string; fields?: unknown }> = [];
+  const coordinator = createNavigationTrackingCoordinator((type, fields) => events.push({ type, fields }));
+
+  coordinator.reconcile("/", "", { ready: true, reason: "ready" });
+  coordinator.reconcile("/", "", { ready: false, reason: "temporary" });
+  coordinator.reconcile("/product/chameleon-mario-sofa-01", "", { ready: false, reason: "temporary" });
+  assert.equal(coordinator.reconcile("/product/chameleon-mario-sofa-01", "", { ready: true, reason: "ready" }), true);
+  assert.equal(coordinator.reconcile("/product/chameleon-mario-sofa-01", "", { ready: true, reason: "ready" }), false);
+
+  assert.deepEqual(events.map((event) => event.type), ["page_view", "page_view", "product_view"]);
+});
+
+test("route lifecycle resets only for a genuine withdrawal and remains Strict Mode safe", () => {
+  const events: Array<{ type: string; fields?: unknown }> = [];
+  const coordinator = createNavigationTrackingCoordinator((type, fields) => events.push({ type, fields }));
+  const productPath = "/product/chameleon-mario-sofa-01";
+
+  coordinator.reconcile(productPath, "", { ready: true, reason: "ready" });
+  coordinator.reconcile(productPath, "", { ready: false, reason: "withdrawn" });
+  coordinator.reconcile(productPath, "", { ready: false, reason: "withdrawn" });
+  assert.equal(coordinator.reconcile(productPath, "", { ready: true, reason: "ready" }), true);
+  assert.equal(coordinator.reconcile(productPath, "", { ready: true, reason: "ready" }), false);
+
+  assert.deepEqual(events.map((event) => event.type), [
+    "page_view",
+    "product_view",
+    "page_view",
+    "product_view"
+  ]);
+});

@@ -1,5 +1,5 @@
 import { products } from "./catalog.ts";
-import type { AnalyticsEvent, AnalyticsEventType } from "./analytics.ts";
+import type { AnalyticsEvent, AnalyticsEventType, AnalyticsReadinessSnapshot } from "./analytics.ts";
 
 export type RouteTrackingFields = Pick<AnalyticsEvent, "productId" | "productSlug" | "productName">;
 export type NavigationTracker = (type: AnalyticsEventType, fields?: RouteTrackingFields) => unknown;
@@ -29,19 +29,44 @@ export function productTrackingFieldsForPath(pathname: string): RouteTrackingFie
 
 export function createNavigationTrackingCoordinator(track: NavigationTracker) {
   let lastTrackedKey: string | null = null;
+  let pendingNavigationKey: string | null = null;
+
+  const trackNavigation = (pathname: string, search = "") => {
+    const key = navigationTrackingKey(pathname, search);
+    if (key === lastTrackedKey) return false;
+    lastTrackedKey = key;
+    pendingNavigationKey = null;
+    track("page_view");
+    const product = productTrackingFieldsForPath(pathname);
+    if (product) track("product_view", product);
+    return true;
+  };
 
   return {
     track(pathname: string, search = "") {
+      return trackNavigation(pathname, search);
+    },
+    reconcile(pathname: string, search: string, readiness: AnalyticsReadinessSnapshot) {
       const key = navigationTrackingKey(pathname, search);
-      if (key === lastTrackedKey) return false;
-      lastTrackedKey = key;
-      track("page_view");
-      const product = productTrackingFieldsForPath(pathname);
-      if (product) track("product_view", product);
-      return true;
+      if (!readiness.ready) {
+        if (readiness.reason === "withdrawn") {
+          lastTrackedKey = null;
+          pendingNavigationKey = null;
+        } else if (key !== lastTrackedKey) {
+          pendingNavigationKey = key;
+        }
+        return false;
+      }
+
+      // An unchanged route after a temporary 403 recovery has already been
+      // represented by the retained event in the delivery queue. A different
+      // route reached while unavailable is tracked once after recovery.
+      if (pendingNavigationKey && pendingNavigationKey !== key) pendingNavigationKey = key;
+      return trackNavigation(pathname, search);
     },
     reset() {
       lastTrackedKey = null;
+      pendingNavigationKey = null;
     }
   };
 }

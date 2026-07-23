@@ -22,12 +22,14 @@ import {
   enqueueConsentMutation,
   fetchWithTimeout,
   inferDeviceType,
+  getAnalyticsReadinessSnapshot,
   isAnalyticsServerReady,
   markAnalyticsServerReady,
   readAnalyticsConsentStatus,
   readStoredAnalyticsConsent,
   shouldSynchronizeConsent,
   sanitizeReferrerDomain,
+  subscribeAnalyticsReadiness,
   synchronizeAnalyticsConsent,
   trackBeginCheckoutOnce,
   AnalyticsRequestTimeoutError,
@@ -260,6 +262,27 @@ test("necessary and analytics synchronization remain distinct, and server readin
   assert.equal(isAnalyticsServerReady(adapter), false);
 });
 
+test("readiness snapshots distinguish temporary recovery from a genuine withdrawal", () => {
+  const storage = new Map<string, string>();
+  const adapter = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key)
+  };
+  const snapshots: string[] = [];
+  const unsubscribe = subscribeAnalyticsReadiness((snapshot) => {
+    snapshots.push(`${snapshot.ready}:${snapshot.reason}`);
+  });
+
+  clearAnalyticsServerReady("withdrawn", adapter);
+  markAnalyticsServerReady(adapter);
+  clearAnalyticsServerReady("temporary", adapter);
+  unsubscribe();
+
+  assert.deepEqual(snapshots.slice(-3), ["false:withdrawn", "true:ready", "false:temporary"]);
+  assert.deepEqual(getAnalyticsReadinessSnapshot(), { ready: false, reason: "temporary" });
+});
+
 test("consent status reads only the public state/version contract", async () => {
   const status = await readAnalyticsConsentStatus(async () => new Response(JSON.stringify({
     consent: "analytics",
@@ -464,7 +487,9 @@ test("cookie settings dialog keeps labelled focus-management markup", () => {
   const routeTrackerSource = readFileSync("components/AnalyticsRouteTracker.tsx", "utf8");
   assert.match(routeTrackerSource, /usePathname\(\)/);
   assert.match(routeTrackerSource, /useSearchParams\(\)/);
-  assert.match(routeTrackerSource, /isAnalyticsServerReady\(\)/);
+  assert.match(routeTrackerSource, /subscribeAnalyticsReadiness/);
+  assert.match(routeTrackerSource, /getAnalyticsReadinessSnapshot/);
+  assert.doesNotMatch(routeTrackerSource, /localStorage/);
   assert.doesNotMatch(source, /trackCurrentPage/);
 
   const layoutSource = readFileSync("app/layout.tsx", "utf8");
