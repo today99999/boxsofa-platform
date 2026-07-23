@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ANALYTICS_CONSENT_KEY,
+  ANALYTICS_CONSENT_REVALIDATE_EVENT,
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
+  enqueueConsentMutation,
   getOrCreateVisitorId,
   markAnalyticsServerReady,
   markConsentSynchronized,
+  readStoredAnalyticsConsent,
   OPEN_COOKIE_SETTINGS_EVENT,
   readAnalyticsConsentStatus,
   synchronizeAnalyticsConsent,
@@ -29,13 +32,43 @@ export function CookieConsent() {
   const necessaryButtonRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const consentSyncGenerationRef = useRef(0);
+  const userOperationRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     let retryTimer: number | undefined;
-    const syncGeneration = consentSyncGenerationRef.current;
+
+    const synchronize = async (saved: AnalyticsConsent, syncGeneration: number) => {
+      if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+      const result = await synchronizeAnalyticsConsent({
+        visitorId: getOrCreateVisitorId(),
+        consent: saved,
+        version: CONSENT_VERSION,
+        getStatus: () => readAnalyticsConsentStatus(),
+        persist: () => persistConsent(saved)
+      });
+      if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
+      if (result === "unavailable") {
+        clearAnalyticsServerReady();
+        setConsent(saved);
+        retryTimer = window.setTimeout(() => void synchronize(saved, syncGeneration), 60_000);
+        return;
+      }
+      applyConfirmedConsent(saved);
+    };
+
+    const synchronizeStoredConsent = () => {
+      const saved = readStoredAnalyticsConsent(localStorage);
+      if (!saved) {
+        clearAnalyticsServerReady();
+        setConsent(null);
+        return;
+      }
+      void synchronize(saved, consentSyncGenerationRef.current);
+    };
 
     function openSettings() {
+      consentSyncGenerationRef.current += 1;
       const activeElement = document.activeElement;
       restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
       setSaveError(false);
@@ -44,33 +77,14 @@ export function CookieConsent() {
     }
 
     window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
-    const saved = localStorage.getItem(ANALYTICS_CONSENT_KEY) as AnalyticsConsent | null;
-    if (saved) {
-      const synchronize = async () => {
-        if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
-        const result = await synchronizeAnalyticsConsent({
-          visitorId: getOrCreateVisitorId(),
-          consent: saved,
-          version: CONSENT_VERSION,
-          getStatus: () => readAnalyticsConsentStatus(),
-          persist: () => persistConsent(saved)
-        });
-        if (cancelled || syncGeneration !== consentSyncGenerationRef.current) return;
-        if (result === "unavailable") {
-          clearAnalyticsServerReady();
-          setConsent(saved);
-          retryTimer = window.setTimeout(() => void synchronize(), 60_000);
-          return;
-        }
-        applyConfirmedConsent(saved);
-      };
-      void synchronize();
-    }
+    window.addEventListener(ANALYTICS_CONSENT_REVALIDATE_EVENT, synchronizeStoredConsent);
+    synchronizeStoredConsent();
 
     return () => {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
+      window.removeEventListener(ANALYTICS_CONSENT_REVALIDATE_EVENT, synchronizeStoredConsent);
     };
   }, []);
 
@@ -105,7 +119,9 @@ export function CookieConsent() {
   async function saveConsent(nextConsent: AnalyticsConsent) {
     // A user decision always wins over a pending mount-time resynchronization.
     consentSyncGenerationRef.current += 1;
+    const operation = ++userOperationRef.current;
     const persisted = await persistConsent(nextConsent);
+    if (operation !== userOperationRef.current) return;
     if (!persisted) {
       setSaveError(true);
       return;
@@ -123,17 +139,20 @@ export function CookieConsent() {
   }
 
   async function persistConsent(nextConsent: AnalyticsConsent): Promise<boolean> {
-    const response = await fetch("/api/analytics/consent", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        visitorId: getOrCreateVisitorId(),
-        consent: nextConsent,
-        locale: language,
-        version: CONSENT_VERSION
-      })
-    }).catch(() => null);
-    return response?.ok === true;
+    const visitorId = getOrCreateVisitorId();
+    return enqueueConsentMutation(visitorId, async () => {
+      const response = await fetch("/api/analytics/consent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          visitorId,
+          consent: nextConsent,
+          locale: language,
+          version: CONSENT_VERSION
+        })
+      }).catch(() => null);
+      return response?.ok === true;
+    });
   }
 
   function applyConfirmedConsent(nextConsent: AnalyticsConsent) {

@@ -3,22 +3,51 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   ANALYTICS_ATTRIBUTION_KEY,
+  ANALYTICS_CONSENT_KEY,
   ANALYTICS_CONSENT_SYNC_KEY,
   ANALYTICS_EVENTS_KEY,
   ANALYTICS_QUEUE_KEY,
   ANALYTICS_SESSION_KEY,
   ANALYTICS_VISITOR_KEY,
+  applyAnalyticsDeliveryDisposition,
+  analyticsDeliveryBackoffMs,
+  classifyAnalyticsDeliveryStatus,
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
   consentSyncMarker,
+  enqueueConsentMutation,
   inferDeviceType,
   isAnalyticsServerReady,
   markAnalyticsServerReady,
   readAnalyticsConsentStatus,
+  readStoredAnalyticsConsent,
   shouldSynchronizeConsent,
   sanitizeReferrerDomain,
   synchronizeAnalyticsConsent
 } from "./analytics.ts";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function queuedEvent(eventKey: string) {
+  return {
+    id: eventKey,
+    eventKey,
+    sessionId: "session",
+    type: "page_view" as const,
+    createdAt: "2026-07-23T00:00:00.000Z",
+    path: "/",
+    source: "direct",
+    visitorId: "visitor"
+  };
+}
 
 test("analytics helpers normalize device and referrer", () => {
   assert.equal(inferDeviceType(390), "mobile");
@@ -139,6 +168,71 @@ test("consent status reads only the public state/version contract", async () => 
   assert.equal(unavailable, null);
 });
 
+test("consent mutations serialize background sync, rapid choices, and failed operations", async () => {
+  const first = deferred<string>();
+  const calls: string[] = [];
+  const background = enqueueConsentMutation("visitor", async () => {
+    calls.push("analytics");
+    return first.promise;
+  });
+  const withdrawal = enqueueConsentMutation("visitor", async () => {
+    calls.push("necessary");
+    return "necessary";
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, ["analytics"]);
+  first.resolve("analytics");
+  assert.equal(await background, "analytics");
+  assert.equal(await withdrawal, "necessary");
+  assert.deepEqual(calls, ["analytics", "necessary"]);
+
+  const rapid: string[] = [];
+  await Promise.all([
+    enqueueConsentMutation("rapid", async () => { rapid.push("analytics"); return "analytics"; }),
+    enqueueConsentMutation("rapid", async () => { rapid.push("necessary"); return "necessary"; }),
+    enqueueConsentMutation("rapid", async () => { rapid.push("analytics-final"); return "analytics-final"; })
+  ]);
+  assert.deepEqual(rapid, ["analytics", "necessary", "analytics-final"]);
+
+  await assert.rejects(enqueueConsentMutation("failure", async () => { throw new Error("offline"); }));
+  assert.equal(await enqueueConsentMutation("failure", async () => "latest-success"), "latest-success");
+});
+
+test("invalid local consent is removed and only valid choices survive runtime validation", () => {
+  const values = new Map<string, string>([[ANALYTICS_CONSENT_KEY, "corrupted"]]);
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    removeItem: (key: string) => values.delete(key)
+  };
+  assert.equal(readStoredAnalyticsConsent(storage), null);
+  assert.equal(values.has(ANALYTICS_CONSENT_KEY), false);
+  values.set(ANALYTICS_CONSENT_KEY, "analytics");
+  assert.equal(readStoredAnalyticsConsent(storage), "analytics");
+});
+
+test("event delivery drops permanent poison entries and backs off retryable failures", () => {
+  const first = queuedEvent("first");
+  const next = queuedEvent("next");
+  assert.equal(classifyAnalyticsDeliveryStatus(204), "success");
+  assert.equal(classifyAnalyticsDeliveryStatus(400), "drop");
+  assert.equal(classifyAnalyticsDeliveryStatus(403), "revalidate");
+  assert.equal(classifyAnalyticsDeliveryStatus(429), "retry");
+  assert.equal(classifyAnalyticsDeliveryStatus(500), "retry");
+  assert.equal(classifyAnalyticsDeliveryStatus(null), "retry");
+  assert.deepEqual(applyAnalyticsDeliveryDisposition([first, next], "first", "drop"), [next]);
+  assert.deepEqual(applyAnalyticsDeliveryDisposition([first, next], "first", "revalidate"), [next]);
+  const retry = applyAnalyticsDeliveryDisposition([first, next], "first", "retry", 1_000);
+  assert.equal(retry[0].deliveryAttempts, 1);
+  assert.equal(retry[0].nextAttemptAt, 1_000 + analyticsDeliveryBackoffMs(1));
+  assert.equal(analyticsDeliveryBackoffMs(1), 1_000);
+  assert.equal(analyticsDeliveryBackoffMs(20), 60_000);
+  let exhausted = [first];
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    exhausted = applyAnalyticsDeliveryDisposition(exhausted, "first", "retry", 1_000) as typeof exhausted;
+  }
+  assert.deepEqual(exhausted, []);
+});
+
 test("cookie settings dialog keeps labelled focus-management markup", () => {
   const source = readFileSync("components/CookieConsent.tsx", "utf8");
 
@@ -150,6 +244,10 @@ test("cookie settings dialog keeps labelled focus-management markup", () => {
   assert.match(source, /const target = restoreFocusRef\.current/);
   assert.match(source, /target\.focus\(\)/);
   assert.match(source, /consentSyncGenerationRef\.current \+= 1/);
+  assert.match(source, /const operation = \+\+userOperationRef\.current/);
+  assert.match(source, /if \(operation !== userOperationRef\.current\) return;/);
+  assert.match(source, /enqueueConsentMutation\(visitorId/);
+  assert.match(source, /readStoredAnalyticsConsent\(localStorage\)/);
   assert.match(source, /markAnalyticsServerReady\(\);/);
 
   const analyticsSource = readFileSync("lib/analytics.ts", "utf8");

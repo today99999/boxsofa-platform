@@ -26,9 +26,11 @@ export type StoredAttribution = {
   occurredAt: string;
 };
 
-type QueuedAnalyticsEvent = AnalyticsEvent & {
+export type QueuedAnalyticsEvent = AnalyticsEvent & {
   eventKey: string;
   sessionId: string;
+  deliveryAttempts?: number;
+  nextAttemptAt?: number;
 };
 
 export const ANALYTICS_CONSENT_KEY = "boxsofa_cookie_consent_v1";
@@ -40,10 +42,16 @@ export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
 export const ANALYTICS_CONSENT_SYNC_KEY = "boxsofa_cookie_consent_server_sync_v1";
 export const ANALYTICS_SERVER_READY_KEY = "boxsofa_analytics_server_ready_v1";
 export const OPEN_COOKIE_SETTINGS_EVENT = "boxsofa-open-cookie-settings";
+export const ANALYTICS_CONSENT_REVALIDATE_EVENT = "boxsofa-analytics-revalidate-consent";
 
 const MAX_QUEUE_SIZE = 200;
 const MAX_HISTORY_SIZE = 1000;
+const MAX_DELIVERY_ATTEMPTS = 6;
+const MAX_DELIVERY_BACKOFF_MS = 60_000;
 const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>>();
+const consentMutationQueues = new Map<string, Promise<void>>();
+let queueFlushInFlight: Promise<void> | null = null;
+let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 export type AnalyticsConsentServerStatus = {
   consent: AnalyticsConsent | null;
@@ -51,6 +59,32 @@ export type AnalyticsConsentServerStatus = {
 };
 
 export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavailable";
+
+export type AnalyticsDeliveryDisposition = "success" | "drop" | "retry" | "revalidate";
+
+export function isAnalyticsConsent(value: unknown): value is AnalyticsConsent {
+  return value === "necessary" || value === "analytics";
+}
+
+export function readStoredAnalyticsConsent(storage: Pick<Storage, "getItem" | "removeItem">): AnalyticsConsent | null {
+  const stored = storage.getItem(ANALYTICS_CONSENT_KEY);
+  if (isAnalyticsConsent(stored)) return stored;
+  if (stored !== null) storage.removeItem(ANALYTICS_CONSENT_KEY);
+  return null;
+}
+
+// Every mutation for one visitor shares a tail promise. Rejections are absorbed by
+// the tail so a failed earlier request cannot prevent the latest choice from writing.
+export function enqueueConsentMutation<T>(visitorId: string, mutation: () => Promise<T>): Promise<T> {
+  const previous = consentMutationQueues.get(visitorId) ?? Promise.resolve();
+  const operation = previous.catch(() => undefined).then(mutation);
+  const tail = operation.then(() => undefined, () => undefined);
+  consentMutationQueues.set(visitorId, tail);
+  void tail.finally(() => {
+    if (consentMutationQueues.get(visitorId) === tail) consentMutationQueues.delete(visitorId);
+  });
+  return operation;
+}
 
 export function inferTrafficSource(url: URL, referrer = "") {
   const utmSource = url.searchParams.get("utm_source");
@@ -198,6 +232,35 @@ export function openCookieSettings() {
   window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT));
 }
 
+export function classifyAnalyticsDeliveryStatus(status: number | null): AnalyticsDeliveryDisposition {
+  if (status !== null && status >= 200 && status < 300) return "success";
+  if (status === 403) return "revalidate";
+  if (status !== null && status >= 400 && status < 500 && status !== 429) return "drop";
+  return "retry";
+}
+
+export function analyticsDeliveryBackoffMs(attempts: number) {
+  return Math.min(MAX_DELIVERY_BACKOFF_MS, 1_000 * 2 ** Math.min(Math.max(attempts - 1, 0), 6));
+}
+
+export function applyAnalyticsDeliveryDisposition(
+  queue: QueuedAnalyticsEvent[],
+  eventKey: string,
+  disposition: AnalyticsDeliveryDisposition,
+  now = Date.now()
+) {
+  const current = queue.find((event) => event.eventKey === eventKey);
+  if (!current || disposition === "success" || disposition === "drop" || disposition === "revalidate") {
+    return queue.filter((event) => event.eventKey !== eventKey);
+  }
+
+  const attempts = (current.deliveryAttempts ?? 0) + 1;
+  if (attempts >= MAX_DELIVERY_ATTEMPTS) return queue.filter((event) => event.eventKey !== eventKey);
+  return queue.map((event) => event.eventKey === eventKey
+    ? { ...event, deliveryAttempts: attempts, nextAttemptAt: now + analyticsDeliveryBackoffMs(attempts) }
+    : event);
+}
+
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {
   if (localStorage.getItem(ANALYTICS_CONSENT_KEY) !== "analytics") return;
   if (!isAnalyticsServerReady()) return;
@@ -226,7 +289,7 @@ export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEv
   writeQueue([queuedEvent, ...readQueue()].slice(0, MAX_QUEUE_SIZE));
   writeAttribution(event);
   window.dispatchEvent(new Event("boxsofa-analytics-updated"));
-  void flushQueue();
+  void flushAnalyticsQueue();
 }
 
 function getSessionId() {
@@ -237,38 +300,63 @@ function getSessionId() {
   return next;
 }
 
+export function flushAnalyticsQueue() {
+  if (!queueFlushInFlight) {
+    queueFlushInFlight = flushQueue().finally(() => { queueFlushInFlight = null; });
+  }
+  return queueFlushInFlight;
+}
+
 async function flushQueue() {
+  if (!isAnalyticsServerReady()) return;
   for (const event of readQueue()) {
-    try {
-      await deliverEvent(event);
-      removeFromQueue(event.eventKey);
-    } catch {
+    if ((event.nextAttemptAt ?? 0) > Date.now()) continue;
+    const disposition = await deliverEvent(event);
+    writeQueue(applyAnalyticsDeliveryDisposition(readQueue(), event.eventKey, disposition));
+    if (disposition === "revalidate") {
+      clearAnalyticsServerReady();
+      window.dispatchEvent(new Event(ANALYTICS_CONSENT_REVALIDATE_EVENT));
       return;
     }
   }
+  scheduleQueueRetry();
 }
 
-async function deliverEvent(event: QueuedAnalyticsEvent) {
-  const response = await fetch("/api/analytics/events", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      eventKey: event.eventKey,
-      type: event.type,
-      createdAt: event.createdAt,
-      visitorId: event.visitorId,
-      sessionId: event.sessionId,
-      path: event.path,
-      deviceType: inferDeviceType(window.innerWidth),
-      productId: event.productId,
-      productName: event.productName,
-      valueEur: event.valueEur
-    }),
-    keepalive: true
-  });
+function scheduleQueueRetry() {
+  if (queueRetryTimer !== null) return;
+  const nextAttemptAt = readQueue()
+    .map((event) => event.nextAttemptAt ?? 0)
+    .filter((value) => value > Date.now())
+    .sort((left, right) => left - right)[0];
+  if (!nextAttemptAt) return;
+  queueRetryTimer = setTimeout(() => {
+    queueRetryTimer = null;
+    void flushAnalyticsQueue();
+  }, Math.max(0, nextAttemptAt - Date.now()));
+}
 
-  if (!response.ok) {
-    throw new Error(`Analytics delivery failed: ${response.status}`);
+async function deliverEvent(event: QueuedAnalyticsEvent): Promise<AnalyticsDeliveryDisposition> {
+  try {
+    const response = await fetch("/api/analytics/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventKey: event.eventKey,
+        type: event.type,
+        createdAt: event.createdAt,
+        visitorId: event.visitorId,
+        sessionId: event.sessionId,
+        path: event.path,
+        deviceType: inferDeviceType(window.innerWidth),
+        productId: event.productId,
+        productName: event.productName,
+        valueEur: event.valueEur
+      }),
+      keepalive: true
+    });
+    return classifyAnalyticsDeliveryStatus(response.status);
+  } catch {
+    return "retry";
   }
 }
 
@@ -287,10 +375,6 @@ function writeAttribution(event: AnalyticsEvent) {
 
 function readQueue(): QueuedAnalyticsEvent[] {
   return readStorageArray<QueuedAnalyticsEvent>(ANALYTICS_QUEUE_KEY);
-}
-
-function removeFromQueue(eventKey: string) {
-  writeQueue(readQueue().filter((event) => event.eventKey !== eventKey));
 }
 
 function writeQueue(events: QueuedAnalyticsEvent[]) {
