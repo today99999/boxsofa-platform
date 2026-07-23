@@ -16,7 +16,8 @@ import {
   registerAnalyticsConsentRecoveryHandler,
   resetAnalyticsConsentRecovery,
   synchronizeAnalyticsConsent,
-  type AnalyticsConsent
+  type AnalyticsConsent,
+  type AnalyticsConsentRecoveryOutcome
 } from "@/lib/analytics";
 import { useTranslation } from "@/components/useTranslation";
 
@@ -39,7 +40,7 @@ export function CookieConsent() {
     let retryTimer: number | undefined;
     // A prior session marker cannot authorize tracking until this mount has
     // confirmed the HttpOnly server consent state again.
-    clearAnalyticsServerReady("temporary");
+    clearAnalyticsServerReady("initial");
 
     const synchronize = async (saved: AnalyticsConsent, syncGeneration: number) => {
       const intent = userOperationRef.current;
@@ -84,11 +85,10 @@ export function CookieConsent() {
       setConsent(null);
     }
 
-    const unregisterRecoveryHandler = registerAnalyticsConsentRecoveryHandler(async () => {
+    const unregisterRecoveryHandler = registerAnalyticsConsentRecoveryHandler(async (): Promise<AnalyticsConsentRecoveryOutcome> => {
       const saved = readStoredAnalyticsConsent(localStorage);
       if (saved !== "analytics") {
-        clearAnalyticsServerReady("withdrawn");
-        return false;
+        return "withdrawn";
       }
 
       const recoveryGeneration = consentSyncGenerationRef.current;
@@ -99,16 +99,14 @@ export function CookieConsent() {
         && readStoredAnalyticsConsent(localStorage) === "analytics";
       const persisted = await persistConsent("analytics", isCurrent);
       if (!persisted || !isCurrent()) {
-        clearAnalyticsServerReady("temporary");
-        return false;
+        return readStoredAnalyticsConsent(localStorage) === "analytics" ? "temporary" : "withdrawn";
       }
 
       markConsentSynchronized(localStorage, "analytics", CONSENT_VERSION);
       setConsent("analytics");
-      markAnalyticsServerReady();
       // Deliberately do not track the current page here. The 403 coordinator
       // retains and retries its original event after the forced mutation.
-      return true;
+      return "confirmed";
     });
 
     window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);

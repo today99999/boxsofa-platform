@@ -25,16 +25,20 @@ import {
   getAnalyticsReadinessSnapshot,
   isAnalyticsServerReady,
   markAnalyticsServerReady,
+  revalidateAnalyticsConsentAfterForbidden,
   readAnalyticsConsentStatus,
   readStoredAnalyticsConsent,
   shouldSynchronizeConsent,
   sanitizeReferrerDomain,
   subscribeAnalyticsReadiness,
   synchronizeAnalyticsConsent,
+  registerAnalyticsConsentRecoveryHandler,
+  resetAnalyticsConsentRecovery,
   trackBeginCheckoutOnce,
   AnalyticsRequestTimeoutError,
   type AnalyticsConsent
 } from "./analytics.ts";
+import { createNavigationTrackingCoordinator } from "./analytics-route-tracking.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -67,10 +71,10 @@ test("403 recovery shares one forced mutation, retries only the retained event, 
   const coordinator = createAnalyticsConsentRecoveryCoordinator({
     forceConsentMutation: async () => {
       forcedMutations += 1;
-      return mutation.promise;
+      return await mutation.promise ? "confirmed" : "temporary";
     },
     retryRetainedEvents: (event) => recovered.push(event.eventKey),
-    stopTracking: () => stopped.push("stop"),
+    applyOutcome: (outcome) => stopped.push(outcome),
     maxAttempts: 2
   });
 
@@ -84,18 +88,18 @@ test("403 recovery shares one forced mutation, retries only the retained event, 
   assert.deepEqual(await Promise.all([firstRecovery, secondRecovery]), ["recovered", "recovered"]);
   assert.deepEqual(recovered, ["original-403-event"]);
   assert.equal(original.eventKey, "original-403-event");
-  assert.equal(stopped.length, 0);
+  assert.deepEqual(stopped, ["confirmed"]);
 
   const capped = createAnalyticsConsentRecoveryCoordinator({
-    forceConsentMutation: async () => false,
+    forceConsentMutation: async () => "withdrawn",
     retryRetainedEvents: (event) => recovered.push(event.eventKey),
-    stopTracking: () => stopped.push("stop"),
+    applyOutcome: (outcome) => stopped.push(outcome),
     maxAttempts: 2
   });
   assert.equal(await capped.recover(original), "stopped");
   assert.equal(await capped.recover(original), "stopped");
   assert.equal(await capped.recover(original), "exhausted");
-  assert.deepEqual(stopped, ["stop", "stop", "stop"]);
+  assert.deepEqual(stopped, ["confirmed", "withdrawn", "withdrawn", "temporary"]);
 });
 
 test("analytics helpers normalize device and referrer", () => {
@@ -179,6 +183,85 @@ test("concurrent consent mounts share one status and POST chain, but a transient
   assert.equal(retried, "resubmitted");
   assert.equal(statusCalls, 2);
   assert.equal(posts, 1);
+});
+
+test("a stale Strict Mode mount never poisons a current caller sharing its consent flight", async () => {
+  const status = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  let statusCalls = 0;
+  let callerACurrent = true;
+  let callerBCurrent = true;
+  const input = {
+    visitorId: "visitor-strict-mode",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return status.promise;
+    },
+    persist: async () => true
+  };
+
+  const callerA = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerACurrent });
+  callerACurrent = false;
+  const callerB = synchronizeAnalyticsConsent({ ...input, isCurrent: () => callerBCurrent });
+  status.resolve({ consent: "analytics", version: "2026-07-23" });
+
+  assert.equal(await callerA, "unavailable");
+  assert.equal(await callerB, "matched");
+  assert.equal(statusCalls, 1);
+  callerBCurrent = false;
+});
+
+test("synchronization, recovery readiness, and route tracking preserve withdrawal and re-opt-in lifecycle", async () => {
+  const storage = new Map<string, string>();
+  const adapter = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key)
+  };
+  const events: string[] = [];
+  const tracker = createNavigationTrackingCoordinator((type) => events.push(type));
+  const unsubscribe = subscribeAnalyticsReadiness((snapshot) => {
+    tracker.reconcile("/product/chameleon-mario-sofa-01", "", snapshot);
+  });
+  const originalSessionStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: adapter });
+
+  try {
+    clearAnalyticsServerReady("initial", adapter);
+    const confirmed = await synchronizeAnalyticsConsent({
+      visitorId: "visitor-lifecycle",
+      consent: "analytics",
+      version: "2026-07-23",
+      getStatus: async () => ({ consent: "analytics", version: "2026-07-23" }),
+      persist: async () => false
+    });
+    assert.equal(confirmed, "matched");
+    markAnalyticsServerReady(adapter);
+    assert.deepEqual(events, ["page_view", "product_view"]);
+
+    clearAnalyticsServerReady("temporary", adapter);
+    const unregisterConfirmed = registerAnalyticsConsentRecoveryHandler(async () => "confirmed");
+    resetAnalyticsConsentRecovery();
+    assert.equal(await revalidateAnalyticsConsentAfterForbidden(queuedEvent("retain")), "recovered");
+    unregisterConfirmed();
+    assert.deepEqual(events, ["page_view", "product_view"]);
+
+    clearAnalyticsServerReady("temporary", adapter);
+    const unregisterWithdrawn = registerAnalyticsConsentRecoveryHandler(async () => "withdrawn");
+    resetAnalyticsConsentRecovery();
+    assert.equal(await revalidateAnalyticsConsentAfterForbidden(queuedEvent("withdraw")), "stopped");
+    unregisterWithdrawn();
+    assert.deepEqual(getAnalyticsReadinessSnapshot(), { ready: false, reason: "withdrawn" });
+
+    markAnalyticsServerReady(adapter);
+    assert.deepEqual(events, ["page_view", "product_view", "page_view", "product_view"]);
+  } finally {
+    unsubscribe();
+    clearAnalyticsServerReady("initial", adapter);
+    if (originalSessionStorage) Object.defineProperty(globalThis, "sessionStorage", originalSessionStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+  }
 });
 
 test("a delayed background status can never overwrite a newer explicit consent intent", async () => {

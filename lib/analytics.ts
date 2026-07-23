@@ -51,10 +51,26 @@ const MAX_HISTORY_SIZE = 1000;
 const MAX_DELIVERY_ATTEMPTS = 6;
 const MAX_DELIVERY_BACKOFF_MS = 60_000;
 export const ANALYTICS_REQUEST_TIMEOUT_MS = 12_000;
-const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>>();
+type ConsentSynchronizationInput = {
+  visitorId: string;
+  consent: AnalyticsConsent;
+  version: string;
+  getStatus: () => Promise<AnalyticsConsentServerStatus | null>;
+  persist: () => Promise<boolean>;
+  isCurrent?: () => boolean;
+};
+
+type ConsentSynchronizationSubscriber = Pick<ConsentSynchronizationInput, "persist" | "isCurrent">;
+
+type ConsentSynchronizationFlight = {
+  subscribers: ConsentSynchronizationSubscriber[];
+  result: Promise<ConsentSynchronizationResult>;
+};
+
+const consentSyncFlights = new Map<string, ConsentSynchronizationFlight>();
 const consentMutationQueues = new Map<string, Promise<void>>();
 let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
-let consentRecoveryHandler: (() => Promise<boolean>) | null = null;
+let consentRecoveryHandler: (() => Promise<AnalyticsConsentRecoveryOutcome>) | null = null;
 
 export type AnalyticsConsentServerStatus = {
   consent: AnalyticsConsent | null;
@@ -72,11 +88,12 @@ export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavaila
 
 export type AnalyticsDeliveryDisposition = "success" | "drop" | "retry" | "revalidate";
 export type AnalyticsConsentRecoveryResult = "recovered" | "stopped" | "exhausted";
+export type AnalyticsConsentRecoveryOutcome = "confirmed" | "withdrawn" | "temporary";
 
 type AnalyticsConsentRecoveryCoordinatorOptions = {
-  forceConsentMutation: () => Promise<boolean>;
+  forceConsentMutation: () => Promise<AnalyticsConsentRecoveryOutcome>;
   retryRetainedEvents: (event: Pick<QueuedAnalyticsEvent, "eventKey">) => void;
-  stopTracking: () => void;
+  applyOutcome: (outcome: AnalyticsConsentRecoveryOutcome) => void;
   maxAttempts?: number;
 };
 
@@ -170,21 +187,22 @@ export function createAnalyticsConsentRecoveryCoordinator(options: AnalyticsCons
     recover(event: Pick<QueuedAnalyticsEvent, "eventKey">): Promise<AnalyticsConsentRecoveryResult> {
       if (flight) return flight;
       if (attempts >= maxAttempts) {
-        options.stopTracking();
+        options.applyOutcome("temporary");
         return Promise.resolve("exhausted");
       }
 
       attempts += 1;
       flight = (async () => {
         try {
-          if (!await options.forceConsentMutation()) {
-            options.stopTracking();
+          const outcome = await options.forceConsentMutation();
+          options.applyOutcome(outcome);
+          if (outcome !== "confirmed") {
             return "stopped" as const;
           }
           options.retryRetainedEvents(event);
           return "recovered" as const;
         } catch {
-          options.stopTracking();
+          options.applyOutcome("temporary");
           return "stopped" as const;
         } finally {
           flight = null;
@@ -199,15 +217,15 @@ export function createAnalyticsConsentRecoveryCoordinator(options: AnalyticsCons
 }
 
 const consentRecoveryCoordinator = createAnalyticsConsentRecoveryCoordinator({
-  forceConsentMutation: async () => consentRecoveryHandler ? consentRecoveryHandler() : false,
+  forceConsentMutation: async () => consentRecoveryHandler ? consentRecoveryHandler() : "temporary",
   retryRetainedEvents: () => { void flushAnalyticsQueue(); },
-  stopTracking: () => clearAnalyticsServerReady()
+  applyOutcome: applyAnalyticsConsentRecoveryOutcome
 });
 
 let analyticsReadinessSnapshot: AnalyticsReadinessSnapshot = { ready: false, reason: "initial" };
 const analyticsReadinessListeners = new Set<(snapshot: AnalyticsReadinessSnapshot) => void>();
 
-export function registerAnalyticsConsentRecoveryHandler(handler: () => Promise<boolean>) {
+export function registerAnalyticsConsentRecoveryHandler(handler: () => Promise<AnalyticsConsentRecoveryOutcome>) {
   consentRecoveryHandler = handler;
   return () => {
     if (consentRecoveryHandler === handler) consentRecoveryHandler = null;
@@ -220,6 +238,14 @@ export function revalidateAnalyticsConsentAfterForbidden(event: Pick<QueuedAnaly
 
 export function resetAnalyticsConsentRecovery() {
   consentRecoveryCoordinator.reset();
+}
+
+// Recovery code reports what it learned; this is the only layer that changes
+// readiness for a 403 recovery so a real withdrawal cannot be overwritten by a
+// generic temporary failure afterwards.
+export function applyAnalyticsConsentRecoveryOutcome(outcome: AnalyticsConsentRecoveryOutcome) {
+  if (outcome === "confirmed") markAnalyticsServerReady();
+  else clearAnalyticsServerReady(outcome);
 }
 
 export function inferTrafficSource(url: URL, referrer = "") {
@@ -339,38 +365,37 @@ export async function readAnalyticsConsentStatus(
   }
 }
 
-export function synchronizeAnalyticsConsent(input: {
-  visitorId: string;
-  consent: AnalyticsConsent;
-  version: string;
-  getStatus: () => Promise<AnalyticsConsentServerStatus | null>;
-  persist: () => Promise<boolean>;
-  isCurrent?: () => boolean;
-}): Promise<ConsentSynchronizationResult> {
+export function synchronizeAnalyticsConsent(input: ConsentSynchronizationInput): Promise<ConsentSynchronizationResult> {
   const key = `${input.visitorId}:${input.consent}:${input.version}`;
   const existing = consentSyncFlights.get(key);
-  if (existing) return existing;
+  if (existing) {
+    existing.subscribers.push({ persist: input.persist, isCurrent: input.isCurrent });
+    return existing.result.then((result) => input.isCurrent && !input.isCurrent() ? "unavailable" : result);
+  }
+
+  const subscribers: ConsentSynchronizationSubscriber[] = [{ persist: input.persist, isCurrent: input.isCurrent }];
 
   const flight = (async (): Promise<ConsentSynchronizationResult> => {
     try {
-      if (input.isCurrent && !input.isCurrent()) return "unavailable";
       const status = await input.getStatus();
-      if (input.isCurrent && !input.isCurrent()) return "unavailable";
       if (!status) return "unavailable";
       if (status.consent === input.consent && status.version === input.version) return "matched";
-      // The status read and conditional POST are separated by network time. Re-check
-      // immediately before enqueueing so an explicit withdrawal always wins.
-      if (input.isCurrent && !input.isCurrent()) return "unavailable";
-      return await input.persist() ? "resubmitted" : "unavailable";
+      // Network work is shared, but component lifetime is deliberately not. Choose
+      // the newest still-current subscriber for a needed mutation, then let every
+      // caller decide whether it may apply the shared result after awaiting it.
+      const currentSubscriber = [...subscribers].reverse().find((subscriber) => !subscriber.isCurrent || subscriber.isCurrent());
+      if (!currentSubscriber) return "unavailable";
+      return await currentSubscriber.persist() ? "resubmitted" : "unavailable";
     } catch {
       return "unavailable";
     }
   })();
-  consentSyncFlights.set(key, flight);
+  const entry: ConsentSynchronizationFlight = { subscribers, result: flight };
+  consentSyncFlights.set(key, entry);
   void flight.finally(() => {
-    if (consentSyncFlights.get(key) === flight) consentSyncFlights.delete(key);
+    if (consentSyncFlights.get(key) === entry) consentSyncFlights.delete(key);
   });
-  return flight;
+  return flight.then((result) => input.isCurrent && !input.isCurrent() ? "unavailable" : result);
 }
 
 export function consentSyncMarker(consent: AnalyticsConsent, version: string) {
