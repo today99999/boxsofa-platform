@@ -211,10 +211,9 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           />
         </div>
         <section className="product-summary">
-          <p><TranslatedText id="home" /> / <CatalogText text={product.name} kind="name" /></p>
+          <p className="product-breadcrumb"><TranslatedText id="home" /> / <CatalogText text={product.name} kind="name" /></p>
           <h1><CatalogText text={product.name} kind="name" /></h1>
-          <p><CatalogText text={product.description} kind="description" /></p>
-          <p><TranslatedText id="shippingAndPaymentNote" /></p>
+          <p className="product-description"><CatalogText text={product.description} kind="description" /></p>
           <div className="product-trust-strip" aria-label={`Why buy ${publicName} from BoxSofa`}>
             <span>Secure Stripe card payment</span>
             <span>14-day return window after delivery</span>
