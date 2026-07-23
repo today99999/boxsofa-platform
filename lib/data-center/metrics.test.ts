@@ -43,6 +43,35 @@ test("attribution prefers UTM then non-direct referrer", () => {
   });
 });
 
+test("Google country domains are recognized by strict hostname boundaries", () => {
+  for (const referrer of [
+    "https://google.com/search?q=boxsofa",
+    "https://www.google.com/search?q=boxsofa",
+    "https://google.co.uk/search?q=boxsofa",
+    "https://www.google.de/search?q=boxsofa",
+    "https://google.com.au/search?q=boxsofa"
+  ]) {
+    assert.deepEqual(resolveAttribution({ referrer }), {
+      source: "google",
+      method: "referrer"
+    });
+  }
+});
+
+test("Google lookalike and malformed referrers fall back safely", () => {
+  for (const referrer of [
+    "https://google.evil.test/search?q=boxsofa",
+    "https://www.google.fake/search?q=boxsofa",
+    "https://google.com.evil.test/search?q=boxsofa",
+    "not a valid URL"
+  ]) {
+    assert.deepEqual(resolveAttribution({ referrer }), {
+      source: "referral",
+      method: "inferred"
+    });
+  }
+});
+
 test("a direct touch carries forward its prior non-direct attribution", () => {
   assert.deepEqual(
     resolveAttribution({

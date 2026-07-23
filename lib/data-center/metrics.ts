@@ -47,8 +47,7 @@ const REFERRER_SOURCES: Array<{ source: string; hosts: string[] }> = [
   { source: "instagram", hosts: ["instagram.com"] },
   { source: "facebook", hosts: ["facebook.com", "fb.com"] },
   { source: "youtube", hosts: ["youtube.com", "youtu.be"] },
-  { source: "pinterest", hosts: ["pinterest.com"] },
-  { source: "google", hosts: ["google."] }
+  { source: "pinterest", hosts: ["pinterest.com"] }
 ];
 
 export function calculateCommerceMetrics(input: CommerceMetricInput): CommerceMetrics {
@@ -108,6 +107,10 @@ function resolveReferrerSource(referrer: string | null | undefined): string | nu
     return null;
   }
 
+  if (isGoogleSearchHost(host)) {
+    return "google";
+  }
+
   for (const { source, hosts } of REFERRER_SOURCES) {
     if (hosts.some((candidate) => matchesReferrerHost(host, candidate))) {
       return source;
@@ -135,6 +138,28 @@ function matchesReferrerHost(host: string, candidate: string): boolean {
   }
 
   return host === candidate || host.endsWith(`.${candidate}`);
+}
+
+function isGoogleSearchHost(host: string): boolean {
+  const labels = host.split(".");
+  if (labels[0] === "www") {
+    labels.shift();
+  }
+
+  if (labels[0] !== "google") {
+    return false;
+  }
+
+  const suffix = labels.slice(1);
+  if (suffix.length === 1) {
+    return suffix[0] === "com" || isCountryCodeTld(suffix[0]);
+  }
+
+  return suffix.length === 2 && ["co", "com"].includes(suffix[0]) && isCountryCodeTld(suffix[1]);
+}
+
+function isCountryCodeTld(label: string | undefined): boolean {
+  return Boolean(label && /^[a-z]{2}$/.test(label));
 }
 
 function hasReferrer(referrer: string | null | undefined): boolean {
