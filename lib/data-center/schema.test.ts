@@ -22,6 +22,10 @@ const analyticsSecurityMigration = readFileSync(
   new URL("../../supabase/migrations/202607230005_secure_analytics_attribution_and_maintenance.sql", import.meta.url),
   "utf8"
 );
+const consentIntentMigration = readFileSync(
+  new URL("../../supabase/migrations/202607230006_database_ordered_consent_intents.sql", import.meta.url),
+  "utf8"
+);
 const bootstrapSchema = readFileSync(
   new URL("../../supabase/schema.sql", import.meta.url),
   "utf8"
@@ -149,6 +153,48 @@ test("bootstrap schema includes the hardened analytics ingestion contract", () =
     "create or replace function public.ingest_analytics_event",
     "grant execute on function public.ingest_analytics_event",
     "to service_role"
+  ]) {
+    assert.match(
+      bootstrapSchema.toLowerCase(),
+      new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    );
+  }
+});
+
+test("database-ordered consent intents are one-time, visitor-bound, and service-only", () => {
+  for (const contract of [
+    "create table if not exists public.analytics_consent_intents",
+    "intent_revision bigint not null default nextval('public.analytics_consent_intent_revision_seq'::regclass)",
+    "consumed_at timestamptz",
+    "expires_at timestamptz not null",
+    "add column if not exists intent_revision bigint",
+    "row_number() over (order by revision, created_at, id)",
+    "create or replace function public.issue_analytics_consent_intent",
+    "create or replace function public.record_analytics_consent",
+    "pg_advisory_xact_lock(hashtextextended(p_visitor_id, 0))",
+    "intent_revision <= coalesce(v_current_intent_revision, 0)",
+    "consumed_at is not null",
+    "revoke all on function public.issue_analytics_consent_intent(text) from public, anon, authenticated",
+    "grant execute on function public.issue_analytics_consent_intent(text) to service_role",
+    "grant execute on function public.record_analytics_consent(text, text, text, text, uuid) to service_role"
+  ]) {
+    assert.match(
+      consentIntentMigration.toLowerCase(),
+      new RegExp(contract.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    );
+  }
+});
+
+test("bootstrap schema matches the final database-ordered consent intent contract", () => {
+  for (const contract of [
+    "create table if not exists public.analytics_consent_intents",
+    "add column if not exists intent_revision bigint",
+    "create or replace function public.issue_analytics_consent_intent",
+    "create or replace function public.record_analytics_consent",
+    "p_intent_id uuid",
+    "consumed_at is not null",
+    "grant execute on function public.issue_analytics_consent_intent(text) to service_role",
+    "grant execute on function public.record_analytics_consent(text, text, text, text, uuid) to service_role"
   ]) {
     assert.match(
       bootstrapSchema.toLowerCase(),

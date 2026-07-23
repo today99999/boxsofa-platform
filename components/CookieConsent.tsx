@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ANALYTICS_CONSENT_KEY,
-  ANALYTICS_CONSENT_REVALIDATE_EVENT,
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
   enqueueConsentMutation,
@@ -14,6 +13,8 @@ import {
   readStoredAnalyticsConsent,
   OPEN_COOKIE_SETTINGS_EVENT,
   readAnalyticsConsentStatus,
+  registerAnalyticsConsentRecoveryHandler,
+  resetAnalyticsConsentRecovery,
   synchronizeAnalyticsConsent,
   type AnalyticsConsent,
   trackEvent
@@ -82,15 +83,41 @@ export function CookieConsent() {
       setConsent(null);
     }
 
+    const unregisterRecoveryHandler = registerAnalyticsConsentRecoveryHandler(async () => {
+      const saved = readStoredAnalyticsConsent(localStorage);
+      if (saved !== "analytics") {
+        clearAnalyticsServerReady();
+        return false;
+      }
+
+      const recoveryGeneration = consentSyncGenerationRef.current;
+      const recoveryOperation = userOperationRef.current;
+      const isCurrent = () => !cancelled
+        && recoveryGeneration === consentSyncGenerationRef.current
+        && recoveryOperation === userOperationRef.current
+        && readStoredAnalyticsConsent(localStorage) === "analytics";
+      const persisted = await persistConsent("analytics", isCurrent);
+      if (!persisted || !isCurrent()) {
+        clearAnalyticsServerReady();
+        return false;
+      }
+
+      markConsentSynchronized(localStorage, "analytics", CONSENT_VERSION);
+      setConsent("analytics");
+      markAnalyticsServerReady();
+      // Deliberately do not track the current page here. The 403 coordinator
+      // retains and retries its original event after the forced mutation.
+      return true;
+    });
+
     window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
-    window.addEventListener(ANALYTICS_CONSENT_REVALIDATE_EVENT, synchronizeStoredConsent);
     synchronizeStoredConsent();
 
     return () => {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
-      window.removeEventListener(ANALYTICS_CONSENT_REVALIDATE_EVENT, synchronizeStoredConsent);
+      unregisterRecoveryHandler();
     };
   }, []);
 
@@ -126,7 +153,8 @@ export function CookieConsent() {
     // A user decision always wins over a pending mount-time resynchronization.
     consentSyncGenerationRef.current += 1;
     const operation = ++userOperationRef.current;
-    const persisted = await persistConsent(nextConsent);
+    resetAnalyticsConsentRecovery();
+    const persisted = await persistConsent(nextConsent, () => operation === userOperationRef.current);
     if (operation !== userOperationRef.current) return;
     if (!persisted) {
       setSaveError(true);
@@ -151,6 +179,14 @@ export function CookieConsent() {
       // ahead of it. Do not let that stale write run after the explicit choice.
       if (!isCurrent()) return false;
       try {
+        const intentResponse = await fetchWithTimeout("/api/analytics/consent/intent", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ visitorId })
+        });
+        if (!intentResponse.ok || !isCurrent()) return false;
+        const intentPayload = await intentResponse.json() as { intentId?: unknown };
+        if (typeof intentPayload.intentId !== "string") return false;
         const response = await fetchWithTimeout("/api/analytics/consent", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -158,7 +194,8 @@ export function CookieConsent() {
             visitorId,
             consent: nextConsent,
             locale: language,
-            version: CONSENT_VERSION
+            version: CONSENT_VERSION,
+            intentId: intentPayload.intentId
           })
         });
         return response.ok;

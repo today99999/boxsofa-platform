@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAnalyticsConsentHandler,
+  createAnalyticsConsentIntentHandler,
   createAnalyticsConsentStatusHandler,
   createAnalyticsEventHandler,
   type AnalyticsIngestionRepository,
@@ -17,14 +18,24 @@ type Consent = {
   id: string;
   consent: "necessary" | "analytics";
   revision: number;
+  intentRevision: number;
+};
+
+type ConsentIntent = {
+  id: string;
+  visitorId: string;
+  revision: number;
+  consumed: boolean;
 };
 
 class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
   consents = new Map<string, Consent>();
+  intents = new Map<string, ConsentIntent>();
   events = new Map<string, IngestedAnalyticsEvent>();
   rateLimitRequests: Array<{ bucketKey: string; limit: number; windowSeconds: number }> = [];
   failNext: "rate" | "consent" | "product" | "event" | null = null;
   nextRevision = 0;
+  nextIntentRevision = 0;
 
   async consumeRateLimit(input: { bucketKey: string; limit: number; windowSeconds: number }) {
     if (this.failNext === "rate") {
@@ -35,14 +46,46 @@ class InMemoryAnalyticsRepository implements AnalyticsIngestionRepository {
     return { allowed: true, retryAfterSeconds: 0 };
   }
 
-  async recordConsent(input: { visitorId: string; consent: "necessary" | "analytics"; locale: string; version: string }) {
+  async issueConsentIntent(input: { visitorId: string }) {
+    const revision = ++this.nextIntentRevision;
+    const id = `00000000-0000-4000-8000-${String(revision).padStart(12, "0")}`;
+    this.intents.set(id, { id, visitorId: input.visitorId, revision, consumed: false });
+    return { id, revision };
+  }
+
+  async recordConsent(input: {
+    visitorId: string;
+    consent: "necessary" | "analytics";
+    locale: string;
+    version: string;
+    intentId: string;
+  }) {
     if (this.failNext === "consent") {
       this.failNext = null;
       throw new Error("database url=postgres://secret-consent");
     }
-    const consent = { id: `consent-${++this.nextRevision}`, consent: input.consent, revision: this.nextRevision };
+    const intent = this.intents.get(input.intentId);
+    const current = this.consents.get(input.visitorId) ?? null;
+    if (!intent || intent.consumed || intent.visitorId !== input.visitorId || intent.revision <= (current?.intentRevision ?? 0)) {
+      if (intent && intent.visitorId === input.visitorId) intent.consumed = true;
+      return {
+        accepted: false,
+        stale: true,
+        id: current?.id ?? null,
+        consent: current?.consent ?? null,
+        revision: current?.revision ?? null,
+        intentRevision: current?.intentRevision ?? null
+      };
+    }
+    intent.consumed = true;
+    const consent = {
+      id: `consent-${++this.nextRevision}`,
+      consent: input.consent,
+      revision: this.nextRevision,
+      intentRevision: intent.revision
+    };
     this.consents.set(input.visitorId, consent);
-    return consent;
+    return { accepted: true, stale: false, ...consent };
   }
 
   async resolveProductId(identifier: string) {
@@ -74,6 +117,7 @@ function handlers(repository = new InMemoryAnalyticsRepository()) {
   const attributionService = createAnalyticsAttributionService(TEST_SIGNING_SECRET);
   return {
     repository,
+    intent: createAnalyticsConsentIntentHandler({ repository, attributionService }),
     consent: createAnalyticsConsentHandler({ repository, attributionService }),
     status: createAnalyticsConsentStatusHandler({ attributionService }),
     event: createAnalyticsEventHandler({ repository, attributionService }),
@@ -139,6 +183,93 @@ function responseCookieValue(response: Response, name: string): string | null {
   const match = header.match(new RegExp(`${name}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
+
+async function issueConsentIntent(
+  intent: ReturnType<typeof createAnalyticsConsentIntentHandler>,
+  visitorId: string
+) {
+  const response = await intent(jsonRequest("/api/analytics/consent/intent", { visitorId }));
+  const payload = await body(response);
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(typeof payload.intentId, "string");
+  return payload.intentId as string;
+}
+
+async function submitConsent(
+  instance: ReturnType<typeof handlers>,
+  input: { visitorId: string; consent: "necessary" | "analytics"; locale: string; version: string },
+  headers: HeadersInit = {}
+) {
+  const intentId = await issueConsentIntent(instance.intent, input.visitorId);
+  return instance.consent(jsonRequest("/api/analytics/consent", { ...input, intentId }, headers));
+}
+
+test("server-issued consent intents reject a late old choice without changing cookies", async () => {
+  const { consent, intent, repository } = handlers();
+  const visitorId = validEvent().visitorId;
+  const oldIntent = await issueConsentIntent(intent, visitorId);
+  const newerIntent = await issueConsentIntent(intent, visitorId);
+
+  const newest = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId,
+    consent: "necessary",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: newerIntent
+  }));
+  const lateOld = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId,
+    consent: "analytics" as const,
+    locale: "en",
+    version: "2026-07-23",
+    intentId: oldIntent
+  }));
+
+  assert.equal(newest.status, 200);
+  assert.equal(lateOld.status, 409);
+  assert.equal(lateOld.headers.get("set-cookie"), null);
+  assert.equal(repository.consents.get(visitorId)?.consent, "necessary");
+
+  const replay = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: newerIntent
+  }));
+  assert.equal(replay.status, 409);
+
+  const otherVisitor = "v-22222222-2222-4222-8222-222222222222";
+  const swapped = await consent(jsonRequest("/api/analytics/consent", {
+    visitorId: otherVisitor,
+    consent: "analytics",
+    locale: "en",
+    version: "2026-07-23",
+    intentId: oldIntent
+  }));
+  assert.equal(swapped.status, 409);
+  assert.equal(swapped.headers.get("set-cookie"), null);
+  assert.equal(repository.consents.has(otherVisitor), false);
+});
+
+test("a consent persistence failure leaves the client free to issue and use a fresh intent", async () => {
+  const api = handlers();
+  const input = {
+    visitorId: validEvent().visitorId,
+    consent: "analytics" as const,
+    locale: "en",
+    version: "2026-07-23"
+  };
+  api.repository.failNext = "consent";
+  const failed = await submitConsent(api, input);
+  const retried = await submitConsent(api, input);
+
+  assert.equal(failed.status, 503);
+  assert.equal(failed.headers.get("set-cookie"), null);
+  assert.equal(retried.status, 200);
+  assert.equal(api.repository.consents.get(input.visitorId)?.consent, "analytics");
+});
 
 test("analytics endpoints reject malformed JSON without reaching persistence", async () => {
   const { consent, event, repository } = handlers();
@@ -210,38 +341,40 @@ test("consent status treats expired or separately cleared trusted cookies as abs
 });
 
 test("analytics event requires current analytics consent", async () => {
-  const { consent, event } = handlers();
+  const api = handlers();
+  const { event } = api;
   const absent = await event(await analyticsEventRequest("/api/analytics/events", validEvent()));
   assert.equal(absent.status, 403);
 
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "necessary",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   const necessary = await event(await analyticsEventRequest("/api/analytics/events", validEvent()));
   assert.equal(necessary.status, 403);
 });
 
 test("consent only writes server cookies after persistence and withdrawal expires attribution", async () => {
-  const { consent, repository } = handlers();
+  const api = handlers();
+  const { repository } = api;
   repository.failNext = "consent";
-  const failed = await consent(jsonRequest("/api/analytics/consent", {
+  const failed = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" }));
+  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" });
   assert.equal(failed.status, 503);
   assert.equal(failed.headers.get("set-cookie"), null);
 
-  const accepted = await consent(jsonRequest("/api/analytics/consent", {
+  const accepted = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" }));
+  }, { referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social" });
   const acceptedCookies = accepted.headers.get("set-cookie") ?? "";
   assert.equal(accepted.status, 200);
   assert.match(acceptedCookies, /boxsofa_analytics_consent_v1=analytics/);
@@ -249,12 +382,12 @@ test("consent only writes server cookies after persistence and withdrawal expire
   assert.match(acceptedCookies, /boxsofa_attribution_v1=/);
   assert.match(acceptedCookies, /HttpOnly/);
 
-  const withdrawn = await consent(jsonRequest("/api/analytics/consent", {
+  const withdrawn = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "necessary",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   const withdrawnCookies = withdrawn.headers.get("set-cookie") ?? "";
   assert.equal(withdrawn.status, 200);
   assert.match(withdrawnCookies, /boxsofa_analytics_consent_v1=necessary/);
@@ -263,7 +396,8 @@ test("consent only writes server cookies after persistence and withdrawal expire
 });
 
 test("repeated analytics consent preserves a valid last-non-direct attribution on page refresh", async () => {
-  const { consent, attributionService } = handlers();
+  const api = handlers();
+  const { attributionService } = api;
   const existingToken = await attributionService.issue({
     source: "pinterest",
     medium: "social",
@@ -271,18 +405,19 @@ test("repeated analytics consent preserves a valid last-non-direct attribution o
     referrerDomain: null,
     rawUtm: { source: "pinterest", medium: "social", campaign: "summer" }
   });
-  const request = () => jsonRequest("/api/analytics/consent", {
+  const input: { visitorId: string; consent: "analytics"; locale: string; version: string } = {
     visitorId: validEvent().visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }, {
+  };
+  const headers = {
     cookie: `boxsofa_attribution_v1=${existingToken}`,
     referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01"
-  });
+  };
 
-  const refreshed = await consent(request());
-  const repeated = await consent(request());
+  const refreshed = await submitConsent(api, input, headers);
+  const repeated = await submitConsent(api, input, headers);
 
   assert.equal(refreshed.status, 200);
   assert.equal(repeated.status, 200);
@@ -292,7 +427,8 @@ test("repeated analytics consent preserves a valid last-non-direct attribution o
 });
 
 test("analytics consent replaces prior attribution for a new trusted campaign", async () => {
-  const { consent, attributionService } = handlers();
+  const api = handlers();
+  const { attributionService } = api;
   const existingToken = await attributionService.issue({
     source: "google",
     medium: null,
@@ -301,7 +437,7 @@ test("analytics consent replaces prior attribution for a new trusted campaign", 
     rawUtm: {}
   });
 
-  const response = await consent(jsonRequest("/api/analytics/consent", {
+  const response = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "analytics",
     locale: "en",
@@ -309,7 +445,7 @@ test("analytics consent replaces prior attribution for a new trusted campaign", 
   }, {
     cookie: `boxsofa_attribution_v1=${existingToken}`,
     referer: "https://boxsofa.eu/?utm_source=tiktok&utm_medium=social&utm_campaign=autumn"
-  }));
+  });
   const replacement = responseCookieValue(response, "boxsofa_attribution_v1");
 
   assert.equal(response.status, 200);
@@ -326,8 +462,9 @@ test("analytics consent replaces prior attribution for a new trusted campaign", 
 });
 
 test("analytics consent rejects invalid attribution and falls back to direct while withdrawal deletes it", async () => {
-  const { consent, attributionService } = handlers();
-  const response = await consent(jsonRequest("/api/analytics/consent", {
+  const api = handlers();
+  const { attributionService } = api;
+  const response = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "analytics",
     locale: "en",
@@ -335,31 +472,32 @@ test("analytics consent rejects invalid attribution and falls back to direct whi
   }, {
     cookie: "boxsofa_attribution_v1=forged.payload",
     referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01"
-  }));
+  });
   const replacement = responseCookieValue(response, "boxsofa_attribution_v1");
 
   assert.equal(response.status, 200);
   assert.equal((await attributionService.verify(replacement))?.source, "direct");
 
-  const withdrawal = await consent(jsonRequest("/api/analytics/consent", {
+  const withdrawal = await submitConsent(api, {
     visitorId: validEvent().visitorId,
     consent: "necessary",
     locale: "en",
     version: "2026-07-23"
-  }, { cookie: `boxsofa_attribution_v1=${replacement}` }));
+  }, { cookie: `boxsofa_attribution_v1=${replacement}` });
   assert.match(withdrawal.headers.get("set-cookie") ?? "", /boxsofa_attribution_v1=;/);
   assert.match(withdrawal.headers.get("set-cookie") ?? "", /Max-Age=0/);
 });
 
 test("analytics event persists canonical payload after analytics consent", async () => {
-  const { consent, event, repository } = handlers();
+  const api = handlers();
+  const { event, repository } = api;
   const input = validEvent({ rawUtm: { source: "tiktok", medium: "social", campaign: "summer" } });
-  const consentResponse = await consent(jsonRequest("/api/analytics/consent", {
+  const consentResponse = await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   const eventResponse = await event(await analyticsEventRequest(
     "/api/analytics/events",
     input,
@@ -382,7 +520,8 @@ test("analytics event persists canonical payload after analytics consent", async
 });
 
 test("signed UTM attribution remains compatible while client UTM fields are ignored", async () => {
-  const { consent, event, repository } = handlers();
+  const api = handlers();
+  const { event, repository } = api;
   const input = validEvent({
     eventKey: "evt-12121212-1212-4212-8212-121212121212",
     source: "pinterest",
@@ -390,12 +529,12 @@ test("signed UTM attribution remains compatible while client UTM fields are igno
     campaign: "summer",
     referrerDomain: "google.com"
   });
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
 
   assert.equal((await event(await analyticsEventRequest(
     "/api/analytics/events",
@@ -409,24 +548,25 @@ test("signed UTM attribution remains compatible while client UTM fields are igno
 });
 
 test("withdrawn analytics consent rejects later events and duplicate keys stay idempotent", async () => {
-  const { consent, event, repository } = handlers();
+  const api = handlers();
+  const { event, repository } = api;
   const input = validEvent();
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
   assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
   assert.equal(repository.events.size, 1);
 
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "necessary",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   assert.equal((await event(await analyticsEventRequest(
     "/api/analytics/events",
     validEvent({ eventKey: "evt-22222222-2222-4222-8222-222222222222" })
@@ -434,7 +574,8 @@ test("withdrawn analytics consent rejects later events and duplicate keys stay i
 });
 
 test("analytics event ignores client attribution and rejects invalid signed attribution, timestamps, and paths", async () => {
-  const { consent, event, repository } = handlers();
+  const api = handlers();
+  const { event, repository } = api;
   const input = validEvent({
     eventKey: "evt-33333333-3333-4333-8333-333333333333",
     medium: undefined,
@@ -446,12 +587,12 @@ test("analytics event ignores client attribution and rejects invalid signed attr
     utmCampaign: "forged-campaign",
     rawUtm: { source: "facebook", medium: "social", campaign: "forged-campaign" }
   });
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   assert.equal((await event(await analyticsEventRequest("/api/analytics/events", input))).status, 200);
   assert.equal(repository.events.get(input.eventKey)?.source, "google");
 
@@ -483,14 +624,15 @@ test("analytics event ignores client attribution and rejects invalid signed attr
 });
 
 test("analytics database failures are redacted and persistent limit keys are hashed", async () => {
-  const { consent, event, repository } = handlers();
+  const api = handlers();
+  const { event, repository } = api;
   const input = validEvent({ eventKey: "evt-66666666-6666-4666-8666-666666666666" });
-  await consent(jsonRequest("/api/analytics/consent", {
+  await submitConsent(api, {
     visitorId: input.visitorId,
     consent: "analytics",
     locale: "en",
     version: "2026-07-23"
-  }));
+  });
   repository.failNext = "event";
   const response = await event(await analyticsEventRequest("/api/analytics/events", input));
   const responseBody = await body(response);

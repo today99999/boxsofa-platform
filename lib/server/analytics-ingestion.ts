@@ -24,7 +24,12 @@ const consentSchema = z.object({
   visitorId: boundedText(120),
   consent: z.enum(["necessary", "analytics"]),
   locale: z.enum(["zh", "en", "es", "fr", "de"]).default("en"),
-  version: boundedText(40)
+  version: boundedText(40),
+  intentId: z.string().uuid()
+});
+
+const consentIntentSchema = z.object({
+  visitorId: boundedText(120)
 });
 
 const eventSchema = z.object({
@@ -66,12 +71,21 @@ export type AnalyticsIngestionRepository = {
     allowed: boolean;
     retryAfterSeconds: number;
   }>;
+  issueConsentIntent(input: { visitorId: string }): Promise<{ id: string; revision: number }>;
   recordConsent(input: {
     visitorId: string;
     consent: "necessary" | "analytics";
     locale: string;
     version: string;
-  }): Promise<{ id: string; consent: "necessary" | "analytics"; revision: number }>;
+    intentId: string;
+  }): Promise<{
+    accepted: boolean;
+    stale: boolean;
+    id: string | null;
+    consent: "necessary" | "analytics" | null;
+    revision: number | null;
+    intentRevision: number | null;
+  }>;
   resolveProductId(identifier: string): Promise<string | null>;
   ingestEvent(input: IngestedAnalyticsEvent): Promise<{
     accepted: boolean;
@@ -108,7 +122,10 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
     }
 
     try {
-      await repository.recordConsent(payload.data);
+      const recorded = await repository.recordConsent(payload.data);
+      if (!recorded.accepted) {
+        return Response.json({ ok: false, message: "Consent change was superseded." }, { status: 409 });
+      }
       const response = Response.json({ ok: true });
       response.headers.append(
         "set-cookie",
@@ -138,6 +155,36 @@ export function createAnalyticsConsentHandler({ repository, attributionService }
         );
       }
       return response;
+    } catch {
+      return unavailableResponse();
+    }
+  };
+}
+
+export function createAnalyticsConsentIntentHandler({ repository, attributionService }: HandlerDependencies) {
+  return async function postAnalyticsConsentIntent(request: Request): Promise<Response> {
+    const payload = consentIntentSchema.safeParse(await readJson(request));
+    if (!payload.success) {
+      return invalidPayloadResponse();
+    }
+
+    if (!attributionService) return unavailableResponse();
+
+    const limit = await checkPersistentRateLimit(
+      repository,
+      request,
+      "analytics:consent-intent",
+      payload.data.visitorId,
+      undefined,
+      attributionService
+    );
+    if (!limit.ok) return limit.response;
+
+    try {
+      const intent = await repository.issueConsentIntent(payload.data);
+      return Response.json({ ok: true, intentId: intent.id, revision: intent.revision }, {
+        headers: { "Cache-Control": "no-store, private" }
+      });
     } catch {
       return unavailableResponse();
     }
@@ -242,19 +289,49 @@ export function createSupabaseAnalyticsRepository(client: SupabaseClient): Analy
       return { allowed: row.allowed, retryAfterSeconds: row.retry_after_seconds };
     },
 
+    async issueConsentIntent(input) {
+      const { data, error } = await client.rpc("issue_analytics_consent_intent", {
+        p_visitor_id: input.visitorId
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] as { intent_id?: string; intent_revision?: number } : null;
+      const revision = row?.intent_revision;
+      if (!row || typeof row.intent_id !== "string" || typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 1) {
+        throw new Error("Invalid analytics consent intent response.");
+      }
+      return { id: row.intent_id, revision };
+    },
+
     async recordConsent(input) {
       const { data, error } = await client.rpc("record_analytics_consent", {
         p_visitor_id: input.visitorId,
         p_consent: input.consent,
         p_locale: input.locale,
-        p_consent_version: input.version
+        p_consent_version: input.version,
+        p_intent_id: input.intentId
       });
       if (error) throw error;
-      const row = Array.isArray(data) ? data[0] as { id?: string; consent?: "necessary" | "analytics"; revision?: number } : null;
-      if (!row || typeof row.id !== "string" || (row.consent !== "necessary" && row.consent !== "analytics") || typeof row.revision !== "number") {
+      const row = Array.isArray(data) ? data[0] as {
+        accepted?: boolean;
+        stale?: boolean;
+        id?: string | null;
+        consent?: "necessary" | "analytics" | null;
+        revision?: number | null;
+        intent_revision?: number | null;
+      } : null;
+      if (!row || typeof row.accepted !== "boolean" || typeof row.stale !== "boolean") {
         throw new Error("Invalid consent write response.");
       }
-      return { id: row.id, consent: row.consent, revision: row.revision };
+      const id = typeof row.id === "string" ? row.id : null;
+      const consent = row.consent === "necessary" || row.consent === "analytics" ? row.consent : null;
+      const revision = typeof row.revision === "number" && Number.isSafeInteger(row.revision) ? row.revision : null;
+      const intentRevision = typeof row.intent_revision === "number" && Number.isSafeInteger(row.intent_revision)
+        ? row.intent_revision
+        : null;
+      if (row.accepted && (!id || !consent || revision === null || intentRevision === null)) {
+        throw new Error("Invalid accepted consent write response.");
+      }
+      return { accepted: row.accepted, stale: row.stale, id, consent, revision, intentRevision };
     },
 
     async resolveProductId(identifier) {
@@ -308,6 +385,7 @@ export function createUnavailableAnalyticsRepository(): AnalyticsIngestionReposi
 
   return {
     consumeRateLimit: async () => unavailable(),
+    issueConsentIntent: async () => unavailable(),
     recordConsent: async () => unavailable(),
     resolveProductId: async () => unavailable(),
     ingestEvent: async () => unavailable()
@@ -367,7 +445,7 @@ async function checkPersistentRateLimit(
   sessionId: string | undefined,
   attributionService: AnalyticsAttributionService
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const options = scope === "analytics:consent"
+  const options = scope === "analytics:consent" || scope === "analytics:consent-intent"
     ? { limit: 30, windowSeconds: 60 }
     : { limit: 120, windowSeconds: 60 };
 

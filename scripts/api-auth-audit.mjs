@@ -41,6 +41,7 @@ const publicChecks = [
   { method: 'POST', path: '/api/leads', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/analytics/consent', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/analytics/consent', rawBody: '{', allowedStatuses: [400] },
+  { method: 'POST', path: '/api/analytics/consent/intent', body: {}, allowedStatuses: [400] },
   { method: 'GET', path: '/api/analytics/consent', allowedStatuses: [200] },
   { method: 'POST', path: '/api/analytics/events', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/analytics/events', rawBody: '{', allowedStatuses: [400] },

@@ -53,6 +53,7 @@ const consentSyncFlights = new Map<string, Promise<ConsentSynchronizationResult>
 const consentMutationQueues = new Map<string, Promise<void>>();
 let queueFlushInFlight: Promise<void> | null = null;
 let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let consentRecoveryHandler: (() => Promise<boolean>) | null = null;
 
 export type AnalyticsConsentServerStatus = {
   consent: AnalyticsConsent | null;
@@ -62,6 +63,14 @@ export type AnalyticsConsentServerStatus = {
 export type ConsentSynchronizationResult = "matched" | "resubmitted" | "unavailable";
 
 export type AnalyticsDeliveryDisposition = "success" | "drop" | "retry" | "revalidate";
+export type AnalyticsConsentRecoveryResult = "recovered" | "stopped" | "exhausted";
+
+type AnalyticsConsentRecoveryCoordinatorOptions = {
+  forceConsentMutation: () => Promise<boolean>;
+  retryRetainedEvents: (event: Pick<QueuedAnalyticsEvent, "eventKey">) => void;
+  stopTracking: () => void;
+  maxAttempts?: number;
+};
 
 export class AnalyticsRequestTimeoutError extends Error {
   constructor() {
@@ -139,6 +148,67 @@ export function enqueueConsentMutation<T>(visitorId: string, mutation: () => Pro
     if (consentMutationQueues.get(visitorId) === tail) consentMutationQueues.delete(visitorId);
   });
   return operation;
+}
+
+// A 403 can mean the server has lost or rejected consent while a stale browser
+// cookie still says otherwise. Keep exactly one forced, server-backed mutation in
+// flight and never create a replacement page-view while the retained event retries.
+export function createAnalyticsConsentRecoveryCoordinator(options: AnalyticsConsentRecoveryCoordinatorOptions) {
+  const maxAttempts = options.maxAttempts ?? 3;
+  let attempts = 0;
+  let flight: Promise<AnalyticsConsentRecoveryResult> | null = null;
+
+  return {
+    recover(event: Pick<QueuedAnalyticsEvent, "eventKey">): Promise<AnalyticsConsentRecoveryResult> {
+      if (flight) return flight;
+      if (attempts >= maxAttempts) {
+        options.stopTracking();
+        return Promise.resolve("exhausted");
+      }
+
+      attempts += 1;
+      flight = (async () => {
+        try {
+          if (!await options.forceConsentMutation()) {
+            options.stopTracking();
+            return "stopped" as const;
+          }
+          options.retryRetainedEvents(event);
+          return "recovered" as const;
+        } catch {
+          options.stopTracking();
+          return "stopped" as const;
+        } finally {
+          flight = null;
+        }
+      })();
+      return flight;
+    },
+    reset() {
+      attempts = 0;
+    }
+  };
+}
+
+const consentRecoveryCoordinator = createAnalyticsConsentRecoveryCoordinator({
+  forceConsentMutation: async () => consentRecoveryHandler ? consentRecoveryHandler() : false,
+  retryRetainedEvents: () => { void flushAnalyticsQueue(); },
+  stopTracking: () => clearAnalyticsServerReady()
+});
+
+export function registerAnalyticsConsentRecoveryHandler(handler: () => Promise<boolean>) {
+  consentRecoveryHandler = handler;
+  return () => {
+    if (consentRecoveryHandler === handler) consentRecoveryHandler = null;
+  };
+}
+
+export function revalidateAnalyticsConsentAfterForbidden(event: Pick<QueuedAnalyticsEvent, "eventKey">) {
+  return consentRecoveryCoordinator.recover(event);
+}
+
+export function resetAnalyticsConsentRecovery() {
+  consentRecoveryCoordinator.reset();
 }
 
 export function inferTrafficSource(url: URL, referrer = "") {
@@ -376,10 +446,13 @@ async function flushQueue() {
   for (const event of readQueue()) {
     if ((event.nextAttemptAt ?? 0) > Date.now()) continue;
     const disposition = await deliverEvent(event);
-    writeQueue(applyAnalyticsDeliveryDisposition(readQueue(), event.eventKey, disposition));
+    const nextQueue = applyAnalyticsDeliveryDisposition(readQueue(), event.eventKey, disposition);
+    writeQueue(nextQueue);
     if (disposition === "revalidate") {
       clearAnalyticsServerReady();
-      window.dispatchEvent(new Event(ANALYTICS_CONSENT_REVALIDATE_EVENT));
+      if (nextQueue.some((queued) => queued.eventKey === event.eventKey)) {
+        void revalidateAnalyticsConsentAfterForbidden(event);
+      }
       return;
     }
   }

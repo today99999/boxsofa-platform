@@ -15,6 +15,7 @@ import {
   clearAnalyticsClientState,
   clearAnalyticsServerReady,
   consentSyncMarker,
+  createAnalyticsConsentRecoveryCoordinator,
   enqueueConsentMutation,
   fetchWithTimeout,
   inferDeviceType,
@@ -51,6 +52,45 @@ function queuedEvent(eventKey: string) {
     visitorId: "visitor"
   };
 }
+
+test("403 recovery shares one forced mutation, retries only the retained event, and stops after its cap", async () => {
+  const mutation = deferred<boolean>();
+  const recovered: string[] = [];
+  const stopped: string[] = [];
+  let forcedMutations = 0;
+  const coordinator = createAnalyticsConsentRecoveryCoordinator({
+    forceConsentMutation: async () => {
+      forcedMutations += 1;
+      return mutation.promise;
+    },
+    retryRetainedEvents: (event) => recovered.push(event.eventKey),
+    stopTracking: () => stopped.push("stop"),
+    maxAttempts: 2
+  });
+
+  const original = queuedEvent("original-403-event");
+  const firstRecovery = coordinator.recover(original);
+  const secondRecovery = coordinator.recover(original);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(forcedMutations, 1);
+  assert.equal(recovered.length, 0);
+  mutation.resolve(true);
+  assert.deepEqual(await Promise.all([firstRecovery, secondRecovery]), ["recovered", "recovered"]);
+  assert.deepEqual(recovered, ["original-403-event"]);
+  assert.equal(original.eventKey, "original-403-event");
+  assert.equal(stopped.length, 0);
+
+  const capped = createAnalyticsConsentRecoveryCoordinator({
+    forceConsentMutation: async () => false,
+    retryRetainedEvents: (event) => recovered.push(event.eventKey),
+    stopTracking: () => stopped.push("stop"),
+    maxAttempts: 2
+  });
+  assert.equal(await capped.recover(original), "stopped");
+  assert.equal(await capped.recover(original), "stopped");
+  assert.equal(await capped.recover(original), "exhausted");
+  assert.deepEqual(stopped, ["stop", "stop", "stop"]);
+});
 
 test("analytics helpers normalize device and referrer", () => {
   assert.equal(inferDeviceType(390), "mobile");
@@ -342,6 +382,7 @@ test("cookie settings dialog keeps labelled focus-management markup", () => {
 
   const analyticsSource = readFileSync("lib/analytics.ts", "utf8");
   assert.match(analyticsSource, /if \(!isAnalyticsServerReady\(\)\) return;/);
-  assert.match(analyticsSource, /window\.dispatchEvent\(new Event\(ANALYTICS_CONSENT_REVALIDATE_EVENT\)\)/);
+  assert.match(analyticsSource, /revalidateAnalyticsConsentAfterForbidden\(event\)/);
+  assert.match(analyticsSource, /registerAnalyticsConsentRecoveryHandler/);
   assert.match(analyticsSource, /fetchWithTimeout\("\/api\/analytics\/events"/);
 });
