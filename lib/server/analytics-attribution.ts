@@ -166,17 +166,17 @@ export async function resolveAttributionForConsentState(input: {
   referrer: string | null;
   existingToken: string | null;
   ownHosts?: ReadonlySet<string>;
-  service: AnalyticsAttributionService;
+  service: AnalyticsAttributionService | null;
   now?: number;
 }): Promise<{ shouldClearAttribution: boolean; token: string | null; shouldSetCookie: boolean }> {
-  if (input.consentState === "necessary") {
+  if (input.consentState !== "analytics") {
     return { shouldClearAttribution: true, token: null, shouldSetCookie: false };
   }
-  if (input.consentState !== "analytics") {
+  if (!input.service) {
     return { shouldClearAttribution: false, token: null, shouldSetCookie: false };
   }
 
-  const resolved = await resolveTrustedAttribution(input);
+  const resolved = await resolveTrustedAttribution({ ...input, service: input.service });
   return {
     shouldClearAttribution: false,
     token: resolved.token,

@@ -9,10 +9,8 @@ import {
 import { createRuntimeAnalyticsSecurity } from "./lib/server/analytics-security";
 
 export async function middleware(request: NextRequest) {
+  const response = NextResponse.next();
   const security = createRuntimeAnalyticsSecurity();
-  if (!security) {
-    return NextResponse.next();
-  }
 
   try {
     const resolved = await resolveAttributionForConsentState({
@@ -23,7 +21,6 @@ export async function middleware(request: NextRequest) {
       ownHosts: getOwnedAnalyticsHosts(),
       service: security
     });
-    const response = NextResponse.next();
     if (resolved.shouldClearAttribution) {
       response.cookies.set({
         name: ATTRIBUTION_COOKIE_NAME,
@@ -49,7 +46,7 @@ export async function middleware(request: NextRequest) {
     return response;
   } catch {
     // Attribution must never make storefront navigation unavailable.
-    return NextResponse.next();
+    return response;
   }
 }
 

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   ANALYTICS_CONSENT_KEY,
-  clearStoredAttribution,
+  clearAnalyticsClientState,
   getOrCreateVisitorId,
+  OPEN_COOKIE_SETTINGS_EVENT,
   type AnalyticsConsent,
   trackEvent
 } from "@/lib/analytics";
@@ -14,6 +15,7 @@ import { useTranslation } from "@/components/useTranslation";
 export function CookieConsent() {
   const { language, t } = useTranslation();
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(ANALYTICS_CONSENT_KEY) as AnalyticsConsent | null;
@@ -25,9 +27,17 @@ export function CookieConsent() {
         }
         setConsent(saved);
         if (saved === "analytics") trackCurrentPage();
-        else clearStoredAttribution();
+        else clearAnalyticsClientState();
       });
     }
+
+    function openSettings() {
+      setSaveError(false);
+      setConsent(null);
+    }
+
+    window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
+    return () => window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, openSettings);
   }, []);
 
   function trackCurrentPage() {
@@ -45,13 +55,17 @@ export function CookieConsent() {
 
   async function saveConsent(nextConsent: AnalyticsConsent) {
     const persisted = await persistConsent(nextConsent);
-    if (!persisted) return;
+    if (!persisted) {
+      setSaveError(true);
+      return;
+    }
+    setSaveError(false);
     localStorage.setItem(ANALYTICS_CONSENT_KEY, nextConsent);
     setConsent(nextConsent);
     if (nextConsent === "analytics") {
       trackCurrentPage();
     } else {
-      clearStoredAttribution();
+      clearAnalyticsClientState();
     }
   }
 
@@ -76,6 +90,7 @@ export function CookieConsent() {
       <div>
         <strong>{t("privacyTitle")}</strong>
         <p>{t("privacyBody")}</p>
+        {saveError ? <p className="cookie-error" role="status">{t("cookieSettingsError")}</p> : null}
       </div>
       <div className="cookie-actions">
         <button className="button" type="button" onClick={() => void saveConsent("necessary")}>

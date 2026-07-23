@@ -1987,6 +1987,11 @@ video {
   margin: 6px 0 0;
 }
 
+.cookie-banner .cookie-error {
+  color: #a34233;
+  font-size: 14px;
+}
+
 .cookie-actions {
   display: flex;
   gap: 10px;
@@ -3432,6 +3437,10 @@ body:has(.checkout-layout) .chat-button {
   line-height: 1.65;
   margin: 0;
   max-width: 880px;
+}
+
+.policy-card-action {
+  margin-top: 18px;
 }
 
 @media (max-width: 820px) {

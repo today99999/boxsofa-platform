@@ -37,6 +37,7 @@ export const ANALYTICS_QUEUE_KEY = "boxsofa_analytics_queue_v1";
 export const ANALYTICS_VISITOR_KEY = "boxsofa_visitor_id_v1";
 export const ANALYTICS_SESSION_KEY = "boxsofa_analytics_session_v1";
 export const ANALYTICS_ATTRIBUTION_KEY = "boxsofa_analytics_attribution_v1";
+export const OPEN_COOKIE_SETTINGS_EVENT = "boxsofa-open-cookie-settings";
 
 const MAX_QUEUE_SIZE = 200;
 const MAX_HISTORY_SIZE = 1000;
@@ -88,6 +89,22 @@ export function getStoredAttribution(): StoredAttribution | null {
 
 export function clearStoredAttribution() {
   localStorage.removeItem(ANALYTICS_ATTRIBUTION_KEY);
+}
+
+export function clearAnalyticsClientState(storage: Pick<Storage, "removeItem"> = localStorage) {
+  for (const key of [
+    ANALYTICS_ATTRIBUTION_KEY,
+    ANALYTICS_EVENTS_KEY,
+    ANALYTICS_QUEUE_KEY,
+    ANALYTICS_SESSION_KEY,
+    ANALYTICS_VISITOR_KEY
+  ]) {
+    storage.removeItem(key);
+  }
+}
+
+export function openCookieSettings() {
+  window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT));
 }
 
 export function trackEvent(type: AnalyticsEventType, fields: Partial<AnalyticsEvent> = {}) {

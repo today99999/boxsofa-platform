@@ -97,7 +97,7 @@ test("trusted attribution accepts configured own hosts but not arbitrary request
   assert.equal(hosts.has("attacker.example"), false);
 });
 
-test("middleware attribution decisions respect absent, necessary, and analytics consent states", async () => {
+test("middleware attribution decisions clear stale tokens unless trusted consent is analytics", async () => {
   const service = createAnalyticsAttributionService(SECRET);
   const common = {
     url: "https://boxsofa.eu/?utm_source=facebook",
@@ -108,11 +108,36 @@ test("middleware attribution decisions respect absent, necessary, and analytics 
     now: 1_700_000_000_000
   };
 
-  const absent = await resolveAttributionForConsentState({ ...common, consentState: null });
-  assert.deepEqual(absent, { shouldClearAttribution: false, token: null, shouldSetCookie: false });
+  const absent = await resolveAttributionForConsentState({
+    ...common,
+    consentState: null,
+    existingToken: "legacy-attribution-token",
+    service: null
+  });
+  assert.deepEqual(absent, { shouldClearAttribution: true, token: null, shouldSetCookie: false });
 
-  const necessary = await resolveAttributionForConsentState({ ...common, consentState: "necessary" });
+  const necessary = await resolveAttributionForConsentState({
+    ...common,
+    consentState: "necessary",
+    existingToken: "legacy-attribution-token",
+    service: null
+  });
   assert.deepEqual(necessary, { shouldClearAttribution: true, token: null, shouldSetCookie: false });
+
+  const malformed = await resolveAttributionForConsentState({
+    ...common,
+    consentState: "unexpected-value",
+    existingToken: "legacy-attribution-token",
+    service: null
+  });
+  assert.deepEqual(malformed, { shouldClearAttribution: true, token: null, shouldSetCookie: false });
+
+  const unavailableSecurity = await resolveAttributionForConsentState({
+    ...common,
+    consentState: "analytics",
+    service: null
+  });
+  assert.deepEqual(unavailableSecurity, { shouldClearAttribution: false, token: null, shouldSetCookie: false });
 
   const analytics = await resolveAttributionForConsentState({ ...common, consentState: "analytics" });
   assert.equal(analytics.shouldClearAttribution, false);

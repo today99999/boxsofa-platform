@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
@@ -5,6 +6,7 @@ import { SupportButton } from "@/components/SupportButton";
 type PolicySection = {
   title: string;
   body: string;
+  action?: ReactNode;
 };
 
 type PolicyPageProps = {
@@ -30,6 +32,7 @@ export function PolicyPage({ eyebrow, title, intro, sections }: PolicyPageProps)
             <article className="policy-card" key={section.title}>
               <h2>{section.title}</h2>
               <p>{section.body}</p>
+              {section.action ? <div className="policy-card-action">{section.action}</div> : null}
             </article>
           ))}
         </section>

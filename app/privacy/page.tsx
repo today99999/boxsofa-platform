@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import { PolicyPage } from "@/components/PolicyPage";
 
 export const metadata: Metadata = {
@@ -23,7 +24,8 @@ export default function PrivacyPage() {
         },
         {
           title: "Analytics consent",
-          body: "Traffic source and conversion analytics are optional. They are only recorded after the visitor accepts analytics cookies or tracking in the consent banner."
+          body: "Traffic source and conversion analytics are optional. They are only recorded after the visitor accepts analytics cookies or tracking in the consent banner.",
+          action: <CookieSettingsButton />
         },
         {
           title: "Customer account data",

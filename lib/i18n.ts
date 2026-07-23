@@ -97,6 +97,8 @@ export const translations = {
     privacyBody: "我们默认只使用必要功能。你同意后，才会记录匿名访问来源和转化行为，用于后台数据罗盘和广告效果分析。",
     necessaryOnly: "仅必要",
     acceptAnalytics: "同意统计",
+    cookieSettings: "Cookie 设置",
+    cookieSettingsError: "暂时无法保存你的 Cookie 选择，请重试。",
     stylesCount: "个款式",
     mainImagePending: "主图待上传",
     home: "首页",
@@ -216,8 +218,9 @@ export const translations = {
     privacyBody:
       "We only use essential features by default. If you agree, anonymous traffic source and conversion events will be recorded for the seller dashboard.",
     necessaryOnly: "Necessary only",
-    acceptAnalytics: "Accept analytics"
-    ,
+    acceptAnalytics: "Accept analytics",
+    cookieSettings: "Cookie settings",
+    cookieSettingsError: "We could not save your cookie choice. Please try again.",
     stylesCount: "styles",
     mainImagePending: "Main image pending",
     home: "Home",
@@ -338,8 +341,9 @@ export const translations = {
     privacyBody:
       "Por defecto solo usamos funciones esenciales. Si aceptas, se registrarán fuentes de tráfico y conversiones anónimas para el panel del vendedor.",
     necessaryOnly: "Solo necesario",
-    acceptAnalytics: "Aceptar analítica"
-    ,
+    acceptAnalytics: "Aceptar analítica",
+    cookieSettings: "Configuración de cookies",
+    cookieSettingsError: "No hemos podido guardar tu elección de cookies. Inténtalo de nuevo.",
     stylesCount: "estilos",
     mainImagePending: "Imagen pendiente",
     home: "Inicio",
@@ -460,8 +464,9 @@ export const translations = {
     privacyBody:
       "Par défaut, nous n'utilisons que les fonctions essentielles. Si vous acceptez, les sources de trafic et conversions anonymes seront enregistrées pour le tableau de bord vendeur.",
     necessaryOnly: "Essentiel seulement",
-    acceptAnalytics: "Accepter les statistiques"
-    ,
+    acceptAnalytics: "Accepter les statistiques",
+    cookieSettings: "Paramètres des cookies",
+    cookieSettingsError: "Nous n'avons pas pu enregistrer votre choix de cookies. Veuillez réessayer.",
     stylesCount: "modèles",
     mainImagePending: "Image principale à ajouter",
     home: "Accueil",
@@ -582,8 +587,9 @@ export const translations = {
     privacyBody:
       "Standardmäßig nutzen wir nur notwendige Funktionen. Wenn Sie zustimmen, werden anonyme Traffic-Quellen und Conversion-Ereignisse für das Verkäufer-Dashboard gespeichert.",
     necessaryOnly: "Nur notwendig",
-    acceptAnalytics: "Analyse akzeptieren"
-    ,
+    acceptAnalytics: "Analyse akzeptieren",
+    cookieSettings: "Cookie-Einstellungen",
+    cookieSettingsError: "Ihre Cookie-Auswahl konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
     stylesCount: "Modelle",
     mainImagePending: "Hauptbild ausstehend",
     home: "Startseite",
