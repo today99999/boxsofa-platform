@@ -49,7 +49,10 @@ test("Google country domains are recognized by strict hostname boundaries", () =
     "https://www.google.com/search?q=boxsofa",
     "https://google.co.uk/search?q=boxsofa",
     "https://www.google.de/search?q=boxsofa",
-    "https://google.com.au/search?q=boxsofa"
+    "https://google.com.au/search?q=boxsofa",
+    "https://images.google.com/search?q=boxsofa",
+    "https://news.google.co.uk/search?q=boxsofa",
+    "https://shopping.google.de/search?q=boxsofa"
   ]) {
     assert.deepEqual(resolveAttribution({ referrer }), {
       source: "google",
@@ -63,6 +66,8 @@ test("Google lookalike and malformed referrers fall back safely", () => {
     "https://google.evil.test/search?q=boxsofa",
     "https://www.google.fake/search?q=boxsofa",
     "https://google.com.evil.test/search?q=boxsofa",
+    "https://notgoogle.com/search?q=boxsofa",
+    "https://google.zz/search?q=boxsofa",
     "not a valid URL"
   ]) {
     assert.deepEqual(resolveAttribution({ referrer }), {

@@ -50,6 +50,48 @@ const REFERRER_SOURCES: Array<{ source: string; hosts: string[] }> = [
   { source: "pinterest", hosts: ["pinterest.com"] }
 ];
 
+const GOOGLE_SEARCH_DOMAINS = new Set([
+  "google.com",
+  "google.co.uk",
+  "google.de",
+  "google.fr",
+  "google.es",
+  "google.it",
+  "google.nl",
+  "google.be",
+  "google.at",
+  "google.ch",
+  "google.se",
+  "google.no",
+  "google.dk",
+  "google.fi",
+  "google.ie",
+  "google.pt",
+  "google.pl",
+  "google.cz",
+  "google.hu",
+  "google.ro",
+  "google.gr",
+  "google.bg",
+  "google.hr",
+  "google.si",
+  "google.sk",
+  "google.lt",
+  "google.lv",
+  "google.ee",
+  "google.com.au",
+  "google.co.nz",
+  "google.ca",
+  "google.com.br",
+  "google.com.mx",
+  "google.com.ar",
+  "google.co.jp",
+  "google.co.in",
+  "google.co.za",
+  "google.com.tr",
+  "google.ae"
+]);
+
 export function calculateCommerceMetrics(input: CommerceMetricInput): CommerceMetrics {
   const paidOrders = input.orders.filter((order) => PAID_PAYMENT_STATUSES.has(normalizeStatus(order.paymentStatus)));
   const gmvEur = paidOrders.reduce((sum, order) => sum + order.totalEur, 0);
@@ -141,25 +183,7 @@ function matchesReferrerHost(host: string, candidate: string): boolean {
 }
 
 function isGoogleSearchHost(host: string): boolean {
-  const labels = host.split(".");
-  if (labels[0] === "www") {
-    labels.shift();
-  }
-
-  if (labels[0] !== "google") {
-    return false;
-  }
-
-  const suffix = labels.slice(1);
-  if (suffix.length === 1) {
-    return suffix[0] === "com" || isCountryCodeTld(suffix[0]);
-  }
-
-  return suffix.length === 2 && ["co", "com"].includes(suffix[0]) && isCountryCodeTld(suffix[1]);
-}
-
-function isCountryCodeTld(label: string | undefined): boolean {
-  return Boolean(label && /^[a-z]{2}$/.test(label));
+  return Array.from(GOOGLE_SEARCH_DOMAINS).some((domain) => matchesReferrerHost(host, domain));
 }
 
 function hasReferrer(referrer: string | null | undefined): boolean {
