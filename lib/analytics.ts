@@ -65,6 +65,10 @@ type ConsentSynchronizationInput = {
 // join during Strict Mode or a fast remount.
 const consentStatusFlights = new Map<string, Promise<AnalyticsConsentServerStatus | null>>();
 const consentPersistFlights = new Map<string, Promise<boolean>>();
+// A successful persistence advances this monotonically for its exact consent
+// key. It is deliberately not a status cache: callers still issue their own
+// status read unless that read overlapped a successful shared persistence.
+const consentPersistSuccessEpochs = new Map<string, number>();
 const consentMutationQueues = new Map<string, Promise<void>>();
 let queueRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let consentRecoveryHandler: (() => Promise<AnalyticsConsentRecoveryOutcome>) | null = null;
@@ -366,8 +370,12 @@ function isConsentSynchronizationCurrent(input: ConsentSynchronizationInput) {
   return !input.isCurrent || input.isCurrent();
 }
 
+function consentSynchronizationKey(input: Pick<ConsentSynchronizationInput, "visitorId" | "consent" | "version">) {
+  return `${input.visitorId}:${input.consent}:${input.version}`;
+}
+
 function getConsentStatusFlight(input: ConsentSynchronizationInput) {
-  const key = `${input.visitorId}:${input.consent}:${input.version}`;
+  const key = consentSynchronizationKey(input);
   const existing = consentStatusFlights.get(key);
   if (existing) return existing;
 
@@ -382,13 +390,19 @@ function getConsentStatusFlight(input: ConsentSynchronizationInput) {
 }
 
 function getConsentPersistFlight(input: ConsentSynchronizationInput) {
-  const key = `${input.visitorId}:${input.consent}:${input.version}`;
+  const key = consentSynchronizationKey(input);
   const existing = consentPersistFlights.get(key);
   if (existing) return existing;
 
   const flight = Promise.resolve()
     .then(input.persist)
-    .then((persisted) => persisted === true)
+    .then((persisted) => {
+      const succeeded = persisted === true;
+      if (succeeded) {
+        consentPersistSuccessEpochs.set(key, (consentPersistSuccessEpochs.get(key) ?? 0) + 1);
+      }
+      return succeeded;
+    })
     .catch(() => false);
   consentPersistFlights.set(key, flight);
   void flight.finally(() => {
@@ -400,15 +414,42 @@ function getConsentPersistFlight(input: ConsentSynchronizationInput) {
 export async function synchronizeAnalyticsConsent(input: ConsentSynchronizationInput): Promise<ConsentSynchronizationResult> {
   if (!isConsentSynchronizationCurrent(input)) return "unavailable";
 
+  const key = consentSynchronizationKey(input);
+  // A caller that arrives while a raw POST is active must join it before
+  // initiating another status request. Its lifecycle guard remains local.
+  const activePersist = consentPersistFlights.get(key);
+  if (activePersist) {
+    const persisted = await activePersist;
+    if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+    return persisted ? "resubmitted" : "unavailable";
+  }
+
+  // This value is intentionally captured immediately before the GET. If a
+  // shared POST succeeds while the GET is in flight, its newer epoch proves
+  // that this particular stale status response must not start a duplicate POST.
+  const successfulPersistEpoch = consentPersistSuccessEpochs.get(key) ?? 0;
   const status = await getConsentStatusFlight(input);
   if (!isConsentSynchronizationCurrent(input)) return "unavailable";
   if (!status) return "unavailable";
   if (status.consent === input.consent && status.version === input.version) return "matched";
 
+  // First join a POST that began while the GET was running. If it already
+  // completed, only its success epoch is reused; a later independent caller
+  // captures that epoch before its own GET and will still verify server state.
+  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+  const overlappingPersist = consentPersistFlights.get(key);
+  if (overlappingPersist) {
+    const persisted = await overlappingPersist;
+    if (!isConsentSynchronizationCurrent(input)) return "unavailable";
+    return persisted ? "resubmitted" : "unavailable";
+  }
+  if ((consentPersistSuccessEpochs.get(key) ?? 0) > successfulPersistEpoch) {
+    return "resubmitted";
+  }
+
   // A needed mutation is also a raw, shared result. Each caller checks its own
   // generation before joining and after awaiting it, so a stale starter cannot
   // turn a current subscriber into an unavailable result.
-  if (!isConsentSynchronizationCurrent(input)) return "unavailable";
   const persisted = await getConsentPersistFlight(input);
   if (!isConsentSynchronizationCurrent(input)) return "unavailable";
   return persisted ? "resubmitted" : "unavailable";

@@ -305,6 +305,115 @@ test("a failed raw POST clears its flight so the next current caller can retry i
   assert.equal(posts, 2);
 });
 
+test("a late subscriber joins an active consent POST before starting another status read", async () => {
+  const firstStatus = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  const post = deferred<boolean>();
+  const postStarted = deferred<void>();
+  let statusCalls = 0;
+  let posts = 0;
+  const input = {
+    visitorId: "visitor-late-persist-join",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return firstStatus.promise;
+    },
+    persist: async () => {
+      posts += 1;
+      postStarted.resolve();
+      return post.promise;
+    }
+  };
+
+  const callerB = synchronizeAnalyticsConsent(input);
+  firstStatus.resolve({ consent: null, version: null });
+  await postStarted.promise;
+
+  const callerC = synchronizeAnalyticsConsent(input);
+  post.resolve(true);
+
+  assert.deepEqual(await Promise.all([callerB, callerC]), ["resubmitted", "resubmitted"]);
+  assert.equal(posts, 1);
+  assert.equal(statusCalls, 1);
+});
+
+test("an existing status read still shares one successful persistence result", async () => {
+  const status = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  const post = deferred<boolean>();
+  const postStarted = deferred<void>();
+  let statusCalls = 0;
+  let posts = 0;
+  const input = {
+    visitorId: "visitor-overlapping-persist-epoch",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return status.promise;
+    },
+    persist: async () => {
+      posts += 1;
+      postStarted.resolve();
+      return post.promise;
+    }
+  };
+
+  const callerB = synchronizeAnalyticsConsent(input);
+  const callerC = synchronizeAnalyticsConsent(input);
+  status.resolve({ consent: null, version: null });
+  await postStarted.promise;
+  post.resolve(true);
+
+  assert.deepEqual(await Promise.all([callerB, callerC]), ["resubmitted", "resubmitted"]);
+  assert.equal(posts, 1);
+  assert.equal(statusCalls, 1);
+});
+
+test("a later consent check persists again when the server cookie has vanished", async () => {
+  let posts = 0;
+  const input = {
+    visitorId: "visitor-later-cleared-cookie",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => ({ consent: null, version: null }),
+    persist: async () => { posts += 1; return true; }
+  };
+
+  assert.equal(await synchronizeAnalyticsConsent(input), "resubmitted");
+  assert.equal(await synchronizeAnalyticsConsent(input), "resubmitted");
+  assert.equal(posts, 2);
+});
+
+test("a failed shared persist does not advance the epoch and a later retry posts again", async () => {
+  const firstStatus = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  const secondStatus = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  let statusCalls = 0;
+  let posts = 0;
+  const input = {
+    visitorId: "visitor-failed-persist-epoch",
+    consent: "analytics" as const,
+    version: "2026-07-23",
+    getStatus: async () => {
+      statusCalls += 1;
+      return statusCalls === 1 ? firstStatus.promise : secondStatus.promise;
+    },
+    persist: async () => {
+      posts += 1;
+      return posts > 1;
+    }
+  };
+
+  const first = synchronizeAnalyticsConsent(input);
+  firstStatus.resolve({ consent: null, version: null });
+  assert.equal(await first, "unavailable");
+
+  const retry = synchronizeAnalyticsConsent(input);
+  secondStatus.resolve({ consent: null, version: null });
+  assert.equal(await retry, "resubmitted");
+  assert.equal(posts, 2);
+});
+
 test("synchronization, recovery readiness, and route tracking preserve withdrawal and re-opt-in lifecycle", async () => {
   const storage = new Map<string, string>();
   const adapter = {
