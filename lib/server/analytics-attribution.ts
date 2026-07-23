@@ -35,6 +35,14 @@ export type AnalyticsAttributionService = {
 
 export type AnalyticsConsentState = "necessary" | "analytics";
 
+export type OrderAttributionFields = {
+  source: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  referrer: string | null;
+};
+
 export function getOwnedAnalyticsHosts(canonicalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL): Set<string> {
   const hosts = new Set(BOXSOFA_OWNED_HOSTS);
   const configuredHost = hostFromUrl(canonicalSiteUrl);
@@ -185,6 +193,28 @@ export async function resolveAttributionForConsentState(input: {
   };
 }
 
+export async function resolveOrderAttribution(input: {
+  request: Request;
+  service: AnalyticsAttributionService | null;
+  now?: number;
+}): Promise<OrderAttributionFields> {
+  const signed = input.service
+    ? await input.service.verify(readCookie(input.request, ATTRIBUTION_COOKIE_NAME), input.now)
+    : null;
+
+  if (signed) {
+    return {
+      source: signed.source,
+      utm_source: signed.rawUtm.source ?? signed.source,
+      utm_medium: signed.medium,
+      utm_campaign: signed.campaign,
+      referrer: signed.referrerDomain
+    };
+  }
+
+  return sanitizedRequestOrderAttribution(input.request);
+}
+
 export function serializeAnalyticsCookie(name: string, value: string, maxAge: number): string {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
@@ -212,6 +242,41 @@ function extractRawUtm(url: URL): Record<string, string> {
     if (value) raw[field] = value;
   }
   return raw;
+}
+
+function sanitizedRequestOrderAttribution(request: Request): OrderAttributionFields {
+  const url = new URL(request.url);
+  const rawUtm = extractRawUtm(url);
+  const ownHosts = getOwnedAnalyticsHosts();
+  const externalReferrer = trustedExternalReferrer(request.headers.get("referer"), ownHosts);
+  const canonical = resolveAttribution({
+    utmSource: rawUtm.source,
+    referrer: externalReferrer?.url ?? null
+  });
+
+  return {
+    source: canonical.source,
+    utm_source: rawUtm.source ?? null,
+    utm_medium: rawUtm.medium ?? null,
+    utm_campaign: rawUtm.campaign ?? null,
+    referrer: externalReferrer?.domain ?? null
+  };
+}
+
+function readCookie(request: Request, name: string): string | null {
+  const header = request.headers.get("cookie");
+  if (!header || header.length > 8192) return null;
+  for (const item of header.split(";")) {
+    const [key, ...value] = item.trim().split("=");
+    if (key === name && value.length) {
+      try {
+        return decodeURIComponent(value.join("="));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 function trustedExternalReferrer(referrer: string | null, ownHosts: ReadonlySet<string>): { url: string; domain: string } | null {

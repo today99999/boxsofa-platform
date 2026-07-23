@@ -5,6 +5,7 @@ import {
   ATTRIBUTION_COOKIE_NAME,
   createAnalyticsAttributionService,
   getOwnedAnalyticsHosts,
+  resolveOrderAttribution,
   resolveAttributionForConsentState,
   resolveTrustedAttribution
 } from "./analytics-attribution.ts";
@@ -169,4 +170,115 @@ test("rate-limit identifiers use purpose-separated HMAC output", async () => {
   assert.equal(first, repeated);
   assert.notEqual(first, otherPurpose);
   assert.equal(first.includes("203.0.113.44"), false);
+});
+
+test("order attribution ignores forged body attribution and falls back to server-observed request fields", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const request = new Request("https://boxsofa.eu/api/orders?utm_source=google&utm_medium=cpc&utm_campaign=chairs", {
+    method: "POST",
+    headers: { referer: "https://boxsofa.eu/product/chameleon-mario-sofa-01" },
+    body: JSON.stringify({
+      attribution: {
+        source: "forged-affiliate",
+        medium: "paid",
+        campaign: "fake-gmv",
+        referrer: "https://evil.example/path"
+      }
+    })
+  });
+
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), {
+    source: "google",
+    utm_source: "google",
+    utm_medium: "cpc",
+    utm_campaign: "chairs",
+    referrer: null
+  });
+});
+
+test("order attribution persists valid signed HttpOnly attribution before request fallbacks", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const token = await service.issue({
+    source: "pinterest",
+    medium: "social",
+    campaign: "summer",
+    referrerDomain: "news.google.de",
+    rawUtm: { source: "pinterest", medium: "social", campaign: "summer" }
+  });
+  const request = new Request("https://boxsofa.eu/api/orders?utm_source=google", {
+    method: "POST",
+    headers: {
+      cookie: `${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+      referer: "https://boxsofa.eu/cart"
+    }
+  });
+
+  assert.deepEqual(await resolveOrderAttribution({ request, service }), {
+    source: "pinterest",
+    utm_source: "pinterest",
+    utm_medium: "social",
+    utm_campaign: "summer",
+    referrer: "news.google.de"
+  });
+});
+
+test("order attribution treats invalid expired or cross-context signed cookies as fallback-only", async () => {
+  const service = createAnalyticsAttributionService(SECRET);
+  const otherService = createAnalyticsAttributionService(`${SECRET}-other-context-secret`);
+  const expiredToken = await service.issue({
+    source: "tiktok",
+    medium: "social",
+    campaign: "expired",
+    referrerDomain: null,
+    rawUtm: { source: "tiktok" }
+  }, 0);
+  const crossContextToken = await otherService.issue({
+    source: "affiliate",
+    medium: "partner",
+    campaign: "wrong-secret",
+    referrerDomain: "partner.example",
+    rawUtm: { source: "affiliate" }
+  });
+
+  for (const token of ["forged.payload", expiredToken, crossContextToken]) {
+    const request = new Request("https://boxsofa.eu/api/orders", {
+      method: "POST",
+      headers: {
+        cookie: `${ATTRIBUTION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+        referer: "https://www.google.com/search?q=boxsofa"
+      }
+    });
+
+    assert.deepEqual(await resolveOrderAttribution({ request, service, now: 31 * 24 * 60 * 60 * 1000 }), {
+      source: "google",
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      referrer: "www.google.com"
+    });
+  }
+});
+
+test("order attribution remains backward compatible with old payload attribution shapes", async () => {
+  const request = new Request("https://boxsofa.eu/api/orders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      attribution: {
+        source: "old-browser-storage",
+        medium: "legacy",
+        campaign: "legacy-campaign",
+        referrer: "https://legacy.example",
+        occurredAt: "2026-07-23T00:00:00.000Z"
+      }
+    })
+  });
+
+  assert.deepEqual(await resolveOrderAttribution({ request, service: null }), {
+    source: "direct",
+    utm_source: null,
+    utm_medium: null,
+    utm_campaign: null,
+    referrer: null
+  });
 });

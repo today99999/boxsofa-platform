@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAccess } from "@/lib/server/admin-auth";
-import { trackOrderEventFields } from "@/lib/server/analytics";
+import { resolveOrderAttribution } from "@/lib/server/analytics-attribution";
+import { createRuntimeAnalyticsSecurity } from "@/lib/server/analytics-security";
 import { buildOrderEmailPreview } from "@/lib/email-notifications";
 import { queueOrderEmailPreview } from "@/lib/server/email-notification-queue";
 import { ADMIN_ORDER_WITH_ITEMS_SELECT, type OrderRow, toLocalOrder } from "@/lib/server/orders";
@@ -27,14 +28,6 @@ const orderItemSchema = z.object({
   quantity: z.number().int().positive()
 });
 
-const attributionSchema = z.object({
-  source: z.string().trim().min(1).max(80),
-  medium: z.string().trim().max(80).optional(),
-  campaign: z.string().trim().max(160).optional(),
-  referrer: z.string().url().max(500).optional(),
-  occurredAt: z.string().datetime()
-});
-
 const createOrderSchema = z.object({
   customerName: z.string().trim().min(1),
   phone: z.string().trim().min(1),
@@ -50,8 +43,7 @@ const createOrderSchema = z.object({
   subtotalEur: z.number().nonnegative(),
   discountEur: z.number().nonnegative().default(0),
   shippingEur: z.number().nonnegative(),
-  totalEur: z.number().nonnegative(),
-  attribution: attributionSchema.nullable().optional()
+  totalEur: z.number().nonnegative()
 });
 
 function createOrderNumber() {
@@ -203,16 +195,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
-  const requestAttribution = trackOrderEventFields(request);
-  const attribution = order.attribution
-    ? {
-        source: order.attribution.source,
-        utm_source: order.attribution.source,
-        utm_medium: order.attribution.medium ?? null,
-        utm_campaign: order.attribution.campaign ?? null,
-        referrer: order.attribution.referrer ?? null
-      }
-    : requestAttribution;
+  const attribution = await resolveOrderAttribution({
+    request,
+    service: createRuntimeAnalyticsSecurity()
+  });
   const supabase = createSupabaseServiceRoleClient();
   const quantitiesBySku = aggregateOrderQuantities(order.items);
   const requestedSkus = Object.keys(quantitiesBySku);

@@ -267,6 +267,13 @@ test("consent status reads only the public state/version contract", async () => 
   assert.equal(unavailable, null);
 });
 
+test("checkout payload does not send browser-stored attribution to the order API", () => {
+  const source = readFileSync("components/CartClient.tsx", "utf8");
+
+  assert.doesNotMatch(source, /getStoredAttribution/);
+  assert.doesNotMatch(source, /attribution:\s*getStoredAttribution\(\)/);
+});
+
 test("consent mutations serialize background sync, rapid choices, and failed operations", async () => {
   const first = deferred<string>();
   const calls: string[] = [];
