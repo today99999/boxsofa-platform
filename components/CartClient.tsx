@@ -6,11 +6,13 @@ import { trackEvent } from "@/lib/analytics";
 import { CatalogText } from "@/components/CatalogText";
 import { LeadCapture } from "@/components/LeadCapture";
 import { useTranslation } from "@/components/useTranslation";
+import { europeDeliveryCountries } from "@/lib/europeShipping";
 
 type CheckoutForm = {
   customerName: string;
   phone: string;
   email: string;
+  countryCode: string;
   address: string;
 };
 
@@ -39,6 +41,7 @@ const emptyCheckoutForm: CheckoutForm = {
   customerName: "",
   phone: "",
   email: "",
+  countryCode: "ES",
   address: ""
 };
 
@@ -53,7 +56,7 @@ function hasCheckoutInput(form: CheckoutForm) {
 function formatSavedAddress(address: CustomerProfileResponse["address"]) {
   if (!address) return "";
   const cityLine = [address.postal_code, address.city].filter(Boolean).join(" ");
-  return [address.line1, address.line2, cityLine, address.province, address.country_code]
+  return [address.line1, address.line2, cityLine, address.province]
     .filter(Boolean)
     .join(", ");
 }
@@ -84,6 +87,7 @@ export function CartClient() {
           customerName: result.address?.recipient || result.profile?.full_name || "",
           phone: result.address?.phone || result.profile?.phone || "",
           email: result.profile?.email || "",
+          countryCode: result.address?.country_code || "ES",
           address: savedAddress
         };
 
@@ -130,6 +134,7 @@ export function CartClient() {
       customerName: checkoutForm.customerName,
       phone: checkoutForm.phone,
       email: checkoutForm.email,
+      countryCode: checkoutForm.countryCode,
       address: checkoutForm.address,
       items,
       subtotalEur: subtotal,
@@ -258,6 +263,21 @@ export function CartClient() {
             value={checkoutForm.email}
             onChange={(event) => updateCheckoutField("email", event.target.value)}
           />
+        </label>
+        <label>
+          {t("country")}
+          <select
+            name="countryCode"
+            required
+            value={checkoutForm.countryCode}
+            onChange={(event) => updateCheckoutField("countryCode", event.target.value)}
+          >
+            {europeDeliveryCountries.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           {t("address")}

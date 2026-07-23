@@ -26,7 +26,7 @@ Post one proof-style short video per weekday. Repeat the same idea in English an
 | Monday | Compressed package entering a small apartment | "Measure your stairs before buying." |
 | Tuesday | 24-72 hour recovery before/after | "See compressed sofa options." |
 | Wednesday | Narrow stairs / small lift problem | "Built for old buildings and rentals." |
-| Thursday | Sofa-in-a-box explanation | "Free basic delivery in Spain." |
+| Thursday | Sofa-in-a-box explanation | "Free basic delivery across Europe." |
 | Friday | Product comfort and room scene | "Secure Stripe payment and 14-day return window." |
 
 ## Short Video Hooks
@@ -39,7 +39,7 @@ Use these as first-line subtitles or spoken hooks.
 4. "What happens after opening a sofa-in-a-box?"
 5. "24-72 hours later: compressed foam recovery."
 6. "For Madrid flats, Barcelona rentals and old European buildings."
-7. "Free basic delivery in Spain, secure checkout with Stripe."
+7. "Free basic delivery across Europe, secure checkout with Stripe."
 
 ## English Caption Templates
 
@@ -49,7 +49,7 @@ Full-size sofa, compact delivery.
 
 BoxSofa sofas arrive vacuum-compressed, then recover after unpacking. Useful for apartments, rentals, narrow staircases and small lifts.
 
-Free basic delivery in Spain. Secure Stripe payment.
+Free basic delivery across Europe. Secure Stripe payment.
 
 Shop: https://boxsofa.eu/category/all?utm_source=tiktok&utm_medium=social&utm_campaign=organic_launch
 
@@ -77,7 +77,7 @@ Un sofá de tamaño completo, entregado en formato compacto.
 
 Los sofás BoxSofa llegan comprimidos al vacío y recuperan su forma tras abrir el paquete. Pensados para pisos pequeños, alquileres, escaleras estrechas y ascensores compactos.
 
-Entrega básica gratuita en España. Pago seguro con Stripe.
+Entrega básica gratuita en toda Europa. Pago seguro con Stripe.
 
 Ver sofás: https://boxsofa.eu/category/all?utm_source=instagram&utm_medium=social&utm_campaign=organic_launch_es
 
@@ -105,7 +105,7 @@ Use soft, helpful posts. Do not spam groups with the same sales message.
 
 Good format:
 
-> We are testing compressed foam sofas for Spain-first delivery. The main use case is apartments where a normal sofa is hard to move through stairs or lifts. I wrote a quick checklist for measuring the route before ordering: [guide link]. Feedback from renters or people in old buildings is very welcome.
+> We are testing compressed foam sofas for delivery across Europe. The main use case is apartments where a normal sofa is hard to move through stairs or lifts. I wrote a quick checklist for measuring the route before ordering: [guide link]. Feedback from renters or people in old buildings is very welcome.
 
 Avoid:
 

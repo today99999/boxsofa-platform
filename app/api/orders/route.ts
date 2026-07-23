@@ -7,6 +7,7 @@ import { queueOrderEmailPreview } from "@/lib/server/email-notification-queue";
 import { ADMIN_ORDER_WITH_ITEMS_SELECT, type OrderRow, toLocalOrder } from "@/lib/server/orders";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getSiteUrl, getStripeClient, hasStripeCheckoutConfig } from "@/lib/server/stripe";
+import { isEuropeDeliveryCountry } from "@/lib/europeShipping";
 import {
   createSupabaseServerClient,
   createSupabaseServiceRoleClient,
@@ -30,6 +31,12 @@ const createOrderSchema = z.object({
   customerName: z.string().trim().min(1),
   phone: z.string().trim().min(1),
   email: z.string().trim().email(),
+  countryCode: z
+    .string()
+    .trim()
+    .length(2)
+    .transform((value) => value.toUpperCase())
+    .refine(isEuropeDeliveryCountry, "Delivery country must be in Europe."),
   address: z.string().trim().min(1),
   items: z.array(orderItemSchema).min(1),
   subtotalEur: z.number().nonnegative(),
@@ -96,7 +103,7 @@ async function saveCustomerCheckoutProfile(
 
   const addressRow = {
     customer_id: customerId,
-    country_code: "ES",
+    country_code: order.countryCode,
     recipient: order.customerName,
     phone: order.phone,
     line1: order.address,
@@ -261,6 +268,7 @@ export async function POST(request: Request) {
       phone: order.phone,
       address_snapshot: {
         address: order.address,
+        countryCode: order.countryCode,
         recipient: order.customerName,
         phone: order.phone,
         email: order.email

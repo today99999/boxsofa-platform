@@ -205,6 +205,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <ProductMedia
             name={publicTitle}
             images={product.images.length ? product.images : [product.mainImage]}
+            video={product.video}
             previousHref={siblings.length > 1 ? `/product/${previousSku.slug}` : undefined}
             nextHref={siblings.length > 1 ? `/product/${nextSku.slug}` : undefined}
           />
@@ -216,8 +217,8 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <p><TranslatedText id="shippingAndPaymentNote" /></p>
           <div className="product-trust-strip" aria-label={`Why buy ${publicName} from BoxSofa`}>
             <span>Secure Stripe card payment</span>
-            <span>14-day return window in Spain</span>
-            <span>Free basic delivery in Spain</span>
+            <span>14-day return window after delivery</span>
+            <span>Free basic delivery across Europe</span>
             <span>Support: info@boxsofa.eu</span>
           </div>
           <div className="price">EUR {product.priceEur}</div>

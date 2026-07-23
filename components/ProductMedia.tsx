@@ -6,13 +6,15 @@ import { useMemo, useState } from "react";
 type ProductMediaProps = {
   name: string;
   images: string[];
+  video?: string;
   previousHref?: string;
   nextHref?: string;
 };
 
-export function ProductMedia({ name, images, previousHref, nextHref }: ProductMediaProps) {
+export function ProductMedia({ name, images, video, previousHref, nextHref }: ProductMediaProps) {
   const gallery = useMemo(() => images.filter(Boolean), [images]);
   const [index, setIndex] = useState(0);
+  const [showVideo, setShowVideo] = useState(Boolean(video));
   const hasGallery = gallery.length > 1;
   const currentImage = gallery[index] ?? gallery[0];
 
@@ -26,42 +28,76 @@ export function ProductMedia({ name, images, previousHref, nextHref }: ProductMe
 
   return (
     <div className="product-media">
-      {hasGallery ? (
+      {!showVideo && hasGallery ? (
         <button
-          aria-label="上一张图片"
+          aria-label="Previous product image"
           className="media-arrow media-arrow-left"
           type="button"
           onClick={showPreviousImage}
         >
           ‹
         </button>
-      ) : previousHref ? (
-        <Link aria-label="上一个 SKU" className="media-arrow media-arrow-left" href={previousHref}>
+      ) : !showVideo && previousHref ? (
+        <Link aria-label="Previous product" className="media-arrow media-arrow-left" href={previousHref}>
           ‹
         </Link>
       ) : null}
 
-      {currentImage ? (
+      {showVideo && video ? (
+        <video
+          aria-label={`${name} product video`}
+          autoPlay
+          className="product-main-video"
+          controls
+          loop
+          muted
+          playsInline
+          poster={currentImage}
+          preload="metadata"
+          src={video}
+        />
+      ) : currentImage ? (
         <img src={currentImage} alt={name} />
       ) : (
-        <div className="image-placeholder" aria-label={`${name} 主图待上传`}>
-          主图待上传
+        <div className="image-placeholder" aria-label={`${name} product image unavailable`}>
+          Product image unavailable
         </div>
       )}
 
-      {hasGallery ? (
+      {!showVideo && hasGallery ? (
         <button
-          aria-label="下一张图片"
+          aria-label="Next product image"
           className="media-arrow media-arrow-right"
           type="button"
           onClick={showNextImage}
         >
           ›
         </button>
-      ) : nextHref ? (
-        <Link aria-label="下一个 SKU" className="media-arrow media-arrow-right" href={nextHref}>
+      ) : !showVideo && nextHref ? (
+        <Link aria-label="Next product" className="media-arrow media-arrow-right" href={nextHref}>
           ›
         </Link>
+      ) : null}
+
+      {video ? (
+        <div className="product-media-modes" aria-label="Product media">
+          <button
+            aria-pressed={showVideo}
+            className={showVideo ? "active" : ""}
+            type="button"
+            onClick={() => setShowVideo(true)}
+          >
+            Video
+          </button>
+          <button
+            aria-pressed={!showVideo}
+            className={!showVideo ? "active" : ""}
+            type="button"
+            onClick={() => setShowVideo(false)}
+          >
+            Photos
+          </button>
+        </div>
       ) : null}
     </div>
   );

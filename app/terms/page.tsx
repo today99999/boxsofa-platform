@@ -4,7 +4,7 @@ import { PolicyPage } from "@/components/PolicyPage";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "BoxSofa ordering, payment, delivery, product, membership and customer support terms for compressed sofa purchases in Spain.",
+    "BoxSofa ordering, payment, delivery, product, membership and customer support terms for compressed sofa purchases in Europe.",
   alternates: {
     canonical: "/terms"
   }
@@ -15,7 +15,7 @@ export default function TermsPage() {
     <PolicyPage
       eyebrow="Terms of Service"
       title="Ordering and payment terms"
-      intro="These terms explain the BoxSofa online order process, secure payment, delivery and after-sales support for customers in Spain."
+      intro="These terms explain the BoxSofa online order process, secure payment, delivery and after-sales support for customers across Europe."
       sections={[
         {
           title: "Orders and payment",
@@ -27,7 +27,7 @@ export default function TermsPage() {
         },
         {
           title: "Pricing",
-          body: "Product prices and the final payable total are shown in EUR before payment. Basic delivery in Spain is free unless an optional service or disclosed delivery limitation applies."
+          body: "Product prices and the final payable total are shown in EUR before payment. Basic delivery across Europe is free unless an optional service or disclosed delivery limitation applies."
         },
         {
           title: "Membership discount",

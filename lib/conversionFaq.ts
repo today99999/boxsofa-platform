@@ -10,9 +10,9 @@ export const productFaqs: FaqItem[] = [
       "Yes. BoxSofa products are designed to expand after unpacking. Most styles need 24-72 hours to recover; room temperature, fabric tension and foam thickness can affect the exact timing."
   },
   {
-    question: "Is basic delivery free in Spain?",
+    question: "Is basic delivery free across Europe?",
     answer:
-      "Yes. Basic delivery in Spain is free for all BoxSofa sofas. Estimated cross-border delivery is 23-30 working days, and tracking details are provided after shipment."
+      "Yes. Basic delivery across Europe is free for all BoxSofa sofas. Estimated delivery is 23-30 working days, and tracking details are provided after shipment."
   },
   {
     question: "Can it work for narrow stairs or a small lift?",
@@ -38,9 +38,9 @@ export const spanishProductFaqs: FaqItem[] = [
       "Sí. Los productos BoxSofa están diseñados para expandirse después de abrir el paquete. La mayoría necesita 24-72 horas; la temperatura, el tejido y el grosor de la espuma pueden influir."
   },
   {
-    question: "¿La entrega básica es gratuita en España?",
+    question: "¿La entrega básica es gratuita en toda Europa?",
     answer:
-      "Sí. La entrega básica en España es gratuita para todos los sofás BoxSofa. La entrega estimada es de 23-30 días laborables y el seguimiento se facilita tras el envío."
+      "Sí. La entrega básica en toda Europa es gratuita para todos los sofás BoxSofa. La entrega estimada es de 23-30 días laborables y el seguimiento se facilita tras el envío."
   },
   {
     question: "¿Sirve para escaleras estrechas o ascensores pequeños?",

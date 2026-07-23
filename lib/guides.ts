@@ -33,7 +33,7 @@ export const guides: Guide[] = [
       {
         title: "Delivery and payment",
         body:
-          "BoxSofa offers free basic delivery in Spain, estimated cross-border delivery in 23-30 working days, secure Stripe card payment and a 14-day return window after delivery."
+          "BoxSofa offers free basic delivery across Europe, estimated delivery in 23-30 working days, secure Stripe card payment and a 14-day return window after delivery."
       }
     ],
     productSlugs: featured
@@ -166,7 +166,7 @@ export const spanishGuides: Guide[] = [
       {
         title: "Entrega y pago",
         body:
-          "BoxSofa ofrece entrega básica gratuita en España, pago seguro con tarjeta mediante Stripe y entrega estimada en 23-30 días laborables."
+          "BoxSofa ofrece entrega básica gratuita en toda Europa, pago seguro con tarjeta mediante Stripe y entrega estimada en 23-30 días laborables."
       }
     ],
     productSlugs: featured
@@ -296,7 +296,7 @@ export const spanishGuides: Guide[] = [
       {
         title: "Entrega en España",
         body:
-          "BoxSofa ofrece entrega básica gratuita en España, pago seguro mediante Stripe y entrega estimada en 23-30 días laborables."
+          "BoxSofa ofrece entrega básica gratuita en toda Europa, pago seguro mediante Stripe y entrega estimada en 23-30 días laborables."
       }
     ],
     productSlugs: featured

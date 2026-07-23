@@ -390,10 +390,49 @@ video {
 
 .hero-media img,
 .product-media img,
-.hero-video {
+.hero-video,
+.product-main-video {
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+.product-main-video {
+  background: #111;
+  display: block;
+}
+
+.product-media-modes {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(31, 39, 34, 0.16);
+  border-radius: 8px;
+  bottom: 12px;
+  box-shadow: 0 6px 20px rgba(31, 39, 34, 0.12);
+  display: flex;
+  gap: 3px;
+  left: 50%;
+  padding: 3px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.product-media-modes button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
+.product-media-modes button.active {
+  background: var(--brand);
+  color: #fff;
 }
 
 .hero-ad {
@@ -2568,18 +2607,37 @@ video {
 }
 
 .chat-button {
+  align-items: center;
   background: var(--brand);
   border: 0;
   border-radius: 999px;
   bottom: 22px;
   box-shadow: var(--shadow-lift);
   color: #fff;
+  display: inline-flex;
+  gap: 8px;
   font-weight: 900;
   min-height: 56px;
   padding: 14px 18px;
   position: fixed;
   right: 18px;
   z-index: 20;
+}
+
+.chat-button-icon {
+  align-items: center;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+body:has(.checkout-layout) .chat-button {
+  left: 18px;
+  right: auto;
 }
 
 .support-panel {
@@ -3833,32 +3891,79 @@ video {
 }
 
 @media (max-width: 430px) {
+  body {
+    padding-bottom: 48px;
+  }
+
   .product-grid,
   .home-product-grid {
     grid-template-columns: 1fr;
   }
 
   .site-header {
-    padding: 14px 12px;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   .header-top {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
   .header-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .brand-logo {
+    width: 132px;
+  }
+
+  .brand-region {
+    font-size: 8px;
+    margin-bottom: 3px;
   }
 
   .site-header .nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .site-header .nav a {
-    font-size: 13px;
-    padding: 9px 3px;
+    font-size: 12px;
+    min-height: 38px;
+    padding: 7px 3px;
+  }
+
+  .topbar {
+    font-size: 12px;
+    padding: 7px 12px;
+  }
+
+  .chat-button {
+    border-radius: 0;
+    bottom: 0;
+    height: 44px;
+    justify-content: center;
+    left: 0;
+    min-height: 44px;
+    padding: 8px 14px;
+    right: 0;
+    width: 100%;
+  }
+
+  .chat-button-label {
+    display: inline;
+  }
+
+  body:has(.checkout-layout) .chat-button {
+    left: 0;
+    right: 0;
+  }
+
+  .support-panel {
+    bottom: 54px;
   }
 }

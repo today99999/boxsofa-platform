@@ -19,7 +19,7 @@ export default function ShippingPage() {
       sections={[
         {
           title: "Free basic delivery",
-          body: "BoxSofa provides free basic delivery for all sofas in Spain. Any optional service or remote-area limitation is shown or agreed before payment."
+          body: "BoxSofa provides free basic delivery for all sofas across Europe. Any optional service or remote-area limitation is shown or agreed before payment."
         },
         {
           title: "Estimated delivery time",

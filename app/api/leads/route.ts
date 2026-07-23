@@ -88,7 +88,7 @@ function buildCustomerEmail(lead: z.infer<typeof leadSchema>) {
     "If stairs, lift or doorway size is your main concern, you can reply with the width, height and any tight turns. We will help confirm fit.",
     "",
     "Useful details:",
-    "- Free basic delivery in Spain",
+    "- Free basic delivery across Europe",
     "- Secure Stripe card payment",
     "- Estimated delivery: 23-30 working days",
     "- Support: info@boxsofa.eu",

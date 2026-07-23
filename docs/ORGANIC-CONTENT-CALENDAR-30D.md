@@ -5,7 +5,7 @@ Use this calendar with the links in `docs/ORGANIC-TRAFFIC-PLAYBOOK.md`. Post man
 ## Rules
 
 - Use real product or unboxing footage whenever possible.
-- Keep claims factual: free basic delivery in Spain, secure Stripe payment, 14-day return window, 23-30 working day delivery estimate.
+- Keep claims factual: free basic delivery across Europe, secure Stripe payment, 14-day return window, 23-30 working day delivery estimate.
 - Do not promise next-day delivery, discounts, policy exceptions or exact recovery beyond the 24-72 hour range.
 - Use one UTM link per platform.
 - Reuse each idea in English and Spanish when the platform audience supports it.
@@ -25,7 +25,7 @@ Use this calendar with the links in `docs/ORGANIC-TRAFFIC-PLAYBOOK.md`. Post man
 | 9 | Facebook Groups | Soft discussion | What is the hardest part of sofa delivery in old buildings? | `/es/guias/sofa-escaleras-estrechas-sin-ascensor?utm_source=facebook&utm_medium=group&utm_campaign=organic_30d_day09` |
 | 10 | Pinterest | Pin | Before buying a sofa: measure your staircase. | `/guides/sofa-for-narrow-stairs-no-elevator?utm_source=pinterest&utm_medium=pin&utm_campaign=organic_30d_day10` |
 | 11 | TikTok | FAQ | Will a compressed sofa recover its shape? | `/product/chameleon-mario-sofa-01?utm_source=tiktok&utm_medium=social&utm_campaign=organic_30d_day11` |
-| 12 | Instagram Reels | FAQ | Is basic delivery free in Spain? | `/shipping?utm_source=instagram&utm_medium=reels&utm_campaign=organic_30d_day12` |
+| 12 | Instagram Reels | FAQ | Is basic delivery free across Europe? | `/shipping?utm_source=instagram&utm_medium=reels&utm_campaign=organic_30d_day12` |
 | 13 | YouTube Shorts | Spanish city | Sofá comprimido para pisos pequeños en Madrid. | `/es/guias/sofa-comprimido-madrid-piso-pequeno?utm_source=youtube&utm_medium=shorts&utm_campaign=organic_30d_day13` |
 | 14 | Facebook Page | Policy trust | 14-day return window after delivery. | `/returns?utm_source=facebook&utm_medium=social&utm_campaign=organic_30d_day14` |
 | 15 | Pinterest | Pin | Compressed sofa recovery: 24-72 hours. | `/es/guias/recuperacion-sofa-comprimido-24-72-horas?utm_source=pinterest&utm_medium=pin&utm_campaign=organic_30d_day15` |

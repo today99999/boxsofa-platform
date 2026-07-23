@@ -27,7 +27,7 @@ export default function FaqPage() {
         },
         {
           title: "Is delivery free?",
-          body: "Yes. Basic delivery is free for all sofas in Spain. Any optional service or remote-area limitation is shown or agreed before payment."
+          body: "Yes. Basic delivery is free for all BoxSofa sofas across Europe. Any optional service or remote-area limitation is shown or agreed before payment."
         },
         {
           title: "Can I pay online now?",

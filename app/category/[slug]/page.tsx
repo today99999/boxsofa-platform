@@ -49,7 +49,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
             <h1>{category.slug === "all" ? <TranslatedText id="allSofas" /> : category.name}</h1>
             <p className="collection-intro">
               Compressed foam sofas for small apartments, rental homes, narrow stairs and compact lifts. Free basic
-              delivery in Spain, secure Stripe payment and a 14-day return window after delivery.
+              delivery across Europe, secure Stripe payment and a 14-day return window after delivery.
             </p>
           </div>
           <span>{items.length} <TranslatedText id="stylesCount" /></span>

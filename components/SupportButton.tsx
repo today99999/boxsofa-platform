@@ -323,8 +323,15 @@ export function SupportButton() {
         </div>
       ) : null}
 
-      <button className="chat-button" type="button" onClick={() => setOpen((value) => !value)}>
-        {t("support")}
+      <button
+        aria-label={t("support")}
+        className="chat-button"
+        title={t("support")}
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span aria-hidden="true" className="chat-button-icon">?</span>
+        <span className="chat-button-label">{t("support")}</span>
       </button>
     </>
   );
