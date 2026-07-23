@@ -6,9 +6,52 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
 import { OptimizedImage } from "@/components/OptimizedImage";
-import { categories, getStyleProductsByCategory } from "@/lib/catalog";
+import { categories, getStyleProductsByCategory, type CategorySlug } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { guides, spanishGuides } from "@/lib/guides";
+import type { TranslationKey } from "@/lib/i18n";
+
+const categoryLabelKeys: Record<CategorySlug, TranslationKey> = {
+  single: "singleSeat",
+  double: "doubleSeat",
+  triple: "tripleSeat",
+  combo: "comboSeat"
+};
+
+const categorySourceLabels: Record<CategorySlug, string> = {
+  single: "单人位",
+  double: "双人位",
+  triple: "三人位",
+  combo: "组合位"
+};
+
+const categorySuffixPatterns: Record<CategorySlug, RegExp> = {
+  single: /(?:单人位?|单人)$/,
+  double: /(?:双人位?|双人)$/,
+  triple: /(?:三人位|3人位)$/,
+  combo: /单人\+脚踏$/
+};
+
+function getCardColor(color: string, category: CategorySlug) {
+  const categoryLabel = categorySourceLabels[category];
+  const cleaned = color
+    .replace(/^(?:三人位带脚垫组合|三人加脚垫)\s*\/\s*/, "")
+    .replace(new RegExp(`^${categoryLabel}\\s*\\/\\s*`), "")
+    .replace(new RegExp(`^${categoryLabel}\\s*`), "")
+    .replace(new RegExp(`\\s*\\/\\s*${categoryLabel}$`), "")
+    .replace(new RegExp(`${categoryLabel}$`), "")
+    .replace(categorySuffixPatterns[category], "")
+    .replace(/背景版/g, "")
+    .replace(/多色(?:展示|组合)/g, "多色")
+    .replace(/三色组合/g, "三色")
+    .replace(/\s*\/\s*拉$/, "")
+    .replace(/^(.+)\s*\/\s*\1$/, "$1")
+    .replace(/^\s*\/\s*|\s*\/\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return cleaned || color;
+}
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const category = categories.find((item) => item.slug === params.slug) ?? categories[0];
@@ -71,8 +114,11 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
                 )}
               </div>
               <div className="product-card-body">
-                <strong className="product-card-name"><CatalogText text={product.name} kind="name" /></strong>
-                <span className="product-card-color"><CatalogText text={product.color} kind="color" /></span>
+                <strong className="product-card-name"><CatalogText text={product.styleId} kind="name" /></strong>
+                <div className="product-card-meta">
+                  <span className="product-card-type"><TranslatedText id={categoryLabelKeys[product.category]} /></span>
+                  <span className="product-card-color"><CatalogText text={getCardColor(product.color, product.category)} kind="color" /></span>
+                </div>
                 <span className="product-card-price">EUR {product.priceEur}</span>
               </div>
             </Link>

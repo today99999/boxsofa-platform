@@ -96,7 +96,7 @@ export default function HomePage() {
                   )}
                 </div>
                 <div className="card-body">
-                  <strong><CatalogText text={product.name} kind="name" /></strong>
+                  <strong><CatalogText text={product.styleId} kind="name" /></strong>
                   <span className="price">EUR {product.priceEur}</span>
                 </div>
               </Link>
