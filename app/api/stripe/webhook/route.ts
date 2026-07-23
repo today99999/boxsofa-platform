@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import {
+  recordStripeRefund,
+  recordStripeWebhookFailure,
+  recordStripeWebhookSuccess
+} from "@/lib/server/stripe-refunds";
 import { confirmStripeCheckoutPayment } from "@/lib/server/stripe-order-payment";
 import { getStripeClient } from "@/lib/server/stripe";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
@@ -19,21 +24,45 @@ export async function POST(request: Request) {
 
   try {
     event = getStripeClient().webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (error) {
-    return NextResponse.json(
-      { ok: false, message: error instanceof Error ? error.message : "Invalid Stripe webhook signature." },
-      { status: 400 }
-    );
+  } catch {
+    return NextResponse.json({ ok: false, message: "Invalid Stripe webhook signature." }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    if (session.payment_status === "paid") {
-      const result = await confirmStripeCheckoutPayment(createSupabaseServiceRoleClient(), session);
-      if (!result.ok) {
-        return NextResponse.json({ ok: false, message: result.message }, { status: 500 });
+  const supabase = createSupabaseServiceRoleClient();
+  let handled = false;
+
+  try {
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.payment_status === "paid") {
+        handled = true;
+        const result = await confirmStripeCheckoutPayment(supabase, session);
+        if (!result.ok) {
+          await recordStripeWebhookFailure(supabase, event.type, "checkout_processing_failed");
+          return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
+        }
       }
     }
+
+    if (event.type === "refund.created" || event.type === "refund.updated") {
+      handled = true;
+      const result = await recordStripeRefund(supabase, event.data.object as Stripe.Refund);
+      if (!result.ok) {
+        await recordStripeWebhookFailure(supabase, event.type, result.code);
+        return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
+      }
+    }
+
+    if (handled) {
+      const health = await recordStripeWebhookSuccess(supabase, event.type);
+      if (!health.ok) {
+        await recordStripeWebhookFailure(supabase, event.type, "source_health_update_failed");
+        return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
+      }
+    }
+  } catch {
+    await recordStripeWebhookFailure(supabase, event.type, "checkout_processing_failed");
+    return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

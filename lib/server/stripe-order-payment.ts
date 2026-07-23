@@ -48,7 +48,7 @@ export async function confirmStripeCheckoutPayment(
     return { ok: false, message: "Stripe paid amount does not match the order total." };
   }
 
-  if (order.payment_status === "paid") {
+  if (order.payment_status === "paid" || order.payment_status === "refunded") {
     return { ok: true };
   }
 

@@ -20,6 +20,21 @@ export type DashboardAlert = {
   createdAt: string;
 };
 
+export type DataCenterOverview = {
+  range: "today" | "7d" | "30d";
+  metrics: {
+    gmvEur: number;
+    netSalesEur: number;
+    paidOrders: number;
+    averageOrderValueEur: number;
+    conversionRate: number | null;
+  };
+  visitors: number;
+  openAfterSales: number;
+  alerts: DashboardAlert[];
+  freshness: DataFreshness[];
+};
+
 export type AfterSalesCase = {
   id: string;
   caseNumber: string;

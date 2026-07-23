@@ -7,6 +7,7 @@ const baseUrl = (
 
 const protectedChecks = [
   { method: 'GET', path: '/api/admin/readiness' },
+  { method: 'GET', path: '/api/admin/data-center/overview?range=7d' },
   { method: 'GET', path: '/api/admin/audit' },
   { method: 'GET', path: '/api/admin/leads' },
   { method: 'GET', path: '/api/admin/notifications' },
