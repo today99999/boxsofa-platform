@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { getProductBySlug, type Product } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { buildFaqJsonLd } from "@/lib/conversionFaq";
@@ -102,11 +103,16 @@ export default function SpanishGuidePage({ params }: { params: { slug: string } 
             </Link>
           </div>
           <div className="grid home-product-grid">
-            {products.map((product) => (
+            {products.map((product, index) => (
               <Link className="card home-product-card" href={`/product/${product.slug}`} key={product.id}>
                 <div className="product-media">
                   {product.mainImage ? (
-                    <img src={product.mainImage} alt={getPublicProductTitle(product)} />
+                    <OptimizedImage
+                      alt={getPublicProductTitle(product)}
+                      priority={index < 2}
+                      sizes="(max-width: 430px) calc(100vw - 36px), (max-width: 820px) 50vw, 25vw"
+                      src={product.mainImage}
+                    />
                   ) : (
                     <div className="image-placeholder">Imagen pendiente</div>
                   )}

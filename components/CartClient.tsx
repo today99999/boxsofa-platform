@@ -7,6 +7,7 @@ import { CatalogText } from "@/components/CatalogText";
 import { LeadCapture } from "@/components/LeadCapture";
 import { useTranslation } from "@/components/useTranslation";
 import { europeDeliveryCountries } from "@/lib/europeShipping";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type CheckoutForm = {
   customerName: string;
@@ -207,7 +208,7 @@ export function CartClient() {
           <div className="cart-list">
             {items.map((item) => (
               <article className="cart-row" key={item.id}>
-                <img src={item.image} alt={item.name} />
+                <OptimizedImage alt={item.name} sizes="92px" src={item.image} />
                 <div>
                   <strong><CatalogText text={item.name} kind="name" /></strong>
                   <p><CatalogText text={item.color} kind="color" /></p>

@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { categories, getStyleProductsByCategory } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { guides, spanishGuides } from "@/lib/guides";
@@ -55,11 +56,16 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
           <span>{items.length} <TranslatedText id="stylesCount" /></span>
         </div>
         <div className="product-grid">
-          {items.map((product) => (
+          {items.map((product, index) => (
             <Link className="product-card" href={`/product/${product.slug}`} key={product.id}>
               <div className="collection-product-media">
                 {product.mainImage ? (
-                  <img src={product.mainImage} alt={getPublicProductTitle(product)} />
+                  <OptimizedImage
+                    alt={getPublicProductTitle(product)}
+                    priority={index < 4}
+                    sizes="(max-width: 430px) calc(100vw - 28px), (max-width: 820px) 50vw, 25vw"
+                    src={product.mainImage}
+                  />
                 ) : (
                   <div className="image-placeholder"><TranslatedText id="mainImagePending" /></div>
                 )}

@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { getStyleProductsByCategory } from "@/lib/catalog";
 import { getPublicProductTitle } from "@/lib/catalogMarketing";
 import { guides } from "@/lib/guides";
@@ -80,11 +81,16 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="grid home-product-grid">
-            {hotProducts.map((product) => (
+            {hotProducts.map((product, index) => (
               <Link className="card home-product-card" href={`/product/${product.slug}`} key={product.id}>
                 <div className="product-media">
                   {product.mainImage ? (
-                    <img src={product.mainImage} alt={getPublicProductTitle(product)} />
+                    <OptimizedImage
+                      alt={getPublicProductTitle(product)}
+                      priority={index < 2}
+                      sizes="(max-width: 430px) calc(100vw - 36px), (max-width: 820px) 50vw, 25vw"
+                      src={product.mainImage}
+                    />
                   ) : (
                     <div className="image-placeholder"><TranslatedText id="mainImagePending" /></div>
                   )}

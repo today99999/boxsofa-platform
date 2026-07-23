@@ -9,6 +9,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SupportButton } from "@/components/SupportButton";
 import { TranslatedText } from "@/components/TranslatedText";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { getProductBySlug, products, type CategorySlug, type Product } from "@/lib/catalog";
 import {
   getPublicProductDescription,
@@ -205,7 +206,6 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           <ProductMedia
             name={publicTitle}
             images={product.images.length ? product.images : [product.mainImage]}
-            video={product.video}
             previousHref={siblings.length > 1 ? `/product/${previousSku.slug}` : undefined}
             nextHref={siblings.length > 1 ? `/product/${nextSku.slug}` : undefined}
           />
@@ -296,14 +296,28 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
               <h2><TranslatedText id="productVideo" /></h2>
               <span className="status"><TranslatedText id="onePerStyle" /></span>
             </div>
-            <video className="detail-video" src={product.video} controls muted preload="metadata" />
+            <video
+              aria-label={`${publicName} product video`}
+              className="detail-video"
+              controls
+              muted
+              playsInline
+              poster={product.mainImage}
+              preload="none"
+              src={product.video}
+            />
           </div>
           <div className="panel detail-image-panel">
             <div className="panel-head">
               <h2><TranslatedText id="detailLongImage" /></h2>
               <span className="status"><TranslatedText id="oneDetailImage" /></span>
             </div>
-            <img className="detail-image" src={product.detailImage} alt={`${product.name} details`} />
+            <OptimizedImage
+              alt={`${product.name} details`}
+              className="detail-image"
+              sizes="(max-width: 820px) calc(100vw - 36px), 92vw"
+              src={product.detailImage}
+            />
           </div>
         </div>
       </section>

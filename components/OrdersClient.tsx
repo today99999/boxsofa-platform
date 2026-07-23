@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { CatalogText } from "@/components/CatalogText";
 import { useTranslation } from "@/components/useTranslation";
 import { ORDERS_KEY, type LocalOrder } from "@/lib/cart";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 type CustomerOrderResponse = { ok: boolean; mode: "local" | "supabase"; orders?: LocalOrder[]; message?: string };
 type OrderSource = "Local orders" | "Customer database";
@@ -465,7 +466,7 @@ export function OrdersClient() {
                   <div className="customer-order-items">
                     {order.items.map((item) => (
                       <div className="customer-order-item" key={item.id}>
-                        <img src={item.image} alt={item.name} />
+                        <OptimizedImage alt={item.name} sizes="64px" src={item.image} />
                         <div>
                           <strong>
                             <CatalogText text={item.name} kind="name" />

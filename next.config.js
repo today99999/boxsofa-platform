@@ -17,6 +17,8 @@ const privateHeaders = [
 module.exports = (phase) => ({
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
   images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
     remotePatterns: [
       {
         protocol: "https",
@@ -33,6 +35,13 @@ module.exports = (phase) => ({
       {
         source: "/(.*)",
         headers: securityHeaders
+      },
+      {
+        source: "/assets/:path*",
+        headers: [
+          ...securityHeaders,
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }
+        ]
       },
       {
         source: "/api/:path*",
