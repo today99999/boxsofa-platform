@@ -38,6 +38,8 @@ const protectedChecks = [
 const publicChecks = [
   { method: 'GET', path: '/api/health', allowedStatuses: [200] },
   { method: 'POST', path: '/api/leads', body: {}, allowedStatuses: [400] },
+  { method: 'POST', path: '/api/analytics/consent', body: {}, allowedStatuses: [400] },
+  { method: 'POST', path: '/api/analytics/events', body: {}, allowedStatuses: [400] },
   { method: 'POST', path: '/api/orders', body: {}, allowedStatuses: [400] },
   { method: 'GET', path: '/api/orders/BX-AUTH-AUDIT', allowedStatuses: [400, 404, 405, 503] },
   { method: 'GET', path: '/api/support', allowedStatuses: [400] },
