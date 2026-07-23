@@ -21,6 +21,7 @@ import {
   createAnalyticsConsentRecoveryCoordinator,
   enqueueConsentMutation,
   fetchWithTimeout,
+  getConsentPersistObservationStateSizeForTest,
   inferDeviceType,
   getAnalyticsReadinessSnapshot,
   isAnalyticsServerReady,
@@ -368,6 +369,55 @@ test("an existing status read still shares one successful persistence result", a
   assert.deepEqual(await Promise.all([callerB, callerC]), ["resubmitted", "resubmitted"]);
   assert.equal(posts, 1);
   assert.equal(statusCalls, 1);
+  assert.equal(getConsentPersistObservationStateSizeForTest(), 0);
+});
+
+test("temporary consent observations are released after unique, failed, and stale status calls", async () => {
+  let posts = 0;
+  for (let index = 0; index < 30; index += 1) {
+    assert.equal(await synchronizeAnalyticsConsent({
+      visitorId: `visitor-observation-${index}`,
+      consent: "analytics",
+      version: "2026-07-23",
+      getStatus: async () => ({ consent: null, version: null }),
+      persist: async () => { posts += 1; return true; }
+    }), "resubmitted");
+  }
+  assert.equal(posts, 30);
+  assert.equal(getConsentPersistObservationStateSizeForTest(), 0);
+
+  const staleStatus = deferred<{ consent: AnalyticsConsent | null; version: string | null }>();
+  let current = true;
+  const stale = synchronizeAnalyticsConsent({
+    visitorId: "visitor-observation-stale",
+    consent: "analytics",
+    version: "2026-07-23",
+    getStatus: async () => staleStatus.promise,
+    persist: async () => true,
+    isCurrent: () => current
+  });
+  current = false;
+  staleStatus.resolve({ consent: null, version: null });
+  assert.equal(await stale, "unavailable");
+  assert.equal(getConsentPersistObservationStateSizeForTest(), 0);
+
+  assert.equal(await synchronizeAnalyticsConsent({
+    visitorId: "visitor-observation-failure",
+    consent: "analytics",
+    version: "2026-07-23",
+    getStatus: async () => ({ consent: null, version: null }),
+    persist: async () => false
+  }), "unavailable");
+  assert.equal(getConsentPersistObservationStateSizeForTest(), 0);
+
+  assert.equal(await synchronizeAnalyticsConsent({
+    visitorId: "visitor-observation-early-return",
+    consent: "analytics",
+    version: "2026-07-23",
+    getStatus: async () => null,
+    persist: async () => true
+  }), "unavailable");
+  assert.equal(getConsentPersistObservationStateSizeForTest(), 0);
 });
 
 test("a later consent check persists again when the server cookie has vanished", async () => {
