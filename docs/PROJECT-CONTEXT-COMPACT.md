@@ -306,4 +306,4 @@ limit 5;
 - TikTok：任务/记录 `6a625779b35dbe3991393f7d`，flow `e2ba14a2-4fb7-4f56-8fad-7b19bc07b63d`，状态仍为平台处理完成前的 `2`，暂未返回公开链接；后续只查询该任务，禁止重建或重复发布。
 - YouTube Shorts：`https://www.youtube.com/watch?v=HfC-NELpsYc`（任务/记录 `6a62577bb35dbe3991393f8a`，flow `9005518e-d425-4359-bbb3-cbadee985738`）。Instagram Reels：`https://www.instagram.com/reel/DbJQ_X-lHGb/`（任务/记录 `6a62577cb35dbe3991393f97`，flow `1d885a69-26df-493a-b8f8-e70f76ef8208`）。Pinterest video Pin：`https://www.pinterest.com/pin/1109363320813714282/`（任务/记录 `6a62577eb35dbe3991393fa3`，flow `b5650063-aa5f-456a-9b40-81829c2412fb`）。Pinterest 未附外链，以避开既有 spam 风险。
 - 已发布文案使用各平台 `boxsofa_final_20260723` UTM，限定为视觉产品演示，说明小户型、出租房、窄楼梯/小电梯、欧洲免费基础配送、Stripe 安全支付和预计 23–30 个工作日；未作折扣、快速到货、真实客户案例或政策例外承诺。
-- Facebook：AiToEarn 仍无公共主页授权；本次发布流中没有 Facebook 记录。需在已登录的 `BoxSofa Europe` Facebook 主页后台手动上传同一原片后，再补录公开链接；在此之前不得以 `BoxSofa_Final.mp4` 再次发布到其余四个平台。
+- Facebook：AiToEarn 仍无公共主页授权，但已通过登录的 `BoxSofa Europe` 主页后台发布同一原片，且主页已显示 AI 内容标识。公开 Reel：`https://www.facebook.com/reel/1012090414790053/`。此素材五个平台均已完成，禁止重复上传。
