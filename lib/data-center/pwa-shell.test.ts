@@ -42,6 +42,10 @@ test("data center overview reads the real owner API response shape", () => {
 test("data center PWA stays scoped to the private application", () => {
   assert.match(manifest, /scope: "\/data-center"/);
   assert.match(registrar, /scope: "\/data-center"/);
+  assert.match(registrar, /getRegistrations\(\)/);
+  assert.match(registrar, /registration\.scope === legacyScope/);
+  assert.match(registrar, /new URL\(worker\.scriptURL\)\.pathname === "\/sw\.js"/);
+  assert.ok(registrar.indexOf("registration.unregister()") < registrar.indexOf("serviceWorker.register"));
   assert.doesNotMatch(serviceWorker, /caches\.open|CacheStorage|cache\.put/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
 });
