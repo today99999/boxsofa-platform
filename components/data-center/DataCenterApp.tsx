@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AfterSalesSection } from "./AfterSalesSection";
 import { OverviewSection } from "./OverviewSection";
+import { UniversalSearch } from "./UniversalSearch";
 
 export type DataCenterSection = "overview" | "orders" | "products" | "inventory" | "customers" | "traffic" | "social" | "marketing" | "after-sales" | "reviews" | "finance" | "cube" | "system";
 
@@ -74,7 +75,10 @@ export function DataCenterApp() {
       </aside>
 
       <section className="dc-content">
-        <header className="dc-topbar"><div><p>BoxSofa Data Center</p><h1>{active.label}</h1></div><Link className="dc-store-link" href="/">查看店铺</Link></header>
+        <header className="dc-topbar">
+          <div><p>BoxSofa Data Center</p><h1>{active.label}</h1></div>
+          <div className="dc-topbar-actions"><UniversalSearch /><Link className="dc-store-link" href="/">查看店铺</Link></div>
+        </header>
         {activeSection === "overview"
           ? <OverviewSection />
           : activeSection === "after-sales"
