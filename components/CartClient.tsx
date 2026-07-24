@@ -63,7 +63,7 @@ function formatSavedAddress(address: CustomerProfileResponse["address"]) {
 }
 
 export function CartClient() {
-  const { t } = useTranslation();
+  const { language, t } = useTranslation();
   const [items, setItems] = useState<CartItem[]>([]);
   const [submittedOrder, setSubmittedOrder] = useState<LocalOrder | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
