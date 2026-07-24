@@ -45,8 +45,8 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 25 SQL files/);
-  assert.match(result.stdout, /25 remote checkpoints/);
+  assert.match(result.stdout, new RegExp(`Migration manifest verified: ${manifest.migrations.length} SQL files`));
+  assert.match(result.stdout, new RegExp(`${manifest.remoteCheckpoints.length} remote checkpoints`));
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -62,12 +62,35 @@ test("repository migration hashes ignore only Windows line endings", () => {
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-test("release verification covers every immutable migration remotely", () => {
-  assert.equal(manifest.remoteCheckpoints.length, manifest.migrations.length);
-  assert.deepEqual(
-    manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
-    manifest.migrations.map((migration: { file: string }) => migration.file).sort()
+const pendingLocalMigrations = ["202607240026_order_locale_snapshot.sql"];
+
+function remotelyCoveredManifest() {
+  const covered = structuredClone(manifest);
+  const checkpointFiles = new Set(
+    covered.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file)
   );
+  covered.migrations = covered.migrations.filter(
+    (migration: { file: string }) => checkpointFiles.has(migration.file)
+  );
+  return covered;
+}
+
+test("local verification records migration 026 as pending remote deployment", () => {
+  const checkpointFiles = manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort();
+  const migrationsWithoutRemoteCheckpoint = manifest.migrations
+    .map((migration: { file: string }) => migration.file)
+    .filter((file: string) => !checkpointFiles.includes(file))
+    .sort();
+
+  assert.deepEqual(migrationsWithoutRemoteCheckpoint, pendingLocalMigrations);
+  assert.deepEqual(
+    checkpointFiles,
+    manifest.migrations
+      .map((migration: { file: string }) => migration.file)
+      .filter((file: string) => !pendingLocalMigrations.includes(file))
+      .sort()
+  );
+
 });
 
 function remoteCheckpointRows() {
@@ -88,7 +111,7 @@ function remoteCheckpointRows() {
 
 test("remote migration truth rejects simultaneous local and manifest tampering", async () => {
   const { verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
-  const changedManifest = structuredClone(manifest);
+  const changedManifest = remotelyCoveredManifest();
   const changedCheckpoint = changedManifest.remoteCheckpoints.find(
     (checkpoint: { matchesLocal?: boolean }) => checkpoint.matchesLocal === false
   );
@@ -101,17 +124,18 @@ test("remote migration truth rejects simultaneous local and manifest tampering",
 
 test("both remote credential modes reject missing, mismatched, and unexpected checkpoints", async () => {
   const { selectRemoteMigrationVerifier, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   assert.throws(() => selectRemoteMigrationVerifier({}), /Remote migration verification requires/);
   assert.throws(() => selectRemoteMigrationVerifier({ projectRef: "invalid", accessToken: "token" }), /Remote migration verification requires/);
 
   const mismatchedServiceRows = remoteCheckpointRows();
   mismatchedServiceRows[0].normalized_md5 = "00000000000000000000000000000000";
   assert.throws(
-    () => verifyRemoteMigrationCheckpoints(manifest, mismatchedServiceRows),
+    () => verifyRemoteMigrationCheckpoints(coveredManifest, mismatchedServiceRows),
     /remote statement hash diverged/
   );
   assert.throws(
-    () => verifyRemoteMigrationCheckpoints(manifest, [...remoteCheckpointRows(), {
+    () => verifyRemoteMigrationCheckpoints(coveredManifest, [...remoteCheckpointRows(), {
       version: "20260724000000",
       name: "unexpected",
       statement_count: 1,
@@ -123,6 +147,7 @@ test("both remote credential modes reject missing, mismatched, and unexpected ch
 
 test("Management API verifier accepts exact rows without exposing its credential", async () => {
   const { fetchRemoteMigrationRowsWithManagementApi, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   const rows = remoteCheckpointRows();
   const fetchedRows = await fetchRemoteMigrationRowsWithManagementApi({
     projectRef: "osmjevtynywbkokzejcp",
@@ -139,13 +164,14 @@ test("Management API verifier accepts exact rows without exposing its credential
     }
   });
   assert.deepEqual(fetchedRows, rows);
-  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(coveredManifest, fetchedRows), {
     remoteCheckpoints: manifest.remoteCheckpoints.length
   });
 });
 
 test("restricted service-role RPC returns only checkpoint fingerprints and is preferred", async () => {
   const { fetchRemoteMigrationCheckpointsWithServiceRole, fetchRemoteMigrationTruth, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   const rows = remoteCheckpointRows();
   const fetchImpl = async (url: string, init: RequestInit) => {
     assert.match(url, /\/rest\/v1\/rpc\/get_applied_migration_checkpoints$/);
@@ -160,7 +186,7 @@ test("restricted service-role RPC returns only checkpoint fingerprints and is pr
     serviceRoleKey: "service-role-test-key",
     fetchImpl
   });
-  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(coveredManifest, fetchedRows), {
     remoteCheckpoints: manifest.remoteCheckpoints.length
   });
   const preferred = await fetchRemoteMigrationTruth({

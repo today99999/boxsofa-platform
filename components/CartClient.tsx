@@ -143,6 +143,7 @@ export function CartClient() {
       customerName: checkoutForm.customerName,
       phone: checkoutForm.phone,
       email: checkoutForm.email,
+      locale: language,
       countryCode: checkoutForm.countryCode,
       address: checkoutForm.address,
       items,
