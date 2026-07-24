@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import test from "node:test";
 import {
   normalizeMigrationText,
@@ -42,11 +44,26 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
   });
 }
 
+async function runScriptAsync(script: string, args: string[] = [], env: Record<string, string | undefined> = {}) {
+  const child = spawn(process.execPath, [script, ...args], {
+    cwd: new URL("../..", import.meta.url),
+    env: { ...process.env, ...env }
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk) => { stdout += chunk; });
+  child.stderr?.on("data", (chunk) => { stderr += chunk; });
+  const [status] = await once(child, "exit") as [number | null];
+  return { status, stdout, stderr };
+}
+
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 25 SQL files/);
-  assert.match(result.stdout, /25 remote checkpoints/);
+  assert.match(result.stdout, new RegExp(`Migration manifest verified: ${manifest.migrations.length} SQL files`));
+  assert.match(result.stdout, new RegExp(`${manifest.remoteCheckpoints.length} remote checkpoints`));
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -62,11 +79,39 @@ test("repository migration hashes ignore only Windows line endings", () => {
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-test("release verification covers every immutable migration remotely", () => {
-  assert.equal(manifest.remoteCheckpoints.length, manifest.migrations.length);
+const pendingLocalMigrations = ["202607240026_localized_paid_order_email.sql"];
+
+function remotelyCoveredManifest() {
+  const covered = structuredClone(manifest);
+  const checkpointFiles = new Set(
+    covered.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file)
+  );
+  covered.migrations = covered.migrations.filter(
+    (migration: { file: string }) => checkpointFiles.has(migration.file)
+  );
+  return covered;
+}
+
+test("local verification may record migration 026 as pending, but release verification fails closed", async () => {
+  const checkpointFiles = manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort();
+  const migrationsWithoutRemoteCheckpoint = manifest.migrations
+    .map((migration: { file: string }) => migration.file)
+    .filter((file: string) => !checkpointFiles.includes(file))
+    .sort();
+
+  assert.deepEqual(migrationsWithoutRemoteCheckpoint, pendingLocalMigrations);
   assert.deepEqual(
-    manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
-    manifest.migrations.map((migration: { file: string }) => migration.file).sort()
+    checkpointFiles,
+    manifest.migrations
+      .map((migration: { file: string }) => migration.file)
+      .filter((file: string) => !pendingLocalMigrations.includes(file))
+      .sort()
+  );
+
+  const { verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  assert.throws(
+    () => verifyRemoteMigrationCheckpoints(manifest, remoteCheckpointRows()),
+    /remote checkpoint coverage is incomplete.*202607240026_localized_paid_order_email\.sql/i
   );
 });
 
@@ -88,7 +133,7 @@ function remoteCheckpointRows() {
 
 test("remote migration truth rejects simultaneous local and manifest tampering", async () => {
   const { verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
-  const changedManifest = structuredClone(manifest);
+  const changedManifest = remotelyCoveredManifest();
   const changedCheckpoint = changedManifest.remoteCheckpoints.find(
     (checkpoint: { matchesLocal?: boolean }) => checkpoint.matchesLocal === false
   );
@@ -101,17 +146,18 @@ test("remote migration truth rejects simultaneous local and manifest tampering",
 
 test("both remote credential modes reject missing, mismatched, and unexpected checkpoints", async () => {
   const { selectRemoteMigrationVerifier, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   assert.throws(() => selectRemoteMigrationVerifier({}), /Remote migration verification requires/);
   assert.throws(() => selectRemoteMigrationVerifier({ projectRef: "invalid", accessToken: "token" }), /Remote migration verification requires/);
 
   const mismatchedServiceRows = remoteCheckpointRows();
   mismatchedServiceRows[0].normalized_md5 = "00000000000000000000000000000000";
   assert.throws(
-    () => verifyRemoteMigrationCheckpoints(manifest, mismatchedServiceRows),
+    () => verifyRemoteMigrationCheckpoints(coveredManifest, mismatchedServiceRows),
     /remote statement hash diverged/
   );
   assert.throws(
-    () => verifyRemoteMigrationCheckpoints(manifest, [...remoteCheckpointRows(), {
+    () => verifyRemoteMigrationCheckpoints(coveredManifest, [...remoteCheckpointRows(), {
       version: "20260724000000",
       name: "unexpected",
       statement_count: 1,
@@ -123,6 +169,7 @@ test("both remote credential modes reject missing, mismatched, and unexpected ch
 
 test("Management API verifier accepts exact rows without exposing its credential", async () => {
   const { fetchRemoteMigrationRowsWithManagementApi, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   const rows = remoteCheckpointRows();
   const fetchedRows = await fetchRemoteMigrationRowsWithManagementApi({
     projectRef: "osmjevtynywbkokzejcp",
@@ -139,13 +186,14 @@ test("Management API verifier accepts exact rows without exposing its credential
     }
   });
   assert.deepEqual(fetchedRows, rows);
-  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(coveredManifest, fetchedRows), {
     remoteCheckpoints: manifest.remoteCheckpoints.length
   });
 });
 
 test("restricted service-role RPC returns only checkpoint fingerprints and is preferred", async () => {
   const { fetchRemoteMigrationCheckpointsWithServiceRole, fetchRemoteMigrationTruth, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const coveredManifest = remotelyCoveredManifest();
   const rows = remoteCheckpointRows();
   const fetchImpl = async (url: string, init: RequestInit) => {
     assert.match(url, /\/rest\/v1\/rpc\/get_applied_migration_checkpoints$/);
@@ -160,7 +208,7 @@ test("restricted service-role RPC returns only checkpoint fingerprints and is pr
     serviceRoleKey: "service-role-test-key",
     fetchImpl
   });
-  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(coveredManifest, fetchedRows), {
     remoteCheckpoints: manifest.remoteCheckpoints.length
   });
   const preferred = await fetchRemoteMigrationTruth({
@@ -216,8 +264,169 @@ test("Vercel build owns preflight and compilation in one credential-isolating pr
     SUPABASE_ACCESS_TOKEN: ""
   });
   assert.notEqual(result.status, 0, result.stdout);
-  assert.match(result.stderr, /Remote migration verification requires/);
+  assert.match(result.stderr, /remote checkpoint coverage is incomplete/i);
   assert.match(result.stderr, /required release gate failed/);
+});
+
+test("Vercel deploy preflight rejects missing release email and cron configuration without printing secrets", () => {
+  const secretValues = [
+    "service-role-do-not-print",
+    "email-api-do-not-print",
+    "cron-secret-do-not-print",
+    "sk_test_stripe-secret-do-not-print-1234567890",
+    "whsec_webhook-secret-do-not-print-1234567890",
+    "pk_test_publishable-do-not-print-1234567890"
+  ];
+  const commonReleaseEnvironment = {
+    NEXT_PUBLIC_SUPABASE_URL: "https://osmjevtynywbkokzejcp.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-test-key",
+    SUPABASE_SERVICE_ROLE_KEY: secretValues[0],
+    NEXT_PUBLIC_SITE_URL: "https://boxsofa.eu",
+    EMAIL_API_KEY: secretValues[1],
+    EXPECT_PAYMENT_ENABLED: "true",
+    STRIPE_SECRET_KEY: secretValues[3],
+    STRIPE_WEBHOOK_SECRET: secretValues[4],
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: secretValues[5]
+  };
+  const missingCron = runScript("scripts/check-env.mjs", ["--release"], {
+    ...commonReleaseEnvironment,
+    EMAIL_PROVIDER: "resend",
+    EMAIL_FROM: "BoxSofa <sender@example.test>",
+    CRON_SECRET: ""
+  });
+  const missingProvider = runScript("scripts/check-env.mjs", ["--release"], {
+    ...commonReleaseEnvironment,
+    EMAIL_PROVIDER: "",
+    EMAIL_FROM: "",
+    CRON_SECRET: secretValues[2].padEnd(40, "x")
+  });
+  const missingCronPreflight = runScript("scripts/deploy-preflight.mjs", [], {
+    ...commonReleaseEnvironment,
+    EMAIL_PROVIDER: "resend",
+    EMAIL_FROM: "BoxSofa <sender@example.test>",
+    CRON_SECRET: ""
+  });
+  const missingProviderPreflight = runScript("scripts/deploy-preflight.mjs", [], {
+    ...commonReleaseEnvironment,
+    EMAIL_PROVIDER: "",
+    EMAIL_FROM: "",
+    CRON_SECRET: secretValues[2].padEnd(40, "x")
+  });
+  const output = [
+    missingCron.stdout,
+    missingCron.stderr,
+    missingProvider.stdout,
+    missingProvider.stderr,
+    missingCronPreflight.stdout,
+    missingCronPreflight.stderr,
+    missingProviderPreflight.stdout,
+    missingProviderPreflight.stderr
+  ].join("");
+  assert.notEqual(missingCron.status, 0, output);
+  assert.notEqual(missingProvider.status, 0, output);
+  assert.notEqual(missingCronPreflight.status, 0, output);
+  assert.notEqual(missingProviderPreflight.status, 0, output);
+  assert.match(missingCronPreflight.stdout, /release environment/i);
+  assert.match(missingProviderPreflight.stdout, /release environment/i);
+  assert.match(output, /EMAIL_PROVIDER|EMAIL_FROM|CRON_SECRET/);
+  for (const secret of secretValues) assert.doesNotMatch(output, new RegExp(secret));
+
+  const deployPreflight = readFileSync(new URL("../../scripts/deploy-preflight.mjs", import.meta.url), "utf8");
+  assert.match(deployPreflight, /env:check:release/);
+  assert.match(deployPreflight, /production:ready:release-config/);
+});
+
+test("release configuration requires complete Stripe settings and accepts a valid redacted set", () => {
+  const valid = {
+    NEXT_PUBLIC_SUPABASE_URL: "https://testprojectref000001.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-test-key",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-do-not-print",
+    NEXT_PUBLIC_SITE_URL: "https://boxsofa.eu",
+    EMAIL_PROVIDER: "resend",
+    EMAIL_FROM: "BoxSofa <sender@example.test>",
+    EMAIL_API_KEY: "re_email-api-do-not-print-1234567890",
+    CRON_SECRET: "cron-secret-do-not-print-12345678901234567890",
+    EXPECT_PAYMENT_ENABLED: "true",
+    STRIPE_SECRET_KEY: "sk_test_stripe-secret-do-not-print-1234567890",
+    STRIPE_WEBHOOK_SECRET: "whsec_webhook-secret-do-not-print-1234567890",
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_publishable-do-not-print-1234567890"
+  };
+  const secretValues = [
+    valid.SUPABASE_SERVICE_ROLE_KEY,
+    valid.EMAIL_API_KEY,
+    valid.CRON_SECRET,
+    valid.STRIPE_SECRET_KEY,
+    valid.STRIPE_WEBHOOK_SECRET,
+    valid.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ];
+
+  const envPass = runScript("scripts/check-env.mjs", ["--release"], valid);
+  const readinessPass = runScript(
+    "scripts/production-readiness.mjs",
+    ["--release", "--environment-only"],
+    valid
+  );
+  assert.equal(envPass.status, 0, envPass.stderr || envPass.stdout);
+  assert.equal(readinessPass.status, 0, readinessPass.stderr || readinessPass.stdout);
+
+  for (const missingName of [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  ]) {
+    const missing = { ...valid, [missingName]: "" };
+    const envFailure = runScript("scripts/check-env.mjs", ["--release"], missing);
+    const readinessFailure = runScript(
+      "scripts/production-readiness.mjs",
+      ["--release", "--environment-only"],
+      missing
+    );
+    const output = envFailure.stdout + envFailure.stderr + readinessFailure.stdout + readinessFailure.stderr;
+    assert.notEqual(envFailure.status, 0, output);
+    assert.notEqual(readinessFailure.status, 0, output);
+    assert.match(output, new RegExp(missingName));
+    for (const secret of secretValues) assert.doesNotMatch(output, new RegExp(secret));
+  }
+});
+
+test("post-deploy readiness relies on the redacted health contract without local service credentials", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({
+      ok: true,
+      service: "boxsofa-platform",
+      siteUrl: "https://boxsofa.eu",
+      supabaseConfigured: true,
+      emailProviderConfigured: true,
+      emailProviderStatus: { configured: true, issues: [] },
+      paymentEnabled: true
+    }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+
+  try {
+    const result = await runScriptAsync("scripts/production-readiness.mjs", [], {
+      PRODUCTION_BASE_URL: `http://127.0.0.1:${address.port}`,
+      EXPECTED_SITE_URL: "https://boxsofa.eu",
+      EXPECT_PAYMENT_ENABLED: "true",
+      SUPABASE_SERVICE_ROLE_KEY: "",
+      EMAIL_PROVIDER: "",
+      EMAIL_FROM: "",
+      EMAIL_API_KEY: "",
+      CRON_SECRET: "",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ""
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /Production readiness passed/);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
 });
 
 test("Vercel build gives remote credentials only to the preflight child", () => {

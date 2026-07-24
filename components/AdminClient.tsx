@@ -204,7 +204,6 @@ function money(value: number) {
 }
 
 function plannedOrderEmailEvent(order: LocalOrder): OrderEmailEvent | null {
-  if (order.status === "pending_confirm") return "payment_confirmed";
   if (order.status === "paid_confirmed" && order.trackingNumber) return "order_shipped";
   if (order.status === "shipped") return "order_shipped";
   if (order.status === "cancelled") return "order_cancelled";

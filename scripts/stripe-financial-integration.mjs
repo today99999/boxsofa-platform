@@ -29,6 +29,7 @@ const state = {
   orderIds: [],
   productIds: [],
   styleIds: [],
+  userIds: [],
   eventIds: [],
   analyticsEventPrefix: `${runPrefix}-analytics-`,
   consentIds: []
@@ -40,7 +41,11 @@ function firstRow(data, message) {
   return row;
 }
 
-async function insertOrderFixture(client, suffix, { stock = 1, reservedStock = 1 } = {}) {
+async function insertOrderFixture(
+  client,
+  suffix,
+  { stock = 1, reservedStock = 1, totalEur = 100, customerId = null, locale = "en" } = {}
+) {
   const styleKey = `${runPrefix}-style-${suffix}`;
   const sku = `${runPrefix}-sku-${suffix}`;
   const slug = `${runPrefix}-slug-${suffix}`;
@@ -65,7 +70,7 @@ async function insertOrderFixture(client, suffix, { stock = 1, reservedStock = 1
       category: "single",
       seat_type: "single",
       color_zh: "test",
-      price_eur: 100,
+      price_eur: totalEur,
       stock,
       reserved_stock: reservedStock,
       is_active: false
@@ -79,15 +84,17 @@ async function insertOrderFixture(client, suffix, { stock = 1, reservedStock = 1
     .from("orders")
     .insert({
       order_number: orderNumber,
+      customer_id: customerId,
       customer_email: `${runPrefix}-${suffix}@invalid.test`,
       customer_name: "Codex Integration",
       customer_phone: "+34000000000",
+      locale,
       status: "pending_confirm",
       payment_status: "pending",
-      subtotal_eur: 100,
+      subtotal_eur: totalEur,
       discount_eur: 0,
       shipping_eur: 0,
-      total_eur: 100,
+      total_eur: totalEur,
       recipient: "Codex Integration",
       phone: "+34000000000",
       address_snapshot: { country: "ES", technical: true }
@@ -105,11 +112,16 @@ async function insertOrderFixture(client, suffix, { stock = 1, reservedStock = 1
     slug,
     name_snapshot: "Codex Integration Sofa",
     quantity: 1,
-    unit_price_eur: 100,
-    line_total_eur: 100
+    unit_price_eur: totalEur,
+    line_total_eur: totalEur
   });
   assert.equal(itemError, null, "temporary order item must insert");
-  return { orderId: order.id, orderNumber: order.order_number, productId: product.id };
+  return {
+    orderId: order.id,
+    orderNumber: order.order_number,
+    productId: product.id,
+    amountCents: Math.round(totalEur * 100)
+  };
 }
 
 function paymentParams(fixture, eventId, paymentId) {
@@ -120,7 +132,7 @@ function paymentParams(fixture, eventId, paymentId) {
     p_order_number: fixture.orderNumber,
     p_provider_payment_id: paymentId,
     p_session_id: `${paymentId}-session`,
-    p_amount_cents: 10_000,
+    p_amount_cents: fixture.amountCents,
     p_currency: "eur",
     p_raw_payload: { technical: true, paymentId }
   };
@@ -130,6 +142,65 @@ async function callPayment(client, fixture, eventId, paymentId) {
   state.eventIds.push(eventId);
   const { data, error } = await client.rpc("record_stripe_checkout_payment", paymentParams(fixture, eventId, paymentId));
   return { row: data ? firstRow(data, "payment RPC must return one row") : null, error };
+}
+
+async function callOfflinePayment(client, fixture, confirmedBy) {
+  const { data, error } = await client.rpc("record_offline_order_payment", {
+    p_order_id: fixture.orderId,
+    p_order_number: fixture.orderNumber,
+    p_confirmed_by: confirmedBy,
+    p_payment_method_note: "Technical integration fixture",
+    p_target_status: "paid_confirmed",
+    p_carrier: null,
+    p_tracking_number: null,
+    p_shipped_subject: null,
+    p_shipped_preview_text: null,
+    p_shipped_body_text: null
+  });
+  return { row: data ? firstRow(data, "offline payment RPC must return one row") : null, error };
+}
+
+async function createLinkedCustomer() {
+  const email = `${runPrefix}-member-${randomUUID()}@example.com`;
+  const { data: authData, error: authError } = await clientA.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    password: `${randomUUID()}Aa1!`
+  });
+  assert.equal(authError, null, "temporary linked auth user must insert");
+  assert.ok(authData.user?.id, "temporary linked auth user must return an id");
+  state.userIds.push(authData.user.id);
+
+  const { error: profileError } = await clientA.from("profiles").upsert(
+    {
+      id: authData.user.id,
+      email,
+      full_name: "Codex Integration Member",
+      preferred_locale: "es",
+      total_paid_eur: 0,
+      is_member: false,
+      member_since: null
+    },
+    { onConflict: "id" }
+  );
+  assert.equal(profileError, null, "temporary linked profile must insert");
+  return authData.user.id;
+}
+
+async function expectPaidNotification(fixture, expectedMemberWelcome, message) {
+  const { data, error } = await clientA
+    .from("email_notifications")
+    .select("member_welcome, subject, preview_text, body_text")
+    .eq("order_id", fixture.orderId)
+    .eq("event", "payment_confirmed")
+    .single();
+  assert.equal(error, null, `${message}: notification must be readable`);
+  if (expectedMemberWelcome !== null) {
+    assert.equal(data.member_welcome, expectedMemberWelcome, message);
+  }
+  assert.ok(data.subject.length > 0, `${message}: localized subject must be snapshotted`);
+  assert.ok(data.preview_text.length > 0, `${message}: localized preview must be snapshotted`);
+  return data;
 }
 
 async function callRefund(client, eventId, paymentId, refundId, amountCents, status, rawRevision) {
@@ -186,6 +257,7 @@ async function testPaymentTransactionAndReplay() {
   await expectExactCount("payments", { provider: "stripe", provider_payment_id: paymentId }, 1, "payment replay must not duplicate payment");
   await expectExactCount("inventory_movements", { order_id: fixture.orderId, movement_type: "payment_confirmed" }, 1, "payment replay must not double-decrement inventory");
   await expectExactCount("email_notifications", { order_id: fixture.orderId, event: "payment_confirmed" }, 1, "payment email outbox must be idempotent");
+  await expectPaidNotification(fixture, false, "guest paid order must use member_welcome=false");
 
   const refundId = `${runPrefix}-re-main`;
   const [succeeded, pending] = await Promise.all([
@@ -265,6 +337,224 @@ async function testPaymentTransactionAndReplay() {
   assert.equal(terminalOrder.status, "refunded");
 }
 
+async function testMembershipAwarePaidNotifications() {
+  const customerId = await createLinkedCustomer();
+
+  const belowThreshold = await insertOrderFixture(clientA, "member-below", {
+    totalEur: 100,
+    customerId,
+    locale: "es"
+  });
+  const belowPayment = await callPayment(
+    clientA,
+    belowThreshold,
+    `${runPrefix}-evt-member-below`,
+    `${runPrefix}-pi-member-below`
+  );
+  assert.equal(belowPayment.error, null, "linked payment below EUR 300 must succeed");
+  assert.equal(belowPayment.row.payment_confirmed, true);
+  await expectPaidNotification(
+    belowThreshold,
+    false,
+    "linked customer remaining below EUR 300 must use member_welcome=false"
+  );
+
+  const crossingThreshold = await insertOrderFixture(clientA, "member-crossing", {
+    totalEur: 200,
+    customerId,
+    locale: "es"
+  });
+  const crossingPaymentId = `${runPrefix}-pi-member-crossing`;
+  const [crossingPayment, crossingReplay] = await Promise.all([
+    callPayment(clientA, crossingThreshold, `${runPrefix}-evt-member-crossing`, crossingPaymentId),
+    callPayment(clientB, crossingThreshold, `${runPrefix}-evt-member-crossing-replay`, crossingPaymentId)
+  ]);
+  assert.equal(crossingPayment.error, null, "payment that first crosses EUR 300 must succeed");
+  assert.equal(crossingReplay.error, null, "concurrent threshold-crossing replay must succeed");
+  assert.equal(crossingPayment.row.ok, true);
+  assert.equal(crossingReplay.row.ok, true);
+  assert.equal(
+    [crossingPayment, crossingReplay].filter((result) => result.row.payment_confirmed === true).length,
+    1,
+    "concurrent threshold-crossing replay must confirm payment exactly once"
+  );
+  await expectExactCount(
+    "email_notifications",
+    { order_id: crossingThreshold.orderId, event: "payment_confirmed" },
+    1,
+    "concurrent threshold-crossing replay must queue exactly one payment_confirmed notification"
+  );
+  const crossingNotification = await expectPaidNotification(
+    crossingThreshold,
+    true,
+    "payment that first crosses EUR 300 must use member_welcome=true"
+  );
+  const [{ data: welcomeTemplate, error: welcomeTemplateError }, { data: standardTemplate, error: standardTemplateError }] =
+    await Promise.all([
+      clientA.rpc("build_payment_confirmed_email", {
+        p_locale: "es",
+        p_customer_name: "Codex Integration",
+        p_order_number: crossingThreshold.orderNumber,
+        p_member_welcome: true
+      }),
+      clientA.rpc("build_payment_confirmed_email", {
+        p_locale: "es",
+        p_customer_name: "Codex Integration",
+        p_order_number: crossingThreshold.orderNumber,
+        p_member_welcome: false
+      })
+    ]);
+  assert.equal(welcomeTemplateError, null, "member template helper must execute");
+  assert.equal(standardTemplateError, null, "standard template helper must execute");
+  const welcomeSnapshot = firstRow(welcomeTemplate, "member template helper must return one row");
+  const standardSnapshot = firstRow(standardTemplate, "standard template helper must return one row");
+  assert.equal(crossingNotification.subject, welcomeSnapshot.subject);
+  assert.equal(crossingNotification.preview_text, welcomeSnapshot.preview_text);
+  assert.equal(crossingNotification.body_text, welcomeSnapshot.body_text, "localized body must contain the member paragraph");
+  assert.notEqual(welcomeSnapshot.body_text, standardSnapshot.body_text, "member paragraph must be conditional");
+
+  const { data: memberProfile, error: memberProfileError } = await clientA
+    .from("profiles")
+    .select("total_paid_eur, is_member")
+    .eq("id", customerId)
+    .single();
+  assert.equal(memberProfileError, null);
+  assert.equal(Number(memberProfile.total_paid_eur), 300, "existing cumulative confirmed-order rule must reach EUR 300");
+  assert.equal(memberProfile.is_member, true, "crossing payment must refresh linked membership");
+
+  const alreadyMember = await insertOrderFixture(clientA, "member-later", {
+    totalEur: 100,
+    customerId,
+    locale: "es"
+  });
+  const laterPayment = await callPayment(
+    clientA,
+    alreadyMember,
+    `${runPrefix}-evt-member-later`,
+    `${runPrefix}-pi-member-later`
+  );
+  assert.equal(laterPayment.error, null, "later payment by already-member customer must succeed");
+  assert.equal(laterPayment.row.payment_confirmed, true);
+  await expectPaidNotification(
+    alreadyMember,
+    false,
+    "later payment by already-member customer must use member_welcome=false"
+  );
+
+  const { data: welcomedProfile, error: welcomedProfileError } = await clientA
+    .from("profiles")
+    .select("membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(welcomedProfileError, null);
+  assert.ok(welcomedProfile.membership_welcomed_at, "first threshold crossing must persist the lifetime welcome marker");
+
+  const crossingRefund = await callRefund(
+    clientA,
+    `${runPrefix}-evt-member-refund`,
+    crossingPaymentId,
+    `${runPrefix}-re-member-refund`,
+    crossingThreshold.amountCents,
+    "succeeded",
+    1
+  );
+  assert.equal(crossingRefund.error, null, "membership demotion refund must succeed");
+
+  const { data: demotedProfile, error: demotedProfileError } = await clientA
+    .from("profiles")
+    .select("is_member, membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(demotedProfileError, null);
+  assert.equal(demotedProfile.is_member, false, "refund below threshold must demote current membership");
+  assert.equal(
+    demotedProfile.membership_welcomed_at,
+    welcomedProfile.membership_welcomed_at,
+    "refund must not clear the lifetime welcome marker"
+  );
+
+  const requalification = await insertOrderFixture(clientA, "member-requalification", {
+    totalEur: 200,
+    customerId,
+    locale: "es"
+  });
+  const requalifiedPayment = await callOfflinePayment(clientA, requalification, customerId);
+  assert.equal(requalifiedPayment.error, null, "offline requalification after refund must succeed");
+  assert.equal(requalifiedPayment.row.payment_confirmed, true);
+  await expectPaidNotification(
+    requalification,
+    false,
+    "refund and later requalification must not produce a second member_welcome"
+  );
+}
+
+async function testConcurrentStripeAndOfflineMembershipRefresh() {
+  const customerId = await createLinkedCustomer();
+  const stripeFixture = await insertOrderFixture(clientA, "concurrent-stripe-member", {
+    totalEur: 200,
+    customerId,
+    locale: "fr"
+  });
+  const offlineFixture = await insertOrderFixture(clientA, "concurrent-offline-member", {
+    totalEur: 200,
+    customerId,
+    locale: "de"
+  });
+
+  const [stripeResult, offlineResult] = await Promise.all([
+    callPayment(
+      clientA,
+      stripeFixture,
+      `${runPrefix}-evt-concurrent-stripe-member`,
+      `${runPrefix}-pi-concurrent-stripe-member`
+    ),
+    callOfflinePayment(clientB, offlineFixture, customerId)
+  ]);
+  assert.equal(stripeResult.error, null, "concurrent Stripe membership writer must succeed");
+  assert.equal(offlineResult.error, null, "concurrent offline membership writer must succeed");
+
+  const [stripeNotification, offlineNotification] = await Promise.all([
+    expectPaidNotification(stripeFixture, null, "Stripe concurrent notification must exist"),
+    expectPaidNotification(offlineFixture, null, "offline concurrent notification must exist")
+  ]);
+  assert.equal(
+    [stripeNotification, offlineNotification].filter((row) => row.member_welcome === true).length,
+    1,
+    "concurrent Stripe/offline threshold crossings must claim one lifetime welcome"
+  );
+
+  const { data: profile, error: profileError } = await clientA
+    .from("profiles")
+    .select("total_paid_eur, is_member, membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(profileError, null);
+  assert.equal(Number(profile.total_paid_eur), 400, "serialized membership refresh must retain both paid orders");
+  assert.equal(profile.is_member, true);
+  assert.ok(profile.membership_welcomed_at);
+
+  const [offlineReplayA, offlineReplayB] = await Promise.all([
+    callOfflinePayment(clientA, offlineFixture, customerId),
+    callOfflinePayment(clientB, offlineFixture, customerId)
+  ]);
+  assert.equal(offlineReplayA.error, null);
+  assert.equal(offlineReplayB.error, null);
+  assert.equal(offlineReplayA.row.payment_confirmed, false);
+  assert.equal(offlineReplayB.row.payment_confirmed, false);
+  await expectExactCount(
+    "payments",
+    { order_id: offlineFixture.orderId, provider: "offline" },
+    1,
+    "concurrent offline replay must retain one payment"
+  );
+  await expectExactCount(
+    "email_notifications",
+    { order_id: offlineFixture.orderId, event: "payment_confirmed" },
+    1,
+    "concurrent offline replay must retain one outbox snapshot"
+  );
+}
+
 async function testPaymentRollback() {
   const fixture = await insertOrderFixture(clientA, "rollback", { stock: 0, reservedStock: 0 });
   const paymentId = `${runPrefix}-pi-rollback`;
@@ -332,6 +622,9 @@ async function cleanup() {
   }
   if (state.productIds.length) await run("products", () => clientA.from("products").delete().in("id", state.productIds));
   if (state.styleIds.length) await run("product styles", () => clientA.from("product_styles").delete().in("id", state.styleIds));
+  for (const userId of state.userIds) {
+    await run(`auth user ${userId}`, () => clientA.auth.admin.deleteUser(userId));
+  }
   await run("analytics events", () => clientA.from("analytics_events").delete().like("event_key", `${state.analyticsEventPrefix}%`));
   if (state.consentIds.length) await run("analytics consents", () => clientA.from("analytics_consents").delete().in("id", state.consentIds));
 
@@ -372,6 +665,8 @@ async function cleanup() {
 
 try {
   await testPaymentTransactionAndReplay();
+  await testMembershipAwarePaidNotifications();
+  await testConcurrentStripeAndOfflineMembershipRefresh();
   await testPaymentRollback();
   await testAggregateBeyondPostgrestLimit();
 } finally {

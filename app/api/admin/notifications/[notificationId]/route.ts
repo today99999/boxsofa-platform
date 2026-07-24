@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendTransactionalEmail } from "@/lib/server/email-provider";
 import { deliverEmailNotification } from "@/lib/server/email-notification-service";
+import { emailNotificationAuditSnapshot } from "@/lib/server/email-notification-audit";
 import { writeAdminAuditLog } from "@/lib/server/admin-audit";
 import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
@@ -49,7 +50,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const supabase = createSupabaseServiceRoleClient();
   const { data: beforeNotification, error: loadError } = await supabase
     .from("email_notifications")
-    .select("id, order_number, customer_email, event, subject, preview_text, body_text, status, provider, attempts, last_error, sent_at")
+    .select("id, order_number, customer_email, event, subject, preview_text, body_text, status, provider, attempts, last_error, sent_at, created_at, updated_at")
     .eq("id", notificationId)
     .single();
 
@@ -74,7 +75,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           async claim(id, leaseSeconds) {
             const { data, error } = await supabase.rpc("claim_email_notification_delivery", {
               p_notification_id: id,
-              p_lease_seconds: leaseSeconds
+              p_lease_seconds: leaseSeconds,
+              p_automatic: false
             });
             if (error) throw error;
             const row = Array.isArray(data) ? data[0] : null;
@@ -125,8 +127,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       action: sendResult.ok ? "email_notification_sent" : "email_notification_send_failed",
       entityType: "email_notification",
       entityId: notificationId,
-      beforeData: beforeNotification,
-      afterData: notification
+      beforeData: emailNotificationAuditSnapshot(beforeNotification),
+      afterData: emailNotificationAuditSnapshot(notification)
     });
 
     return NextResponse.json({
@@ -161,8 +163,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     action: "email_notification_" + payload.data.action,
     entityType: "email_notification",
     entityId: notificationId,
-    beforeData: beforeNotification,
-    afterData: notification
+    beforeData: emailNotificationAuditSnapshot(beforeNotification),
+    afterData: emailNotificationAuditSnapshot(notification)
   });
 
   return NextResponse.json({ ok: true, mode: "supabase", notification });

@@ -115,7 +115,20 @@ export function verifyMigrationManifest({ manifest = loadManifest(), readMigrati
   return { migrations: manifest.migrations.length, remoteCheckpoints: manifest.remoteCheckpoints.length };
 }
 
+export function verifyRemoteMigrationCoverage(manifest) {
+  const checkpointFiles = new Set(manifest.remoteCheckpoints.map((checkpoint) => checkpoint.file));
+  const missingCheckpointFiles = manifest.migrations
+    .map((migration) => migration.file)
+    .filter((file) => !checkpointFiles.has(file));
+  assert.equal(
+    missingCheckpointFiles.length,
+    0,
+    `remote checkpoint coverage is incomplete: ${missingCheckpointFiles.join(", ")}`
+  );
+}
+
 export function verifyRemoteMigrationCheckpoints(manifest, remoteRows) {
+  verifyRemoteMigrationCoverage(manifest);
   assert.ok(Array.isArray(remoteRows), "remote migration checkpoint response must be an array");
   const rowsByVersion = new Map();
   for (const row of remoteRows) {
@@ -201,6 +214,7 @@ async function main() {
     console.log(`Migration manifest verified: ${result.migrations} SQL files; ${result.remoteCheckpoints} remote checkpoints.`);
     return;
   }
+  verifyRemoteMigrationCoverage(manifest);
   const remote = await fetchRemoteMigrationTruth({
     projectRef: process.env.SUPABASE_PROJECT_REF,
     accessToken: process.env.SUPABASE_ACCESS_TOKEN,

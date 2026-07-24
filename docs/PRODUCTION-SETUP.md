@@ -1,6 +1,15 @@
 # BoxSofa Production Setup Notes
 
-These steps must be completed before the non-payment launch can be treated as production-ready.
+These steps must be completed before the payment launch can be treated as production-ready.
+
+## Migration 026 maintenance window
+
+Start a maintenance window before applying migration 026. Disable customer
+checkout and admin order changes from migration start until the new app health
+check passes. Apply migration 026, verify and record the remote checkpoint,
+deploy the new app, then confirm `/api/health` reports the expected redacted
+readiness state before reopening checkout or admin order operations. The
+missing locale default intentionally makes old-app inserts fail closed.
 
 ## Vercel project
 
@@ -14,12 +23,16 @@ These steps must be completed before the non-payment launch can be treated as pr
 
 Add these in Vercel Project Settings -> Environment Variables for Production. Do not paste these values into documentation or chat.
 
-Required before real production use:
+Required for both staging and production:
 
 - NEXT_PUBLIC_SUPABASE_URL
 - NEXT_PUBLIC_SUPABASE_ANON_KEY
 - SUPABASE_SERVICE_ROLE_KEY
 - NEXT_PUBLIC_SITE_URL=https://boxsofa.eu
+- CRON_SECRET
+- EMAIL_PROVIDER=resend
+- EMAIL_FROM
+- EMAIL_API_KEY
 
 Recommended before customer launch:
 
@@ -27,7 +40,14 @@ Recommended before customer launch:
 - EMAIL_FROM as a verified sender address, for example `BoxSofa <orders@boxsofa.eu>`
 - EMAIL_API_KEY from Resend
 
-Keep payment disabled until the final Stripe step.
+For pre-payment or staging readiness, leave `EXPECT_PAYMENT_ENABLED` unset or
+set it to a value other than `true`. In that mode `npm.cmd run
+production:ready` requires `/api/health` to report `paymentEnabled=false`.
+
+For final release, set `EXPECT_PAYMENT_ENABLED=true` and configure the actual
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Release preflight and the deployed health
+check must both pass before checkout is reopened.
 
 ## Domain binding
 
@@ -59,22 +79,38 @@ Current status on 2026-07-14:
 - Resend domain `boxsofa.eu` is verified.
 - Vercel production env has `EMAIL_PROVIDER=resend`, `EMAIL_FROM=BoxSofa <orders@boxsofa.eu>`, and `EMAIL_API_KEY` configured.
 - Production redeploy after email env setup is ready.
-- `npm.cmd run production:verify` passes after email env setup.
 
-## Verification commands
+## Pre-payment or staging verification
 
-After Vercel env vars and domains are configured, redeploy production and run:
+With `EXPECT_PAYMENT_ENABLED` not true, run:
 
 ```powershell
 $env:SMOKE_BASE_URL='https://boxsofa.eu'; npm.cmd run smoke
 $env:PRODUCTION_BASE_URL='https://boxsofa.eu'; $env:EXPECTED_SITE_URL='https://boxsofa.eu'; npm.cmd run production:ready
-npm.cmd run production:verify
 ```
 
-Expected result before payment:
+Expected staging result:
 
 - smoke passes
 - production:ready passes
 - /api/health returns supabaseConfigured true
 - /api/health returns emailProviderConfigured true
 - /api/health returns paymentEnabled false
+
+## Final release verification
+
+Set `EXPECT_PAYMENT_ENABLED=true` and provide the actual
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, email, cron, Supabase, and remote
+checkpoint credentials through the approved secret store. Then run:
+
+```powershell
+npm.cmd run env:check -- --release
+npm.cmd run production:ready:release-config
+npm.cmd run production:verify
+```
+
+The release command verifies the remote migration checkpoint and deployed
+sites, then uses the redacted `/api/health` response. The final result must
+report paymentEnabled true. A `paymentEnabled=false` response is a release
+failure.
