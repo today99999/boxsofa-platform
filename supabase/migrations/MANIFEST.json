@@ -27,7 +27,7 @@
     { "file": "202607240023_qualify_after_sales_update_columns.sql", "sha256": "093e4b476d13242c9922a1dbf84b54cf254433a1b66ffd110eab25a71d4c5d20" },
     { "file": "202607240024_verify_complete_data_center_migration_history.sql", "sha256": "0f6379bec1bafbfecc12ea185a113e695f2a19cb727f34d7504499bdc7b6d314" },
     { "file": "202607240025_attest_reviewed_migration_sources.sql", "sha256": "dabe5603d5d2c8ff5be2d2ac316031f9f4afeb2453d49ef116223aa9220127e8" },
-    { "file": "202607240026_localized_paid_order_email.sql", "sha256": "1805d0d93a825c76b5af19911b874812817bf672b75e92579d443d42447479df" }
+    { "file": "202607240026_localized_paid_order_email.sql", "sha256": "10a5f3c1ab6ff58bbabe2d422ccb81c5c811750843634f718649ad91d3ee372b" }
   ],
   "remoteCheckpoints": [
     {

@@ -13,6 +13,10 @@ const bootstrapSchema = readFileSync(new URL("../../supabase/schema.sql", import
 test("orders persist an immutable supported checkout locale", () => {
   assert.match(migration, /add column if not exists locale text/i);
   assert.match(migration, /preferred_locale/i);
+  assert.match(
+    migration,
+    /case when profiles\.preferred_locale in \('zh', 'en', 'es', 'fr', 'de'\) then profiles\.preferred_locale else 'en' end/i
+  );
   assert.match(migration, /check \(locale in \('zh', 'en', 'es', 'fr', 'de'\)\)/i);
   assert.match(orderRoute, /locale: z\.enum\(\["zh", "en", "es", "fr", "de"\]\)/);
   assert.match(orderRoute, /locale: order\.locale/);

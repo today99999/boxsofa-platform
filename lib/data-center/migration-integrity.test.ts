@@ -62,15 +62,21 @@ test("repository migration hashes ignore only Windows line endings", () => {
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-test("remote checkpoints cover only migrations recorded as deployed", () => {
-  assert.ok(manifest.remoteCheckpoints.length <= manifest.migrations.length);
+const pendingLocalMigrations = ["202607240026_localized_paid_order_email.sql"];
+
+test("remote checkpoints cover every migration except the explicit pending locale migration", () => {
+  const checkpointFiles = manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort();
+  const migrationsWithoutRemoteCheckpoint = manifest.migrations
+    .map((migration: { file: string }) => migration.file)
+    .filter((file: string) => !checkpointFiles.includes(file))
+    .sort();
+
+  assert.deepEqual(migrationsWithoutRemoteCheckpoint, pendingLocalMigrations);
   assert.deepEqual(
-    manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
+    checkpointFiles,
     manifest.migrations
-      .filter((migration: { file: string }) => manifest.remoteCheckpoints.some(
-        (checkpoint: { file: string }) => checkpoint.file === migration.file
-      ))
       .map((migration: { file: string }) => migration.file)
+      .filter((file: string) => !pendingLocalMigrations.includes(file))
       .sort()
   );
 });

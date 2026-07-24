@@ -4,7 +4,7 @@ alter table public.orders
   add column if not exists locale text;
 
 update public.orders
-set locale = coalesce(profiles.preferred_locale, 'en')
+set locale = case when profiles.preferred_locale in ('zh', 'en', 'es', 'fr', 'de') then profiles.preferred_locale else 'en' end
 from public.profiles as profiles
 where orders.customer_id = profiles.id
   and orders.locale is null;
