@@ -48,6 +48,87 @@ The email includes the order number for traceability. It does not claim that the
 
 If an unsupported locale somehow reaches the template layer, the system uses English and records the data issue in application logs without exposing customer details.
 
+### Approved Copy
+
+`{customerName}` and `{orderNumber}` are replaced from the immutable order snapshot. The membership paragraph is included only when `member_welcome` is true.
+
+#### Chinese
+
+Subject: `感谢您的购买｜BoxSofa 订单 {orderNumber}`
+
+```text
+您好，{customerName}：
+
+感谢您在 boxsofa.eu 购买我们的产品。您的订单 {orderNumber} 已支付成功，我们会尽快为您安排发货。
+
+感谢您成为 BoxSofa 会员！您今后符合条件的订单可享受 10% 会员折扣。
+
+此致
+BoxSofa 团队
+```
+
+#### English
+
+Subject: `Thank you for your purchase | BoxSofa order {orderNumber}`
+
+```text
+Hello {customerName},
+
+Thank you for purchasing from boxsofa.eu. Payment for your order {orderNumber} has been confirmed, and we will arrange shipment as soon as possible.
+
+We would also like to thank you for becoming a BoxSofa member! You can now receive a 10% member discount on eligible future orders.
+
+Kind regards,
+The BoxSofa Team
+```
+
+#### Spanish
+
+Subject: `Gracias por tu compra | Pedido BoxSofa {orderNumber}`
+
+```text
+Hola, {customerName}:
+
+Gracias por comprar en boxsofa.eu. Hemos confirmado el pago de tu pedido {orderNumber} y prepararemos el envío lo antes posible.
+
+¡También queremos darte las gracias por hacerte miembro de BoxSofa! A partir de ahora podrás disfrutar de un 10 % de descuento para miembros en futuros pedidos que cumplan las condiciones.
+
+Un cordial saludo,
+El equipo de BoxSofa
+```
+
+#### French
+
+Subject: `Merci pour votre achat | Commande BoxSofa {orderNumber}`
+
+```text
+Bonjour {customerName},
+
+Merci pour votre achat sur boxsofa.eu. Le paiement de votre commande {orderNumber} a bien été confirmé et nous organiserons son expédition dans les meilleurs délais.
+
+Nous vous remercions également d’être devenu membre de BoxSofa ! Vous pouvez désormais bénéficier d’une remise membre de 10 % sur vos prochaines commandes éligibles.
+
+Cordialement,
+L’équipe BoxSofa
+```
+
+#### German
+
+Subject: `Vielen Dank für Ihren Einkauf | BoxSofa-Bestellung {orderNumber}`
+
+```text
+Hallo {customerName},
+
+vielen Dank für Ihren Einkauf bei boxsofa.eu. Die Zahlung für Ihre Bestellung {orderNumber} wurde bestätigt. Wir werden den Versand so schnell wie möglich veranlassen.
+
+Außerdem bedanken wir uns herzlich dafür, dass Sie BoxSofa-Mitglied geworden sind! Bei zukünftigen berechtigten Bestellungen erhalten Sie nun 10 % Mitgliederrabatt.
+
+Freundliche Grüße
+Ihr BoxSofa-Team
+```
+
+For non-member notifications, omit the membership paragraph and its preceding blank line while keeping the remainder unchanged.
+
 ## Automatic Delivery
 
 Retain the existing transactional-email provider, database notification state machine, delivery lease, and provider idempotency key.
