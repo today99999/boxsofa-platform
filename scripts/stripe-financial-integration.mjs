@@ -346,14 +346,26 @@ async function testMembershipAwarePaidNotifications() {
     customerId,
     locale: "es"
   });
-  const crossingPayment = await callPayment(
-    clientA,
-    crossingThreshold,
-    `${runPrefix}-evt-member-crossing`,
-    `${runPrefix}-pi-member-crossing`
-  );
+  const crossingPaymentId = `${runPrefix}-pi-member-crossing`;
+  const [crossingPayment, crossingReplay] = await Promise.all([
+    callPayment(clientA, crossingThreshold, `${runPrefix}-evt-member-crossing`, crossingPaymentId),
+    callPayment(clientB, crossingThreshold, `${runPrefix}-evt-member-crossing-replay`, crossingPaymentId)
+  ]);
   assert.equal(crossingPayment.error, null, "payment that first crosses EUR 300 must succeed");
-  assert.equal(crossingPayment.row.payment_confirmed, true);
+  assert.equal(crossingReplay.error, null, "concurrent threshold-crossing replay must succeed");
+  assert.equal(crossingPayment.row.ok, true);
+  assert.equal(crossingReplay.row.ok, true);
+  assert.equal(
+    [crossingPayment, crossingReplay].filter((result) => result.row.payment_confirmed === true).length,
+    1,
+    "concurrent threshold-crossing replay must confirm payment exactly once"
+  );
+  await expectExactCount(
+    "email_notifications",
+    { order_id: crossingThreshold.orderId, event: "payment_confirmed" },
+    1,
+    "concurrent threshold-crossing replay must queue exactly one payment_confirmed notification"
+  );
   const crossingNotification = await expectPaidNotification(
     crossingThreshold,
     true,

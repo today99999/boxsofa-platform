@@ -3824,7 +3824,8 @@ begin
     v_customer_name,
     v_order_number
   from public.orders order_row
-  where order_row.id = p_order_id;
+  where order_row.id = p_order_id
+  for update;
 
   if v_customer_id is not null then
     select profile_row.is_member

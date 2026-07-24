@@ -11,6 +11,15 @@ const orderRoute = readFileSync(new URL("../../app/api/orders/route.ts", import.
 const cartClient = readFileSync(new URL("../../components/CartClient.tsx", import.meta.url), "utf8");
 const bootstrapSchema = readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8");
 
+function effectivePaymentRpc(sql: string) {
+  const marker = "create or replace function public.record_stripe_checkout_payment(";
+  const start = sql.toLowerCase().lastIndexOf(marker);
+  assert.notEqual(start, -1, "effective payment RPC must exist");
+  const end = sql.indexOf("\n$$;", start);
+  assert.notEqual(end, -1, "effective payment RPC must have a complete body");
+  return sql.slice(start, end + 4);
+}
+
 test("orders persist an immutable supported checkout locale", () => {
   assert.match(migration, /add column if not exists locale text/i);
   assert.match(migration, /preferred_locale/i);
@@ -104,27 +113,28 @@ test("payment-confirmed email helper executes with English fallback, immutable s
 
 test("paid notification schema and RPC atomically snapshot the membership transition", () => {
   for (const sql of [migration, bootstrapSchema]) {
+    const paymentRpc = effectivePaymentRpc(sql);
     assert.match(
       sql,
       /email_notifications[\s\S]*member_welcome boolean not null default false/i,
       "email notification snapshots must persist whether this payment welcomed a member"
     );
     assert.match(
-      sql,
+      paymentRpc,
       /create or replace function public\.record_stripe_checkout_payment\(\s*p_event_id text,\s*p_event_type text,\s*p_order_id uuid,\s*p_order_number text,\s*p_provider_payment_id text,\s*p_session_id text,\s*p_amount_cents bigint,\s*p_currency text,\s*p_raw_payload jsonb\s*\)\s*returns table\(\s*ok boolean,\s*error_code text,\s*event_processed boolean,\s*payment_confirmed boolean,\s*email_queued boolean,\s*source_record_count bigint\s*\)/is
     );
     assert.match(
-      sql,
-      /select profile_row\.is_member[\s\S]*from public\.profiles profile_row[\s\S]*for update;[\s\S]*record_stripe_checkout_payment_v012[\s\S]*select profile_row\.is_member[\s\S]*build_payment_confirmed_email\(\s*v_order_locale,\s*v_customer_name,\s*v_order_number,\s*v_member_welcome\s*\)/is,
-      "the wrapper must read membership before and after the proven paid-order writer and use the database template helper"
+      paymentRpc,
+      /select\s+order_row\.customer_id,[\s\S]*from public\.orders order_row\s*where order_row\.id = p_order_id\s*for update;[\s\S]*select profile_row\.is_member[\s\S]*from public\.profiles profile_row[\s\S]*for update;[\s\S]*record_stripe_checkout_payment_v012[\s\S]*select profile_row\.is_member[\s\S]*build_payment_confirmed_email\(\s*v_order_locale,\s*v_customer_name,\s*v_order_number,\s*v_member_welcome\s*\)/is,
+      "the wrapper must lock the order before the profile, then read membership after the proven paid-order writer"
     );
     assert.match(
-      sql,
+      paymentRpc,
       /set subject = v_email\.subject,\s*preview_text = v_email\.preview_text,\s*body_text = v_email\.body_text,\s*member_welcome = v_member_welcome/is,
       "the queued row must store one immutable localized snapshot"
     );
     assert.match(
-      sql,
+      paymentRpc,
       /v_member_welcome := v_customer_id is not null\s*and v_was_member is not true\s*and v_is_member is true;/is,
       "only a linked customer's false-to-true transition may emit a member welcome"
     );
@@ -143,4 +153,9 @@ test("paid notification schema and RPC atomically snapshot the membership transi
   assert.match(integration, /first crosses EUR 300[\s\S]*member_welcome/);
   assert.match(integration, /already-member customer[\s\S]*member_welcome/);
   assert.match(integration, /guest paid order[\s\S]*member_welcome/);
+  assert.match(
+    integration,
+    /Promise\.all\(\[\s*callPayment\(clientA, crossingThreshold,[\s\S]*callPayment\(clientB, crossingThreshold,[\s\S]*\]\)[\s\S]*expectExactCount\(\s*"email_notifications",\s*\{ order_id: crossingThreshold\.orderId, event: "payment_confirmed" \},\s*1,[\s\S]*expectPaidNotification\(\s*crossingThreshold,\s*true/is,
+    "the threshold-crossing fixture must exercise concurrent replay and preserve one welcome notification"
+  );
 });
