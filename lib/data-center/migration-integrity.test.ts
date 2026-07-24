@@ -44,8 +44,8 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 22 SQL files/);
-  assert.match(result.stdout, /3 remote checkpoints/);
+  assert.match(result.stdout, /Migration manifest verified: 23 SQL files/);
+  assert.match(result.stdout, /4 remote checkpoints/);
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -136,7 +136,9 @@ test("Management API verifier accepts exact rows without exposing its credential
     }
   });
   assert.deepEqual(fetchedRows, rows);
-  assert.deepEqual(verifyRemoteMigrationRows(manifest, fetchedRows), { remoteCheckpoints: 3 });
+  assert.deepEqual(verifyRemoteMigrationRows(manifest, fetchedRows), {
+    remoteCheckpoints: manifest.remoteCheckpoints.length
+  });
 });
 
 test("restricted service-role RPC returns only checkpoint fingerprints and is preferred", async () => {
@@ -155,7 +157,9 @@ test("restricted service-role RPC returns only checkpoint fingerprints and is pr
     serviceRoleKey: "service-role-test-key",
     fetchImpl
   });
-  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), { remoteCheckpoints: 3 });
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+    remoteCheckpoints: manifest.remoteCheckpoints.length
+  });
   const preferred = await fetchRemoteMigrationTruth({
     projectRef: "osmjevtynywbkokzejcp",
     accessToken: "management-test-token",
@@ -202,6 +206,7 @@ test("Vercel build owns preflight and compilation in one credential-isolating pr
   assert.doesNotMatch(readFileSync(new URL("../../scripts/deploy-preflight.mjs", import.meta.url), "utf8"), /run\([^\n]+["']build["']/);
 
   const result = runScript("scripts/production-verify.mjs", ["--release"], {
+    EXPECT_PAYMENT_ENABLED: "true",
     NEXT_PUBLIC_SUPABASE_URL: "",
     SUPABASE_SERVICE_ROLE_KEY: "",
     SUPABASE_PROJECT_REF: "",

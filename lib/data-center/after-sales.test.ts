@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import {
   afterSalesMutationStatus,
@@ -44,6 +44,13 @@ const integrationScript = readFileSync(
   new URL("../../scripts/after-sales-integration.mjs", import.meta.url),
   "utf8"
 );
+const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
+const latestAfterSalesUpdateMigration = readdirSync(migrationDirectory)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => readFileSync(new URL(file, migrationDirectory), "utf8"))
+  .filter((migration) => migration.includes("create or replace function public.update_after_sales_case"))
+  .at(-1)!;
 
 const rows = [
   { id: "00000000-0000-4000-8000-000000000003", createdAt: "2026-07-24T10:00:00.000Z" },
@@ -165,6 +172,15 @@ test("after-sales migration history stays distinct while the final migration pre
   }
   assert.match(caseNumberMigration, /v_case_sequence := nextval\('public\.after_sales_case_number_seq'\)/);
   assert.match(caseNumberMigration, /lpad\(v_case_sequence::text, greatest\(8, length\(v_case_sequence::text\)\), '0'\)/);
+});
+
+test("latest after-sales update function qualifies columns that overlap return variables", () => {
+  for (const column of ["refund_amount_eur", "internal_note", "due_at", "version"]) {
+    assert.match(
+      latestAfterSalesUpdateMigration,
+      new RegExp(`else after_sales_cases\\.${column}|after_sales_cases\\.${column} \\+ 1`)
+    );
+  }
 });
 
 test("after-sales routes authenticate before JSON parsing and use a bounded keyset cursor", () => {

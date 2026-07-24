@@ -8,6 +8,11 @@ const secondaryUrl = process.env.PRODUCTION_WWW_BASE_URL || 'https://www.boxsofa
 const expectedSiteUrl = process.env.EXPECTED_SITE_URL || 'https://boxsofa.eu';
 const releaseMode = process.argv.includes('--release') || !process.argv.includes('--local');
 
+if (releaseMode && process.env.EXPECT_PAYMENT_ENABLED !== 'true') {
+  console.error('Release verification requires EXPECT_PAYMENT_ENABLED=true.');
+  process.exit(1);
+}
+
 function withoutRemoteMigrationSecrets(env = process.env) {
   const sanitized = { ...env };
   delete sanitized.SUPABASE_ACCESS_TOKEN;
@@ -64,6 +69,7 @@ for (const check of checks) {
   console.log(`\n=== ${check.label} ===`);
   const result = spawnSync(check.command, check.args, {
     stdio: 'inherit',
+    shell: process.platform === 'win32' && !npmCliPath,
     env: {
       ...withoutRemoteMigrationSecrets(),
       ...check.env

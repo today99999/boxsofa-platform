@@ -23,7 +23,8 @@
     { "file": "202607240019_after_sales_refund_amount_nullability.sql", "sha256": "47298c9a2f2d7d545baa671b42facc326c43a821d8395dd3d5e3509815098c06" },
     { "file": "202607240020_after_sales_cumulative_refund_truth.sql", "sha256": "71e26f55eacef700f58efc268f86de3748889ea5db23605c961a47ece5e783d1" },
     { "file": "202607240021_after_sales_cursor_and_case_number_safety.sql", "sha256": "9d2c4ee2460999faa027823a00448a6b7e421620268d806d62f7b11a763012e6" },
-    { "file": "202607240022_verify_migration_checkpoints_rpc.sql", "sha256": "6865603ad6a92e843a2a6e78371b713397ea90e3f963e9d862de56f099185bfb" }
+    { "file": "202607240022_verify_migration_checkpoints_rpc.sql", "sha256": "6865603ad6a92e843a2a6e78371b713397ea90e3f963e9d862de56f099185bfb" },
+    { "file": "202607240023_qualify_after_sales_update_columns.sql", "sha256": "093e4b476d13242c9922a1dbf84b54cf254433a1b66ffd110eab25a71d4c5d20" }
   ],
   "remoteCheckpoints": [
     {
@@ -46,6 +47,13 @@
       "name": "after_sales_cumulative_refund_truth",
       "statementCount": 1,
       "normalizedMd5": "247684b0ae398baecdb9af5457236841"
+    },
+    {
+      "file": "202607240023_qualify_after_sales_update_columns.sql",
+      "version": "20260724083502",
+      "name": "qualify_after_sales_update_columns",
+      "statementCount": 1,
+      "normalizedMd5": "56b8ac627b3e90d63546ea1836f184f8"
     }
   ]
 }
