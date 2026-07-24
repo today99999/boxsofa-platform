@@ -26,6 +26,7 @@ const required = [
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'NEXT_PUBLIC_SITE_URL',
+  'CRON_SECRET',
 ];
 
 const recommendedBeforeLaunch = [
@@ -39,6 +40,7 @@ const missingRecommended = recommendedBeforeLaunch.filter((name) => !getEnv(name
 const emailProvider = getEnv('EMAIL_PROVIDER').trim().toLowerCase();
 const emailFrom = getEnv('EMAIL_FROM').trim();
 const emailApiKey = getEnv('EMAIL_API_KEY').trim();
+const cronSecret = getEnv('CRON_SECRET');
 const emailIssues = [];
 
 function isLikelyEmailAddress(value) {
@@ -49,6 +51,11 @@ function isLikelyEmailAddress(value) {
 
 if (missingRequired.length) {
   console.error('Missing required environment variable names: ' + missingRequired.join(', '));
+  process.exit(1);
+}
+
+if (cronSecret.length < 32) {
+  console.error('CRON_SECRET must be at least 32 characters.');
   process.exit(1);
 }
 

@@ -1,5 +1,16 @@
 const baseUrl = (process.env.PRODUCTION_BASE_URL || 'https://boxsofa-platform.vercel.app').replace(/\/$/, '');
 const expectedSiteUrl = process.env.EXPECTED_SITE_URL || 'https://boxsofa.eu';
+const cronSecret = process.env.CRON_SECRET || '';
+
+if (!cronSecret) {
+  console.error('CRON_SECRET is required for production readiness.');
+  process.exit(1);
+}
+
+if (cronSecret.length < 32) {
+  console.error('CRON_SECRET must be at least 32 characters for production readiness.');
+  process.exit(1);
+}
 
 const response = await fetch(baseUrl + '/api/health', { cache: 'no-store' });
 if (!response.ok) {
