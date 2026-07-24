@@ -225,6 +225,15 @@
       "statementCount": 1,
       "normalizedMd5": "a6f4a6bde54acfb331ca82a903a45b69",
       "normalization": "trim-final-newlines"
+    },
+    {
+      "file": "202607240026_order_locale_snapshot.sql",
+      "version": "20260724165546",
+      "name": "order_locale_snapshot",
+      "statementCount": 1,
+      "normalizedMd5": "eb36589359130cb72e24a854001118b9",
+      "matchesLocal": false,
+      "reviewedSourceSha256": "3d104a7a02df816902c6989a34847f29f8502d37d9b5ef82ed7d6244b64d1464"
     }
   ]
 }
