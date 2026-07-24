@@ -6,8 +6,16 @@ const npmArgs = (script) => (npmCliPath ? [npmCliPath, 'run', script] : ['run', 
 const primaryUrl = process.env.PRODUCTION_BASE_URL || 'https://boxsofa.eu';
 const secondaryUrl = process.env.PRODUCTION_WWW_BASE_URL || 'https://www.boxsofa.eu';
 const expectedSiteUrl = process.env.EXPECTED_SITE_URL || 'https://boxsofa.eu';
+const releaseMode = process.argv.includes('--release') || !process.argv.includes('--local');
 
 const checks = [
+  ...(releaseMode ? [{
+    label: 'remote Supabase migration history',
+    command: npmCommand,
+    args: npmArgs('db:migrations:verify-remote'),
+    env: {},
+    failFast: true
+  }] : []),
   { label: `smoke ${primaryUrl}`, command: npmCommand, args: npmArgs('smoke'), env: { SMOKE_BASE_URL: primaryUrl } },
   { label: `seo ${primaryUrl}`, command: npmCommand, args: npmArgs('seo:audit'), env: { SEO_BASE_URL: primaryUrl } },
   { label: `api auth ${primaryUrl}`, command: npmCommand, args: npmArgs('api:auth-audit'), env: { API_AUDIT_BASE_URL: primaryUrl } },
@@ -42,6 +50,10 @@ for (const check of checks) {
 
   if (result.status !== 0) {
     failures.push(check.label);
+    if (check.failFast) {
+      console.error('\nProduction verification stopped: required release gate failed.');
+      process.exit(1);
+    }
   }
 }
 
@@ -51,4 +63,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nProduction verification passed.');
+console.log(releaseMode ? '\nRelease production verification passed.' : '\nLocal-compatible production verification passed.');

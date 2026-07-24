@@ -23,7 +23,9 @@
     "env:check": "node scripts/check-env.mjs",
     "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke && npm run seo:audit && npm run api:auth-audit",
     "production:ready": "node scripts/production-readiness.mjs",
-    "production:verify": "node scripts/production-verify.mjs"
+    "production:verify:local": "node scripts/production-verify-local.mjs",
+    "production:verify": "node scripts/production-verify.mjs --release",
+    "deploy:preflight": "npm run production:verify"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
