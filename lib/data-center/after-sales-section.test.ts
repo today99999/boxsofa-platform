@@ -87,9 +87,11 @@ test("Madrid overdue display and 390px forms stay explicit", () => {
 
 test("after-sales saves reject stale UI responses and duplicate submissions", () => {
   assert.match(section, /selectedIdRef\.current === caseId/);
+  assert.match(section, /updatedCase\.id !== caseId/);
   assert.match(section, /saveMutationId\.current/);
   assert.match(section, /saveInFlight\.current/);
   assert.match(section, /createInFlight\.current/);
+  assert.match(section, /disabled=\{saving\}/);
 });
 
 test("after-sales editor follows the canonical workflow and maps business failures", () => {
@@ -98,6 +100,8 @@ test("after-sales editor follows the canonical workflow and maps business failur
   assert.match(section, /code === "invalid_transition"/);
   assert.match(section, /code === "refund_not_verified"/);
   assert.match(section, /status === 409/);
+  assert.match(section, /该订单已有相同售后工单/);
+  assert.match(section, /超过了已核实成功退款/);
 });
 
 test("equivalent refund amounts compare exact cents before mutation", () => {

@@ -161,9 +161,13 @@ function mutationErrorMessage(payload: unknown, status: number, operation: "crea
   if (status === 401) return "登录状态已失效，请重新登录后再试。";
   if (status === 403) return "当前账号没有店主权限。";
   if (status === 404) return operation === "create" ? "找不到对应订单，请检查订单号。" : "工单不存在，可能已被删除。";
-  if (status === 409 || code === "conflict") return "工单已被其他操作更新，请刷新后再试。";
+  if (status === 409 || code === "conflict") {
+    return operation === "create"
+      ? "该订单已有相同售后工单，请检查现有记录。"
+      : "工单已被其他操作更新，请刷新后再试。";
+  }
   if (code === "invalid_transition") return "当前状态不能进行这项流转，请刷新工单后重试。";
-  if (code === "refund_not_verified") return "只有已核实的退款才能将工单标记为已退款。";
+  if (code === "refund_not_verified") return "记录金额或“已退款”状态超过了已核实成功退款，请先核对 Stripe 退款记录。";
   return publicMessage(payload, operation === "create" ? "无法创建售后工单。" : "无法保存工单，已保留编辑内容。");
 }
 
@@ -391,6 +395,12 @@ export function AfterSalesSection() {
         return;
       }
       const updatedCase = result.case;
+      if (updatedCase.id !== caseId) {
+        if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
+          setEditError("工单响应与当前记录不匹配，请刷新后再试。");
+        }
+        return;
+      }
       setCases((current) => current.map((item) => item.id === updatedCase.id ? updatedCase : item));
       if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
         setEditDraft(draftFor(updatedCase));
@@ -519,7 +529,7 @@ function CaseEditor({
     <aside className="dc-case-editor" aria-labelledby="dc-case-editor-heading">
       <div className="dc-panel-heading">
         <div><h3 id="dc-case-editor-heading">{item.caseNumber}</h3><p>{item.orderNumber} · 版本 {item.version}</p></div>
-        <button className="dc-icon-button" type="button" aria-label="关闭工单编辑" onClick={onClose}><X aria-hidden size={18} /></button>
+        <button className="dc-icon-button" type="button" aria-label="关闭工单编辑" disabled={saving} onClick={onClose}><X aria-hidden size={18} /></button>
       </div>
       <div className="dc-case-context">
         <span>{typeLabel(item.type)}</span>
@@ -527,11 +537,11 @@ function CaseEditor({
         <p><strong>客户诉求</strong>{item.requestedRemedy || "未填写"}</p>
       </div>
       <form className="dc-case-form dc-edit-form" onSubmit={onSubmit}>
-        <label>状态<select value={draft.status} disabled={statusOptions.length === 1} onChange={(event) => onDraft((current) => current ? { ...current, status: event.target.value as CaseStatus } : current)}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label>责任归属<select value={draft.responsibility ?? ""} onChange={(event) => onDraft((current) => current ? { ...current, responsibility: (event.target.value || null) as AfterSalesCase["responsibility"] } : current)}><option value="">未设置</option>{responsibilities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label>跟进日期<input type="datetime-local" value={draft.dueAt} onChange={(event) => onDraft((current) => current ? { ...current, dueAt: event.target.value } : current)} /></label>
-        <label>记录退款金额（EUR）<input inputMode="decimal" pattern="^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$" placeholder="仅记录，不会调用 Stripe" value={draft.refundAmountEur} onChange={(event) => onDraft((current) => current ? { ...current, refundAmountEur: event.target.value } : current)} /><small>仅作售后台账记录，不会触发 Stripe 退款。</small></label>
-        <label className="dc-form-wide">内部备注<textarea maxLength={4000} rows={5} value={draft.internalNote} onChange={(event) => onDraft((current) => current ? { ...current, internalNote: event.target.value } : current)} /></label>
+        <label>状态<select value={draft.status} disabled={saving || statusOptions.length === 1} onChange={(event) => onDraft((current) => current ? { ...current, status: event.target.value as CaseStatus } : current)}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>责任归属<select value={draft.responsibility ?? ""} disabled={saving} onChange={(event) => onDraft((current) => current ? { ...current, responsibility: (event.target.value || null) as AfterSalesCase["responsibility"] } : current)}><option value="">未设置</option>{responsibilities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>跟进日期<input type="datetime-local" value={draft.dueAt} disabled={saving} onChange={(event) => onDraft((current) => current ? { ...current, dueAt: event.target.value } : current)} /></label>
+        <label>记录退款金额（EUR）<input inputMode="decimal" pattern="^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$" placeholder="仅记录，不会调用 Stripe" value={draft.refundAmountEur} disabled={saving} onChange={(event) => onDraft((current) => current ? { ...current, refundAmountEur: event.target.value } : current)} /><small>仅作售后台账记录，不会触发 Stripe 退款。</small></label>
+        <label className="dc-form-wide">内部备注<textarea maxLength={4000} rows={5} value={draft.internalNote} disabled={saving} onChange={(event) => onDraft((current) => current ? { ...current, internalNote: event.target.value } : current)} /></label>
         {item.refundAmountEur !== null && <p className="dc-recorded-refund dc-form-wide">当前已记录：{money.format(item.refundAmountEur)}</p>}
         {error && <p className="dc-form-error dc-form-wide" role="alert">{error}</p>}
         <div className="dc-form-actions dc-form-wide">
