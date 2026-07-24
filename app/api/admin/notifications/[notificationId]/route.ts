@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendTransactionalEmail } from "@/lib/server/email-provider";
-import { EMAIL_DELIVERY_LEASE_SECONDS, getEmailDeliveryIdempotencyKey } from "@/lib/server/email-notification-delivery";
+import { deliverEmailNotification } from "@/lib/server/email-notification-service";
 import { writeAdminAuditLog } from "@/lib/server/admin-audit";
 import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
@@ -19,12 +19,14 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const payload = updateNotificationSchema.safeParse(await request.json());
-
-  if (!payload.success) {
+  const adminAccess = await requireOwnerAccess();
+  if (!adminAccess.ok) {
+    if (adminAccess.reason === "supabase_not_configured") {
+      return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
+    }
     return NextResponse.json(
-      { ok: false, message: "Notification update is incomplete.", issues: payload.error.flatten() },
-      { status: 400 }
+      { ok: false, message: adminAccess.reason === "not_authenticated" ? "Merchant login is required." : "Owner access is required." },
+      { status: adminAccess.reason === "not_authenticated" ? 401 : 403 }
     );
   }
 
@@ -32,9 +34,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
-  const adminAccess = await requireOwnerAccess();
-  if (!adminAccess.ok) {
-    return NextResponse.json({ ok: false, message: "Merchant login is required." }, { status: 401 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, message: "Notification update is incomplete." }, { status: 400 });
+  }
+  const payload = updateNotificationSchema.safeParse(body);
+  if (!payload.success) {
+    return NextResponse.json({ ok: false, message: "Notification update is incomplete." }, { status: 400 });
   }
 
   const notificationId = decodeURIComponent(params.notificationId);
@@ -53,56 +61,64 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   if (payload.data.action === "send") {
-    const { data: claimRows, error: claimError } = await supabase.rpc("claim_email_notification_delivery", {
-      p_notification_id: notificationId,
-      p_lease_seconds: EMAIL_DELIVERY_LEASE_SECONDS
-    });
-    const claim = Array.isArray(claimRows) ? claimRows[0] : null;
-
-    if (claimError || !claim) {
+    let delivery;
+    try {
+      delivery = await deliverEmailNotification(
+        {
+          id: notificationId,
+          customerEmail: beforeNotification.customer_email,
+          subject: beforeNotification.subject,
+          bodyText: beforeNotification.body_text
+        },
+        {
+          async claim(id, leaseSeconds) {
+            const { data, error } = await supabase.rpc("claim_email_notification_delivery", {
+              p_notification_id: id,
+              p_lease_seconds: leaseSeconds
+            });
+            if (error) throw error;
+            const row = Array.isArray(data) ? data[0] : null;
+            return { claimed: row?.claimed === true, leaseToken: typeof row?.lease_token === "string" ? row.lease_token : null };
+          },
+          async finalize(input) {
+            const { data, error } = await supabase.rpc("finalize_email_notification_delivery", {
+              p_notification_id: input.notificationId,
+              p_lease_token: input.leaseToken,
+              p_succeeded: input.succeeded,
+              p_provider: input.provider,
+              p_provider_message_id: input.providerMessageId,
+              p_error: input.error
+            });
+            if (error) throw error;
+            const row = Array.isArray(data) ? data[0] : null;
+            return { finalized: row?.finalized === true, notification: row?.notification ?? null };
+          }
+        },
+        sendTransactionalEmail
+      );
+    } catch {
       return NextResponse.json(
-        { ok: false, message: "Could not claim email notification for delivery." },
+        { ok: false, message: "Could not process email notification." },
         { status: 500 }
       );
     }
 
-    if (claim.claimed !== true) {
+    if (delivery.state === "conflict") {
       return NextResponse.json(
         { ok: false, message: "Email notification is already being delivered or has been sent." },
         { status: 409 }
       );
     }
 
-    let sendResult;
-    try {
-      sendResult = await sendTransactionalEmail({
-        to: beforeNotification.customer_email,
-        subject: beforeNotification.subject,
-        text: beforeNotification.body_text,
-        idempotencyKey: getEmailDeliveryIdempotencyKey(notificationId)
-      });
-    } catch {
-      sendResult = { ok: false, provider: "resend", error: "Email provider request failed." };
-    }
-
-    const { data: finalizedRows, error: finalizeError } = await supabase.rpc("finalize_email_notification_delivery", {
-      p_notification_id: notificationId,
-      p_lease_token: claim.lease_token,
-      p_succeeded: sendResult.ok,
-      p_provider: sendResult.provider,
-      p_provider_message_id: sendResult.providerMessageId ?? null,
-      p_error: sendResult.error ?? null
-    });
-    const finalized = Array.isArray(finalizedRows) ? finalizedRows[0] : null;
-
-    if (finalizeError || !finalized || finalized.finalized !== true) {
+    if (delivery.state === "finalization_failed") {
       return NextResponse.json(
         { ok: false, message: "Email delivery result could not be recorded." },
         { status: 500 }
       );
     }
 
-    const notification = finalized.notification;
+    const notification = delivery.notification;
+    const sendResult = delivery.providerResult;
 
     await writeAdminAuditLog(supabase, {
       actorId: adminAccess.userId,
@@ -114,31 +130,31 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     });
 
     return NextResponse.json({
-      ok: sendResult.ok,
+      ok: delivery.state === "delivered",
       mode: "supabase",
       notification,
-      message: sendResult.ok ? "Email notification sent." : "Email sending failed."
-    }, { status: sendResult.ok ? 200 : 502 });
+      message: delivery.state === "delivered" ? "Email notification sent." : "Email sending failed."
+    }, { status: delivery.state === "delivered" ? 200 : 502 });
   }
 
-  const update = payload.data.action === "requeue"
-    ? { status: "queued", provider: "pending", last_error: null, sent_at: null }
-    : { status: "skipped", last_error: null, sent_at: null };
-
-  const { data: notification, error: updateError } = await supabase
-    .from("email_notifications")
-    .update(update)
-    .eq("id", notificationId)
-    .neq("status", "sending")
-    .select("id, order_number, customer_email, event, subject, preview_text, body_text, provider, status, attempts, last_error, sent_at, created_at, updated_at")
-    .single();
-
-  if (updateError || !notification) {
+  const { data: transitionRows, error: transitionError } = await supabase.rpc("transition_email_notification", {
+    p_notification_id: notificationId,
+    p_action: payload.data.action
+  });
+  const transition = Array.isArray(transitionRows) ? transitionRows[0] : null;
+  if (transitionError || !transition) {
     return NextResponse.json(
       { ok: false, message: "Could not update email notification." },
       { status: 500 }
     );
   }
+  if (transition.transitioned !== true) {
+    if (transition.error_code === "notification_not_found") {
+      return NextResponse.json({ ok: false, message: "Email notification was not found." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: false, message: "Email notification cannot change in its current state." }, { status: 409 });
+  }
+  const notification = transition.notification;
 
   await writeAdminAuditLog(supabase, {
     actorId: adminAccess.userId,

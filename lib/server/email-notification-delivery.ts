@@ -9,3 +9,12 @@ export function isRetryableEmailNotificationStatus(status: string, leaseExpiresA
   if (status !== "sending" || !leaseExpiresAt) return false;
   return Date.parse(leaseExpiresAt) <= now;
 }
+
+export type EmailNotificationAction = "requeue" | "skip" | "send";
+
+export function canTransitionEmailNotification(status: string, action: EmailNotificationAction) {
+  if (status === "sent" || status === "skipped" || status === "sending") return false;
+  if (action === "send") return status === "queued" || status === "failed";
+  if (action === "requeue") return status === "failed";
+  return action === "skip" && (status === "queued" || status === "failed");
+}

@@ -4,8 +4,7 @@ import {
   hasSupabasePublicConfig,
   hasSupabaseServiceRoleConfig
 } from "@/lib/supabase/server";
-
-const ADMIN_ROLES = new Set(["owner", "service"]);
+import { isOwnerAdminRole } from "./admin-roles";
 
 export async function requireAdminAccess() {
   if (!hasSupabasePublicConfig() || !hasSupabaseServiceRoleConfig()) {
@@ -34,18 +33,15 @@ export async function requireAdminAccess() {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profileError || !profile || !ADMIN_ROLES.has(profile.role)) {
+  if (profileError || !profile || !isOwnerAdminRole(profile.role)) {
     return { ok: false as const, reason: "not_authorized" as const };
   }
 
-  return { ok: true as const, userId: user.id, email: user.email ?? "", role: profile.role as "owner" | "service" };
+  return { ok: true as const, userId: user.id, email: user.email ?? "", role: profile.role as "owner" };
 }
 
 export async function requireOwnerAccess() {
   const access = await requireAdminAccess();
   if (!access.ok) return access;
-  if (access.role !== "owner") {
-    return { ok: false as const, reason: "not_authorized" as const };
-  }
   return access;
 }

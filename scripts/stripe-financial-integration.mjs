@@ -357,6 +357,16 @@ async function cleanup() {
     assert.equal(error, null, "analytics consent cleanup count must succeed");
     assert.equal(count, 0, "analytics cleanup must leave zero technical consents");
   }
+  await run("Stripe source health reconciliation", () => clientA.rpc("reconcile_stripe_source_health_count"));
+  const [{ data: health, error: healthError }, { count: paymentCount, error: paymentCountError }, { count: refundCount, error: refundCountError }] = await Promise.all([
+    clientA.from("data_source_health").select("record_count").eq("source_key", "stripe").single(),
+    clientA.from("payments").select("*", { count: "exact", head: true }).eq("provider", "stripe"),
+    clientA.from("payment_refunds").select("*", { count: "exact", head: true }).eq("provider", "stripe")
+  ]);
+  assert.equal(healthError, null, "Stripe health must remain readable after cleanup");
+  assert.equal(paymentCountError, null);
+  assert.equal(refundCountError, null);
+  assert.equal(health.record_count, paymentCount + refundCount, "cleanup must reconcile Stripe health instead of restoring a stale snapshot");
   if (failures.length) throw new AggregateError(failures, "Stripe financial integration cleanup failed");
 }
 
