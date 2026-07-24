@@ -55,8 +55,8 @@ export async function GET(request: Request) {
       .limit(8),
     supabase
       .from("products")
-      .select("id, sku, slug, style_id")
-      .or(`sku.ilike.${pattern},slug.ilike.${pattern},style_id.ilike.${pattern}`)
+      .select("id, sku, slug, name_en, name_zh")
+      .or(`sku.ilike.${pattern},slug.ilike.${pattern},name_en.ilike.${pattern},name_zh.ilike.${pattern}`)
       .order("sku", { ascending: true })
       .limit(8),
     supabase
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       id: String(item.id),
       kind: "product" as const,
       title: text(item.sku, "Product"),
-      subtitle: text(item.slug, text(item.style_id)),
+      subtitle: text(item.name_en, text(item.name_zh, text(item.slug))),
       href: "/admin/products"
     })),
     ...(afterSales.data ?? []).map((item) => ({

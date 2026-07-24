@@ -29,6 +29,8 @@ test("owner search trims and bounds Unicode queries", () => {
   assert.equal(normalizeOwnerSearchQuery(" a ").ok, false);
   assert.equal(normalizeOwnerSearchQuery("a".repeat(101)).ok, false);
   assert.equal(normalizeOwnerSearchQuery("🛋️🛋️").ok, true);
+  assert.equal(normalizeOwnerSearchQuery("😀".repeat(100)).ok, true);
+  assert.equal(normalizeOwnerSearchQuery("😀".repeat(101)).ok, false);
 });
 
 test("PostgREST OR values quote grammar and escape LIKE wildcards", () => {
@@ -90,6 +92,9 @@ test("universal search implements accessible, race-safe keyboard interaction", (
   assert.match(component, /new AbortController\(\)/);
   assert.match(component, /requestIdRef\.current/);
   assert.match(component, /isComposing/);
+  assert.match(component, /onCompositionStart/);
+  assert.match(component, /onCompositionEnd/);
+  assert.ok(component.indexOf("setResults([])") < component.indexOf("window.setTimeout"));
   for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
     assert.match(component, new RegExp(`"${key}"`));
   }

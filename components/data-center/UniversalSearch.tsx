@@ -43,22 +43,29 @@ export function UniversalSearch() {
   const [state, setState] = useState<SearchState>("idle");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isComposing, setIsComposing] = useState(false);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    const normalized = normalizeOwnerSearchQuery(query);
     const id = ++requestIdRef.current;
-    if (!normalized.ok) {
-      setResults([]);
+    setResults([]);
+    setActiveIndex(-1);
+    if (isComposing) {
       setState("idle");
-      setActiveIndex(-1);
+      setOpen(false);
+      return;
+    }
+
+    const normalized = normalizeOwnerSearchQuery(query);
+    if (!normalized.ok) {
+      setState("idle");
       return;
     }
 
     const controller = new AbortController();
+    setState("loading");
+    setOpen(true);
     const timer = window.setTimeout(() => {
-      setState("loading");
-      setOpen(true);
       void fetch(`/api/admin/data-center/search?q=${encodeURIComponent(normalized.value)}`, {
         credentials: "include",
         cache: "no-store",
@@ -91,7 +98,7 @@ export function UniversalSearch() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [isComposing, query]);
 
   const groups = useMemo(
     () => kindOrder
@@ -162,6 +169,8 @@ export function UniversalSearch() {
           placeholder="搜索订单、客户、产品、售后"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={onKeyDown}
         />
         {query && (
