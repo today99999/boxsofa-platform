@@ -16,6 +16,10 @@ const finalFinancialMigration = readFileSync(
   new URL("../../supabase/migrations/202607240015_finalize_task5_refund_identity_and_health.sql", import.meta.url),
   "utf8"
 ).toLowerCase();
+const sourceHealthConcurrencyMigration = readFileSync(
+  new URL("../../supabase/migrations/202607240017_serialize_stripe_source_health_count.sql", import.meta.url),
+  "utf8"
+).toLowerCase();
 const bootstrapSchema = readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8").toLowerCase();
 const integrationScript = readFileSync(
   new URL("../../scripts/stripe-financial-integration.mjs", import.meta.url),
@@ -124,4 +128,55 @@ test("final refund recovery binds identity before payment lookup and bootstrap r
     finalFinancialMigration.indexOf("from public.claim_stripe_webhook_event_identity") < finalFinancialMigration.indexOf("from public.payments payment_row"),
     "refund identity must be claimed before payment lookup"
   );
+});
+
+function functionBody(sql: string, functionName: string) {
+  const start = sql.lastIndexOf(`create or replace function public.${functionName}(`);
+  assert.ok(start >= 0, `expected ${functionName} to be defined`);
+  const bodyStart = sql.indexOf("as $$", start);
+  const bodyEnd = sql.indexOf("$$;", bodyStart);
+  assert.ok(bodyStart >= 0 && bodyEnd > bodyStart, `expected ${functionName} body`);
+  return sql.slice(bodyStart, bodyEnd);
+}
+
+test("all effective Stripe source-health writers use one transaction lock before count or delegated write", () => {
+  const lock = "pg_advisory_xact_lock(hashtextextended('stripe:source-health', 0))";
+  const writers = [
+    "record_stripe_refund",
+    "record_stripe_checkout_payment",
+    "mark_stripe_webhook_failure",
+    "reconcile_stripe_source_health_count"
+  ];
+
+  for (const source of [sourceHealthConcurrencyMigration, bootstrapSchema]) {
+    for (const writer of writers) {
+      const body = functionBody(source, writer);
+      const lockAt = body.indexOf(lock);
+      assert.ok(lockAt >= 0, `${writer} must take the shared source-health transaction lock`);
+
+      const countOrDelegatedWriteAt = Math.min(
+        ...["stripe_source_record_count", "record_stripe_refund_v012", "record_stripe_checkout_payment_v012"]
+          .map((needle) => body.indexOf(needle))
+          .filter((index) => index >= 0)
+      );
+      assert.ok(Number.isFinite(countOrDelegatedWriteAt), `${writer} must count or delegate its health write`);
+      assert.ok(lockAt < countOrDelegatedWriteAt, `${writer} must lock before its source-health count/write`);
+    }
+  }
+});
+
+test("Stripe source-health lock ordering keeps business locks ahead of the shared count lock", () => {
+  for (const writer of ["record_stripe_refund", "record_stripe_checkout_payment"]) {
+    const body = functionBody(sourceHealthConcurrencyMigration, writer);
+    const paymentLockAt = body.indexOf("stripe:payment:");
+    const orderLockAt = body.indexOf("stripe:order:");
+    const healthLockAt = body.indexOf("stripe:source-health");
+    assert.ok(paymentLockAt >= 0 && orderLockAt > paymentLockAt, `${writer} must preserve payment then order locks`);
+    assert.ok(healthLockAt > orderLockAt, `${writer} must take source-health only after business locks`);
+  }
+
+  const reconcile = functionBody(sourceHealthConcurrencyMigration, "reconcile_stripe_source_health_count");
+  assert.match(reconcile, /stripe:source-health/);
+  assert.doesNotMatch(reconcile, /stripe:(?:payment|order):/);
+  assert.match(sourceHealthConcurrencyMigration, /concurrency contract:[\s\S]*transaction-visible stripe payments/);
 });
