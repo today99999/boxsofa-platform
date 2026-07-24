@@ -19,7 +19,8 @@ if (fs.existsSync(envPath)) {
 }
 
 function getEnv(name) {
-  return process.env[name] || fileEnv[name] || '';
+  if (process.env[name] !== undefined) return process.env[name];
+  return releaseMode ? '' : fileEnv[name] || '';
 }
 
 const required = [
