@@ -34,8 +34,8 @@ const serviceWorker = readFileSync(
 test("data center shell authenticates the owner before rendering private HTML", () => {
   assert.match(layout, /await requireOwnerAccess\(\)/);
   assert.ok(layout.indexOf("await requireOwnerAccess()") < layout.indexOf("return <div"));
+  assert.match(layout, /redirect\("\/login"\)/);
   assert.match(layout, /notFound\(\)/);
-  assert.doesNotMatch(layout, /redirect\(/);
   assert.match(layout, /dynamic = "force-dynamic"/);
 });
 

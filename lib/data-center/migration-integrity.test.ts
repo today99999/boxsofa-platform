@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -25,7 +24,6 @@ type RemoteMigrationVerifier = {
   }) => Promise<unknown[]>;
   fetchRemoteMigrationTruth: (options: Record<string, unknown>) => Promise<{ mode: string; rows: unknown[] }>;
   selectRemoteMigrationVerifier: (options: Record<string, unknown>) => { mode: string };
-  verifyRemoteMigrationRows: (manifest: unknown, rows: unknown[], options?: { readMigration?: (file: string) => string }) => { remoteCheckpoints: number };
   verifyRemoteMigrationCheckpoints: (manifest: unknown, rows: unknown[]) => { remoteCheckpoints: number };
 };
 
@@ -44,8 +42,8 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 24 SQL files/);
-  assert.match(result.stdout, /24 remote checkpoints/);
+  assert.match(result.stdout, /Migration manifest verified: 25 SQL files/);
+  assert.match(result.stdout, /25 remote checkpoints/);
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -56,11 +54,6 @@ test("Supabase migration comparison canonicalizes only line endings and trailing
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-const sourceByFile = new Map<string, string>(manifest.remoteCheckpoints.map((checkpoint: { file: string }) => [
-  checkpoint.file,
-  readFileSync(new URL(checkpoint.file, migrationDirectory), "utf8")
-]));
-
 test("release verification covers every immutable migration remotely", () => {
   assert.equal(manifest.remoteCheckpoints.length, manifest.migrations.length);
   assert.deepEqual(
@@ -69,46 +62,40 @@ test("release verification covers every immutable migration remotely", () => {
   );
 });
 
-function remoteRows() {
-  return manifest.remoteCheckpoints.map((checkpoint: { file: string; version: string; name: string }) => ({
-    version: checkpoint.version,
-    name: checkpoint.name,
-    statements: [sourceByFile.get(checkpoint.file)]
-  }));
-}
-
 function remoteCheckpointRows() {
-  return manifest.remoteCheckpoints.map((checkpoint: { version: string; name: string; statementCount: number; normalizedMd5: string }) => ({
+  return manifest.remoteCheckpoints.map((checkpoint: {
+    version: string;
+    name: string;
+    statementCount: number;
+    normalizedMd5: string;
+    reviewedSourceSha256?: string;
+  }) => ({
     version: checkpoint.version,
     name: checkpoint.name,
     statement_count: checkpoint.statementCount,
-    normalized_md5: checkpoint.normalizedMd5
+    normalized_md5: checkpoint.normalizedMd5,
+    reviewed_source_sha256: checkpoint.reviewedSourceSha256 ?? null
   }));
 }
 
 test("remote migration truth rejects simultaneous local and manifest tampering", async () => {
-  const { verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
-  const changedSql = "select 'tampered local migration';\n";
+  const { verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
   const changedManifest = structuredClone(manifest);
-  const changedCheckpoint = changedManifest.remoteCheckpoints[0];
-  changedCheckpoint.normalizedMd5 = createHash("md5").update(normalizeMigrationText(changedSql)).digest("hex");
+  const changedCheckpoint = changedManifest.remoteCheckpoints.find(
+    (checkpoint: { matchesLocal?: boolean }) => checkpoint.matchesLocal === false
+  );
+  changedCheckpoint.reviewedSourceSha256 = "0".repeat(64);
   assert.throws(
-    () => verifyRemoteMigrationRows(changedManifest, remoteRows(), {
-      readMigration: (file: string) => file === changedCheckpoint.file ? changedSql : sourceByFile.get(file)!
-    }),
-    /remote statement hash diverged/
+    () => verifyRemoteMigrationCheckpoints(changedManifest, remoteCheckpointRows()),
+    /reviewed source attestation diverged/
   );
 });
 
 test("both remote credential modes reject missing, mismatched, and unexpected checkpoints", async () => {
-  const { selectRemoteMigrationVerifier, verifyRemoteMigrationRows, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const { selectRemoteMigrationVerifier, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
   assert.throws(() => selectRemoteMigrationVerifier({}), /Remote migration verification requires/);
   assert.throws(() => selectRemoteMigrationVerifier({ projectRef: "invalid", accessToken: "token" }), /Remote migration verification requires/);
 
-  assert.throws(
-    () => verifyRemoteMigrationRows(manifest, remoteRows().slice(1)),
-    /remote migration response has an unexpected row count/
-  );
   const mismatchedServiceRows = remoteCheckpointRows();
   mismatchedServiceRows[0].normalized_md5 = "00000000000000000000000000000000";
   assert.throws(
@@ -127,8 +114,8 @@ test("both remote credential modes reject missing, mismatched, and unexpected ch
 });
 
 test("Management API verifier accepts exact rows without exposing its credential", async () => {
-  const { fetchRemoteMigrationRowsWithManagementApi, verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
-  const rows = remoteRows();
+  const { fetchRemoteMigrationRowsWithManagementApi, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const rows = remoteCheckpointRows();
   const fetchedRows = await fetchRemoteMigrationRowsWithManagementApi({
     projectRef: "osmjevtynywbkokzejcp",
     accessToken: "management-test-token",
@@ -138,21 +125,14 @@ test("Management API verifier accepts exact rows without exposing its credential
       assert.equal(init.method, "POST");
       assert.equal((init.headers as Record<string, string>).authorization, "Bearer management-test-token");
       const body = JSON.parse(String(init.body));
-      assert.match(body.query, /supabase_migrations\.schema_migrations/);
-      assert.deepEqual(body.parameters, manifest.remoteCheckpoints.map((checkpoint: { version: string }) => checkpoint.version));
+      assert.match(body.query, /public\.get_applied_migration_checkpoints\(\)/);
+      assert.deepEqual(body.parameters, []);
       return new Response(JSON.stringify(rows), { status: 201 });
     }
   });
   assert.deepEqual(fetchedRows, rows);
-  const locallyMatchingManifest = structuredClone(manifest);
-  for (const checkpoint of locallyMatchingManifest.remoteCheckpoints) {
-    checkpoint.normalizedMd5 = createHash("md5")
-      .update(normalizeMigrationText(sourceByFile.get(checkpoint.file)!))
-      .digest("hex");
-    delete checkpoint.matchesLocal;
-  }
-  assert.deepEqual(verifyRemoteMigrationRows(locallyMatchingManifest, fetchedRows), {
-    remoteCheckpoints: locallyMatchingManifest.remoteCheckpoints.length
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), {
+    remoteCheckpoints: manifest.remoteCheckpoints.length
   });
 });
 

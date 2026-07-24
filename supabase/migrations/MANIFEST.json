@@ -25,7 +25,8 @@
     { "file": "202607240021_after_sales_cursor_and_case_number_safety.sql", "sha256": "9d2c4ee2460999faa027823a00448a6b7e421620268d806d62f7b11a763012e6" },
     { "file": "202607240022_verify_migration_checkpoints_rpc.sql", "sha256": "6865603ad6a92e843a2a6e78371b713397ea90e3f963e9d862de56f099185bfb" },
     { "file": "202607240023_qualify_after_sales_update_columns.sql", "sha256": "093e4b476d13242c9922a1dbf84b54cf254433a1b66ffd110eab25a71d4c5d20" },
-    { "file": "202607240024_verify_complete_data_center_migration_history.sql", "sha256": "0f6379bec1bafbfecc12ea185a113e695f2a19cb727f34d7504499bdc7b6d314" }
+    { "file": "202607240024_verify_complete_data_center_migration_history.sql", "sha256": "0f6379bec1bafbfecc12ea185a113e695f2a19cb727f34d7504499bdc7b6d314" },
+    { "file": "202607240025_attest_reviewed_migration_sources.sql", "sha256": "dabe5603d5d2c8ff5be2d2ac316031f9f4afeb2453d49ef116223aa9220127e8" }
   ],
   "remoteCheckpoints": [
     {
@@ -41,7 +42,8 @@
       "name": "data_center_owner_only_policies",
       "statementCount": 1,
       "normalizedMd5": "55058120951875e5e8bfbbf5c14bcab6",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "79b4edf43881189a4d4a67bf9fc7a0c6317374be73c02cc02a999abadc5b50b0"
     },
     {
       "file": "202607230003_harden_analytics_ingestion.sql",
@@ -49,7 +51,8 @@
       "name": "harden_analytics_ingestion",
       "statementCount": 1,
       "normalizedMd5": "bfcb694bd0078cdebfe62a2e371870e8",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "35259fd0fb8696e51f2911decd42437f162034a80f697b0d02bcda5fc30fd79d"
     },
     {
       "file": "202607230004_finalize_analytics_consent_lock.sql",
@@ -78,7 +81,8 @@
       "name": "finalize_analytics_consent_intent_ordering",
       "statementCount": 1,
       "normalizedMd5": "3cfcecc49731f1e8aa4fcff45f728260",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "32812965c0ea45cec97741d5ff9fa89455f689dd59bde205c90c9c4c3a0fe010"
     },
     {
       "file": "202607230008_reassert_analytics_consent_superseded_constraint.sql",
@@ -135,7 +139,8 @@
       "name": "finalize_task5_refund_identity_and_health",
       "statementCount": 1,
       "normalizedMd5": "d1e712163bd6a99d17df61f11f325611",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "b0f6ef066b654cfd0dad723017d4dcbaa28d6ad236fe322151a8027b32bf1b3b"
     },
     {
       "file": "202607240016_finalize_task5_email_state_machine.sql",
@@ -143,7 +148,8 @@
       "name": "finalize_task5_email_state_machine",
       "statementCount": 1,
       "normalizedMd5": "2fcec6582de6d55c2cb01695ea08d44b",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "a5025f4b0ce11d56d691ff6b25f3eb1465529a83407e1aaec9d5bc81208ffb48"
     },
     {
       "file": "202607240017_serialize_stripe_source_health_count.sql",
@@ -151,7 +157,8 @@
       "name": "serialize_stripe_source_health_count",
       "statementCount": 1,
       "normalizedMd5": "a4214ab4e90f19f878337b4dc45fae2a",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "bb780d2211bbc12ca8107209da38d6deb2e70b31e737b036e1de878def815eec"
     },
     {
       "file": "202607240018_after_sales_foundation.sql",
@@ -180,7 +187,8 @@
       "name": "after_sales_cursor_and_case_number_safety",
       "statementCount": 1,
       "normalizedMd5": "1ab0cf3f67629fc8a0efcf170d6677e1",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "9d2c4ee2460999faa027823a00448a6b7e421620268d806d62f7b11a763012e6"
     },
     {
       "file": "202607240022_verify_migration_checkpoints_rpc.sql",
@@ -188,7 +196,8 @@
       "name": "verify_migration_checkpoints_rpc",
       "statementCount": 1,
       "normalizedMd5": "ad4c7c0bcddc5b758f1353f666f80b75",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "6865603ad6a92e843a2a6e78371b713397ea90e3f963e9d862de56f099185bfb"
     },
     {
       "file": "202607240023_qualify_after_sales_update_columns.sql",
@@ -196,7 +205,8 @@
       "name": "qualify_after_sales_update_columns",
       "statementCount": 1,
       "normalizedMd5": "dbf274b14e95d63b1a44c7017c6877ab",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "093e4b476d13242c9922a1dbf84b54cf254433a1b66ffd110eab25a71d4c5d20"
     },
     {
       "file": "202607240024_verify_complete_data_center_migration_history.sql",
@@ -204,7 +214,16 @@
       "name": "verify_complete_data_center_migration_history",
       "statementCount": 1,
       "normalizedMd5": "9010a0e8c1ed7c354f1c98c6450278f3",
-      "matchesLocal": false
+      "matchesLocal": false,
+      "reviewedSourceSha256": "0f6379bec1bafbfecc12ea185a113e695f2a19cb727f34d7504499bdc7b6d314"
+    },
+    {
+      "file": "202607240025_attest_reviewed_migration_sources.sql",
+      "version": "20260724091033",
+      "name": "attest_reviewed_migration_sources",
+      "statementCount": 1,
+      "normalizedMd5": "a6f4a6bde54acfb331ca82a903a45b69",
+      "normalization": "trim-final-newlines"
     }
   ]
 }

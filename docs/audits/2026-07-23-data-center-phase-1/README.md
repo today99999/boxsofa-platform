@@ -11,9 +11,9 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 ## Database And Financial Truth
 
-- All Data Center migrations `001` through `024` are applied. The immutable manifest contains 24 SQL files and 24 exact remote checkpoints.
+- All Data Center migrations `001` through `025` are applied. The immutable manifest contains 25 SQL files and 25 exact remote checkpoints.
 - Migration `023` fixes a production-only PL/pgSQL ambiguity in `update_after_sales_case` by qualifying columns that overlap `RETURNS TABLE` variables.
-- Migration `024` makes the restricted release RPC return every Data Center migration fingerprint. Historical remote statements that were applied through corrective migrations are explicitly pinned by their production MD5 even where their stored text differs from the current local source file.
+- Migration `024` makes the restricted release RPC return every Data Center migration fingerprint. Migration `025` adds production-side SHA-256 attestations that bind every historically corrected production statement to its reviewed repository source.
 - Reconciliation range: `2026-07-01T00:00:00Z` inclusive to `2026-08-01T00:00:00Z` exclusive.
 - Paid orders: `1`; GMV: `37500` cents; succeeded Stripe refunds: `0` cents; net sales: `37500` cents.
 - GMV is the merchandise total of Stripe-paid orders before refunds. Net sales is GMV minus succeeded Stripe refunds. Calculations remain integer-cent based.
@@ -21,7 +21,7 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 ## Automated Verification
 
 - `npm test`: PASS, 186/186.
-- `npm run db:migrations:verify`: PASS, 24 migrations and 24 remote checkpoints.
+- `npm run db:migrations:verify`: PASS, 25 migrations and 25 remote checkpoints.
 - `npm run db:bootstrap:execute`: PASS, 26 core tables, 44 owner policies, 26 RLS tables and 23 critical RPCs.
 - `npm run typecheck`: PASS.
 - `npm run build`: PASS.
@@ -32,7 +32,7 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 - Windows: Windows 11 Home China, version `10.0.22000`, build `22000`.
 - Installed browsers recorded on the machine: Chrome `150.0.7871.186`; Edge `150.0.4078.96`.
-- Desktop viewport: `1440 x 900`; anonymous `/data-center` returned a private 404 with `noindex, nofollow`.
+- Desktop viewport: `1440 x 900`; anonymous `/data-center` returned a manual `307` to `/login` without exposing private HTML.
 - Mobile viewport: `390 x 844`; no horizontal overflow; privacy controls remained visible.
 - Manifest contract: `BoxSofa Data Center`, start URL and scope `/data-center`, `display: standalone`.
 - Standard and maskable PNG icons are both verified at `512 x 512`.
@@ -40,7 +40,7 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 ## Privacy And Access
 
-- Anonymous owner APIs are denied with `401` or `403`; `503` cannot satisfy the release gate. Anonymous `/data-center` must return a non-redirected `404`. Private pages use `no-store` and `noindex`.
+- Anonymous owner APIs are denied with `401` or `403`; `503` cannot satisfy the release gate. Anonymous `/data-center` must return a non-followed `307` whose location is exactly `/login`. Private pages use `no-store` and `noindex`.
 - The owner gate executes server-side before private Data Center HTML is rendered.
 - Production currently has zero analytics consent rows and zero analytics events. Visitor count is therefore zero and conversion is represented as unavailable, not invented as `0%`.
 - `orders`, `stripe` and `website_analytics` each have an explicit source key, state and timestamp. Website analytics is currently `disconnected`; no social source is represented with a fabricated number.

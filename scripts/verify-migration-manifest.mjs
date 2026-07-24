@@ -8,13 +8,10 @@ const root = join(fileURLToPath(new URL("..", import.meta.url)));
 const migrationDirectory = join(root, "supabase", "migrations");
 const manifestPath = join(migrationDirectory, "MANIFEST.json");
 
-function remoteMigrationQuery(checkpointCount) {
-  assert.ok(checkpointCount > 0, "remote migration verification requires at least one checkpoint");
-  const placeholders = Array.from({ length: checkpointCount }, (_, index) => `$${index + 1}`).join(", ");
+function remoteMigrationQuery() {
   return `
-    select version::text, name, statements
-    from supabase_migrations.schema_migrations
-    where version in (${placeholders})
+    select version, name, statement_count, normalized_md5, reviewed_source_sha256
+    from public.get_applied_migration_checkpoints()
     order by version
   `;
 }
@@ -31,17 +28,11 @@ function md5(value) {
   return createHash("md5").update(value).digest("hex");
 }
 
-function canonicalStatements(statements) {
-  if (typeof statements === "string") {
-    try {
-      return canonicalStatements(JSON.parse(statements));
-    } catch {
-      return [statements];
-    }
+function normalizeCheckpointText(sql, checkpoint) {
+  if (checkpoint.normalization === "trim-final-newlines") {
+    return sql.replace(/\r\n/g, "\n").replace(/\n+$/g, "");
   }
-  assert.ok(Array.isArray(statements), "remote migration statements must be an array");
-  assert.ok(statements.every((statement) => typeof statement === "string"), "remote migration statements must be strings");
-  return statements.map(normalizeMigrationText);
+  return normalizeMigrationText(sql);
 }
 
 function validProjectRef(projectRef) {
@@ -97,42 +88,25 @@ export function verifyMigrationManifest({ manifest = loadManifest(), readMigrati
     assert.match(checkpoint.name, /^[a-z0-9_]+$/, `invalid remote migration name: ${checkpoint.file}`);
     assert.equal(checkpoint.statementCount, 1, `unexpected remote statement count: ${checkpoint.file}`);
     assert.match(checkpoint.normalizedMd5, /^[a-f0-9]{32}$/, `invalid remote normalized MD5: ${checkpoint.file}`);
+    assert.ok(checkpoint.normalization === undefined || checkpoint.normalization === "trim-final-newlines",
+      `invalid normalization mode: ${checkpoint.file}`);
     assert.ok(checkpoint.matchesLocal === undefined || typeof checkpoint.matchesLocal === "boolean",
       `invalid matchesLocal flag: ${checkpoint.file}`);
+    const sourceEntry = migrationEntries.get(checkpoint.file);
+    if (checkpoint.matchesLocal === false) {
+      assert.equal(checkpoint.reviewedSourceSha256, sourceEntry.sha256,
+        `reviewed source attestation must match the local migration SHA-256: ${checkpoint.file}`);
+    } else {
+      assert.equal(checkpoint.reviewedSourceSha256, undefined,
+        `matching migrations do not need a source attestation: ${checkpoint.file}`);
+    }
     if (checkpoint.matchesLocal !== false) {
-      assert.equal(md5(normalizeMigrationText(readMigration(checkpoint.file))), checkpoint.normalizedMd5,
+      assert.equal(md5(normalizeCheckpointText(readMigration(checkpoint.file), checkpoint)), checkpoint.normalizedMd5,
         `migration no longer matches the normalized SQL recorded by Supabase: ${checkpoint.file}`);
     }
   }
 
   return { migrations: manifest.migrations.length, remoteCheckpoints: manifest.remoteCheckpoints.length };
-}
-
-export function verifyRemoteMigrationRows(manifest, remoteRows, { readMigration = localMigrationText } = {}) {
-  assert.ok(Array.isArray(remoteRows), "remote migration response must be an array");
-  const checkpoints = manifest.remoteCheckpoints;
-  const rowsByVersion = new Map();
-  for (const row of remoteRows) {
-    assert.equal(typeof row?.version, "string", "remote migration version is missing");
-    assert.ok(!rowsByVersion.has(row.version), `duplicate remote migration version: ${row.version}`);
-    rowsByVersion.set(row.version, row);
-  }
-
-  assert.equal(rowsByVersion.size, checkpoints.length, "remote migration response has an unexpected row count");
-  for (const checkpoint of checkpoints) {
-    const row = rowsByVersion.get(checkpoint.version);
-    assert.ok(row, `remote migration is missing: ${checkpoint.version}`);
-    assert.equal(row.name, checkpoint.name, `remote migration name diverged: ${checkpoint.version}`);
-    const statements = canonicalStatements(row.statements);
-    assert.equal(statements.length, checkpoint.statementCount, `remote statement count diverged: ${checkpoint.version}`);
-    assert.equal(statements.length, 1, `remote checkpoint must retain one statement: ${checkpoint.version}`);
-    assert.equal(md5(statements[0]), checkpoint.normalizedMd5, `remote statement hash diverged: ${checkpoint.version}`);
-    if (checkpoint.matchesLocal !== false) {
-      assert.equal(statements[0], normalizeMigrationText(readMigration(checkpoint.file)),
-        `remote statement text diverged from local migration: ${checkpoint.file}`);
-    }
-  }
-  return { remoteCheckpoints: checkpoints.length };
 }
 
 export function verifyRemoteMigrationCheckpoints(manifest, remoteRows) {
@@ -152,6 +126,8 @@ export function verifyRemoteMigrationCheckpoints(manifest, remoteRows) {
     assert.equal(row.name, checkpoint.name, `remote migration name diverged: ${checkpoint.version}`);
     assert.equal(row.statement_count, checkpoint.statementCount, `remote statement count diverged: ${checkpoint.version}`);
     assert.equal(row.normalized_md5, checkpoint.normalizedMd5, `remote statement hash diverged: ${checkpoint.version}`);
+    assert.equal(row.reviewed_source_sha256 ?? undefined, checkpoint.reviewedSourceSha256,
+      `reviewed source attestation diverged: ${checkpoint.version}`);
   }
   return { remoteCheckpoints: checkpoints.length };
 }
@@ -160,14 +136,13 @@ export async function fetchRemoteMigrationRowsWithManagementApi({ projectRef, ac
   assert.ok(validProjectRef(projectRef), "SUPABASE_PROJECT_REF must be a Supabase project ref");
   assert.ok(accessToken, "SUPABASE_ACCESS_TOKEN is required for Management API migration verification");
   assert.equal(typeof fetchImpl, "function", "fetch is unavailable for remote migration verification");
-  const versions = checkpoints.map((checkpoint) => checkpoint.version);
   const response = await fetchImpl(`https://api.supabase.com/v1/projects/${projectRef}/database/query/read-only`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({ query: remoteMigrationQuery(versions.length), parameters: versions })
+    body: JSON.stringify({ query: remoteMigrationQuery(), parameters: [] })
   });
   if (!response.ok) throw new Error(`Supabase Management API migration query failed with HTTP ${response.status}`);
   const payload = await response.json();
@@ -229,7 +204,7 @@ async function main() {
   });
   const remoteResult = remote.mode === "service-role-rpc"
     ? verifyRemoteMigrationCheckpoints(manifest, remote.rows)
-    : verifyRemoteMigrationRows(manifest, remote.rows);
+    : verifyRemoteMigrationCheckpoints(manifest, remote.rows);
   console.log(`Remote migration verification passed via ${remote.mode}: ${result.migrations} SQL files; ${remoteResult.remoteCheckpoints} remote checkpoints.`);
 }
 

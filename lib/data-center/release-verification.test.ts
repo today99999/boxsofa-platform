@@ -12,9 +12,10 @@ const localVerification = readFileSync(
 );
 
 test("anonymous data center smoke cannot accept private HTML or followed redirects", () => {
-  assert.match(smoke, /\{ path: '\/data-center', allowedStatuses: \[404\] \}/);
+  assert.match(smoke, /\{ path: '\/data-center', allowedStatuses: \[307\], expectedLocation: '\/login' \}/);
   assert.match(smoke, /fetch\(baseUrl \+ route\.path, \{ cache: 'no-store', redirect: 'manual' \}\)/);
   assert.doesNotMatch(smoke, /\/data-center', allowedStatuses: \[[^\]]*200/);
+  assert.match(smoke, /location !== route\.expectedLocation/);
 });
 
 test("protected API smoke only accepts authorization denials", () => {

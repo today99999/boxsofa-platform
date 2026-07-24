@@ -45,7 +45,7 @@ const privateChecks = [
   { path: '/admin/audit' },
   { path: '/admin/notifications' },
   { path: '/admin/support' },
-  { path: '/data-center', allowedStatuses: [404] },
+  { path: '/data-center', allowedStatuses: [307], expectedLocation: '/login' },
 ];
 
 const protectedApiChecks = [
@@ -119,6 +119,13 @@ async function checkPrivateRoute(route) {
   checkSecurityHeaders(route.path, response.headers);
   const cacheControl = response.headers.get('cache-control') || '';
   if (!cacheControl.includes('no-store')) throw new Error(route.path + ' missing no-store cache header');
+  if (route.expectedLocation) {
+    const location = response.headers.get('location');
+    if (location !== route.expectedLocation) {
+      throw new Error(route.path + ' returned unexpected redirect location ' + location);
+    }
+    return;
+  }
   const text = await response.text();
   if (stableMojibakePattern.test(text)) throw new Error(route.path + ' contains mojibake text');
   if (!/name="robots" content="noindex(?:,\s*nofollow)?"/.test(text)) {
