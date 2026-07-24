@@ -12,7 +12,7 @@ Supported languages are Chinese, English, Spanish, French, and German (`zh`, `en
 
 ## Data Model
 
-Add a required `locale` column to `orders`, constrained to the five supported language codes. Migration 026 backfills existing rows, then removes the temporary default before enforcing `NOT NULL`, so old-app inserts fail closed during the maintenance window. New orders must explicitly store the website language selected at checkout. This is an immutable communication snapshot: later changes to a profile's `preferred_locale` do not alter an existing order's language.
+Add a required `locale` column to `orders`, constrained to the five supported language codes and defaulting to `en` for migration safety. New orders must store the website language selected at checkout. This is an immutable communication snapshot: later changes to a profile's `preferred_locale` do not alter an existing order's language.
 
 Existing orders are backfilled from the linked profile's `preferred_locale` when available, otherwise `en`.
 

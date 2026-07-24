@@ -6,7 +6,6 @@ const baseUrl = (
 ).replace(/\/$/, '');
 
 const protectedChecks = [
-  { method: 'GET', path: '/api/cron/email-notifications', allowedStatuses: [401] },
   { method: 'GET', path: '/api/admin/readiness' },
   { method: 'GET', path: '/api/admin/overview' },
   { method: 'GET', path: '/api/admin/launch-status' },

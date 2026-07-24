@@ -21,10 +21,8 @@
     "db:bootstrap:validate": "node scripts/validate-bootstrap-sql.mjs",
     "db:bootstrap:execute": "node scripts/execute-bootstrap-pglite.mjs",
     "env:check": "node scripts/check-env.mjs",
-    "env:check:release": "node scripts/check-env.mjs --release",
     "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke && npm run seo:audit && npm run api:auth-audit",
     "production:ready": "node scripts/production-readiness.mjs",
-    "production:ready:release-config": "node scripts/production-readiness.mjs --release --environment-only",
     "production:verify:local": "node scripts/production-verify-local.mjs",
     "production:verify": "node scripts/production-verify.mjs --release",
     "deploy:preflight": "node scripts/deploy-preflight.mjs"

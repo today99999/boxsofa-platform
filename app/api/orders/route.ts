@@ -33,7 +33,6 @@ const createOrderSchema = z.object({
   customerName: z.string().trim().min(1),
   phone: z.string().trim().min(1),
   email: z.string().trim().email(),
-  locale: z.enum(["zh", "en", "es", "fr", "de"]),
   countryCode: z
     .string()
     .trim()
@@ -84,7 +83,6 @@ async function saveCustomerCheckoutProfile(
       email: order.email,
       full_name: order.customerName,
       phone: order.phone,
-      preferred_locale: order.locale,
       last_login_at: new Date().toISOString()
     },
     { onConflict: "id" }
@@ -270,7 +268,6 @@ export async function POST(request: Request) {
       customer_email: order.email,
       customer_name: order.customerName,
       customer_phone: order.phone,
-      locale: order.locale,
       status: "pending_confirm",
       payment_status: "not_started",
       subtotal_eur: order.subtotalEur,

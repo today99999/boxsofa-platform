@@ -1,4 +1,4 @@
-export type OrderEmailEvent = "order_submitted" | "order_shipped" | "order_cancelled";
+export type OrderEmailEvent = "order_submitted" | "payment_confirmed" | "order_shipped" | "order_cancelled";
 
 export type OrderEmailInput = {
   orderNumber: string;
@@ -44,6 +44,21 @@ export function buildOrderEmailPreview(event: OrderEmailEvent, input: OrderEmail
         `Order total: ${formatTotal(input.totalEur)}.`,
         "",
         "If payment is still pending, use the secure Stripe Checkout link shown after ordering. Your order is confirmed automatically after successful payment.",
+        "Estimated cross-border delivery after dispatch: 23-30 days.",
+        "",
+        "Thank you,",
+        "BoxSofa"
+      ].join("\n")
+    },
+    payment_confirmed: {
+      subject: `Payment confirmed for BoxSofa order ${input.orderNumber}`,
+      previewText: "Your payment has been confirmed. We are preparing your sofa for dispatch.",
+      bodyText: [
+        intro,
+        "",
+        `Payment has been confirmed for order ${input.orderNumber}.`,
+        "We are preparing your sofa and will update you again once it has shipped.",
+        "",
         "Estimated cross-border delivery after dispatch: 23-30 days.",
         "",
         "Thank you,",

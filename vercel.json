@@ -1,9 +1,3 @@
 {
-  "buildCommand": "node scripts/vercel-build.mjs",
-  "crons": [
-    {
-      "path": "/api/cron/email-notifications",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "buildCommand": "node scripts/vercel-build.mjs"
 }

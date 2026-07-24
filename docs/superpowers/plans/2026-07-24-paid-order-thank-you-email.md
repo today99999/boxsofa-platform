@@ -119,97 +119,91 @@ git commit -m "feat: persist checkout locale on orders"
 
 ---
 
-### Task 2: Build the Five Approved Database Templates
+### Task 2: Build the Five Approved Templates
 
 **Files:**
-- Modify: `supabase/migrations/202607240026_localized_paid_order_email.sql`
-- Modify: `supabase/schema.sql`
-- Modify: `supabase/migrations/MANIFEST.json`
-- Test: `lib/server/paid-order-email-contract.test.ts`
+- Modify: `lib/email-notifications.ts`
+- Create: `lib/email-notifications.test.ts`
 
 **Interfaces:**
-- Produces: SQL helper `build_payment_confirmed_email(p_locale text, p_customer_name text, p_order_number text, p_member_welcome boolean)` returning `subject`, `preview_text`, and `body_text`.
-- Preserves: existing TypeScript preview behavior for non-payment events. TypeScript reads and displays the paid notification snapshot; it does not duplicate the five paid templates.
+- Produces: `buildOrderEmailPreview(event, input)` accepts `locale: LanguageCode` and `memberWelcome?: boolean`.
+- Preserves: existing `OrderEmailPreview` delivery fields and all non-payment event behavior.
 
-- [ ] **Step 1: Write failing database template contract tests**
+- [ ] **Step 1: Write failing tests for all five paid templates**
 
 ```ts
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { buildOrderEmailPreview } from "./email-notifications.ts";
 
-const migration = readFileSync(
-  new URL("../../supabase/migrations/202607240026_localized_paid_order_email.sql", import.meta.url),
-  "utf8"
-);
+const expectations = {
+  zh: ["感谢您的购买", "您好，Ada：", "我们会尽快为您安排发货"],
+  en: ["Thank you for your purchase", "Hello Ada,", "arrange shipment as soon as possible"],
+  es: ["Gracias por tu compra", "Hola, Ada:", "envío lo antes posible"],
+  fr: ["Merci pour votre achat", "Bonjour Ada,", "expédition dans les meilleurs délais"],
+  de: ["Vielen Dank für Ihren Einkauf", "Hallo Ada,", "Versand so schnell wie möglich"]
+} as const;
 
-test("database owns all five approved paid-order templates", () => {
-  assert.match(migration, /create or replace function public\\.build_payment_confirmed_email/i);
-  for (const subject of [
-    "感谢您的购买",
-    "Thank you for your purchase",
-    "Gracias por tu compra",
-    "Merci pour votre achat",
-    "Vielen Dank für Ihren Einkauf"
-  ]) assert.ok(migration.includes(subject));
-  assert.match(migration, /p_member_welcome/i);
-  assert.match(migration, /else 'en'/i);
-});
+for (const [locale, phrases] of Object.entries(expectations)) {
+  test(`builds approved ${locale} paid-order copy`, () => {
+    const email = buildOrderEmailPreview("payment_confirmed", {
+      orderNumber: "BX-123",
+      customerName: "Ada",
+      customerEmail: "ada@example.test",
+      locale: locale as keyof typeof expectations,
+      memberWelcome: false
+    });
+    assert.match(email.subject, new RegExp(phrases[0]));
+    assert.match(email.bodyText, new RegExp(phrases[1]));
+    assert.match(email.bodyText, /BX-123/);
+    assert.match(email.bodyText, new RegExp(phrases[2]));
+    assert.doesNotMatch(email.bodyText, /10\\s?%/);
+  });
+}
 ```
 
 - [ ] **Step 2: Run the focused test and verify failure**
 
-Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/server/paid-order-email-contract.test.ts`
+Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/email-notifications.test.ts`
 
-Expected: FAIL because the SQL template helper is absent.
+Expected: FAIL because the input has no locale or membership flag and the template is English-only.
 
-- [ ] **Step 3: Implement the localized SQL helper**
+- [ ] **Step 3: Implement typed localized template data**
 
-Create a stable SQL function returning one row:
+Add:
 
-```sql
-create or replace function public.build_payment_confirmed_email(
-  p_locale text,
-  p_customer_name text,
-  p_order_number text,
-  p_member_welcome boolean
-)
-returns table(subject text, preview_text text, body_text text)
-language plpgsql
-set search_path = public, pg_temp
-as $$
-declare
-  v_locale text := case when p_locale in ('zh', 'en', 'es', 'fr', 'de') then p_locale else 'en' end;
-begin
-  -- Each CASE branch contains the verbatim approved subject and body.
-  -- Append the locale-specific membership paragraph only when p_member_welcome is true.
-  return query select v_subject, v_preview_text, v_body_text;
-end;
-$$;
+```ts
+import type { LanguageCode } from "@/lib/i18n";
+
+export type OrderEmailInput = {
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  totalEur?: number;
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  locale?: LanguageCode;
+  memberWelcome?: boolean;
+};
 ```
 
-Fill every branch with the exact approved copy from the design specification. Use `format(..., p_order_number)` only with fixed format strings and concatenate customer data as values. Omit the membership paragraph and its preceding blank line when `p_member_welcome` is false.
+Implement the approved subject, greeting, core paragraph, optional membership paragraph, and sign-off for all five locales exactly as specified. Default missing or unsupported locale to `en`. Join body sections with one blank line and omit the membership section entirely when false.
 
-- [ ] **Step 4: Add exact-copy, membership, and fallback assertions**
+- [ ] **Step 4: Add membership and fallback assertions**
 
-Extend the PGlite/bootstrap validation or a focused SQL execution test to call the helper for each locale, assert the approved subject/body, assert membership text appears only when true, and assert an unsupported locale returns English.
+Add tests that verify the exact localized membership sentence appears when `memberWelcome: true`, does not appear when false, and English is used when locale is omitted.
 
-- [ ] **Step 5: Refresh schema and manifest, then run template tests**
+- [ ] **Step 5: Run template tests**
 
-Mirror the helper in `supabase/schema.sql`, recalculate the migration hash, then run:
+Run: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/email-notifications.test.ts`
 
-```bash
-npm run db:bootstrap:validate
-node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/server/paid-order-email-contract.test.ts
-```
-
-Expected: both commands PASS.
+Expected: all template tests PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/202607240026_localized_paid_order_email.sql supabase/schema.sql supabase/migrations/MANIFEST.json lib/server/paid-order-email-contract.test.ts
-git commit -m "feat: add localized paid order email templates"
+git add lib/email-notifications.ts lib/email-notifications.test.ts
+git commit -m "feat: add localized paid order email copy"
 ```
 
 ---
@@ -259,9 +253,9 @@ In `record_stripe_checkout_payment`, capture `v_was_member` before the paid-orde
 
 Keep the existing unique `(order_id, event)` insert conflict behavior so concurrent webhook replays cannot generate a second message.
 
-- [ ] **Step 4: Generate the notification snapshot from the approved SQL helper**
+- [ ] **Step 4: Generate approved SQL copy deterministically**
 
-Call `build_payment_confirmed_email(v_order.locale, v_order.customer_name, v_order.order_number, v_member_welcome)` inside the payment RPC and insert the returned subject, preview text, and body text into `email_notifications`. Do not add a second paid-order template in TypeScript.
+Either build the five templates in SQL from `v_order.locale`, or add notification snapshot columns sufficient for a single TypeScript queue builder. Choose one source of truth; the recommended implementation is a SQL helper function `build_payment_confirmed_email(locale, customer_name, order_number, member_welcome)` returning `subject`, `preview_text`, and `body_text`, because the email outbox must be committed atomically with payment.
 
 - [ ] **Step 5: Refresh manifest hash and bootstrap schema**
 

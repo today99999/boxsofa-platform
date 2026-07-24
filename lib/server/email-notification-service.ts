@@ -42,17 +42,6 @@ export type EmailDeliveryResult =
   | { state: "delivered"; notification: unknown; providerResult: EmailProviderResult }
   | { state: "provider_failed"; notification: unknown; providerResult: EmailProviderResult };
 
-function sanitizeEmailProviderError(error: string | undefined) {
-  if (
-    typeof error === "string"
-    && error.length <= 64
-    && /^email_provider_(?:not_configured|unsupported|request_failed|failed|ambiguity_window_expired|http_error:[1-5]\d{2})$/.test(error)
-  ) {
-    return error;
-  }
-  return "email_provider_failed";
-}
-
 export async function deliverEmailNotification(
   notification: DeliverableEmailNotification,
   repository: EmailDeliveryRepository,
@@ -71,14 +60,7 @@ export async function deliverEmailNotification(
       idempotencyKey: getEmailDeliveryIdempotencyKey(notification.id)
     });
   } catch {
-    providerResult = { ok: false, provider: "resend", error: "email_provider_request_failed" };
-  }
-  if (!providerResult.ok) {
-    providerResult = {
-      ...providerResult,
-      providerMessageId: undefined,
-      error: sanitizeEmailProviderError(providerResult.error)
-    };
+    providerResult = { ok: false, provider: "resend", error: "Email provider request failed." };
   }
 
   const finalized = await repository.finalize({

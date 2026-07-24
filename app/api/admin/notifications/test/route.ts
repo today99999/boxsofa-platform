@@ -50,9 +50,10 @@ export async function POST() {
     entityId: null,
     beforeData: null,
     afterData: {
-      provider: sendResult.provider === "resend" ? "resend" : "unknown",
-      status: sendResult.ok ? "sent" : "failed",
-      sentAt: sendResult.ok ? sentAt : null
+      to: adminAccess.email,
+      provider: sendResult.provider,
+      providerMessageId: sendResult.providerMessageId ?? null,
+      error: sendResult.error ?? null
     }
   });
 

@@ -2,18 +2,6 @@
 
 This checklist tracks the work that must be stable before Stripe or any real online payment is enabled.
 
-## Migration 026 release gate
-
-- Open a maintenance window before migration 026 begins: disable checkout and
-  admin order changes.
-- Apply migration 026 and require the remote checkpoint to match.
-- Deploy the new app and keep the window active until its `/api/health` check
-  passes.
-- Confirm `EXPECT_PAYMENT_ENABLED=true`, `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`,
-  `CRON_SECRET`, and email delivery prerequisites are configured.
-- Reopen checkout and admin order operations only after new app health passes.
-
 ## Already wired
 
 - Next.js production build and typecheck pass with `npm run prelaunch`.
