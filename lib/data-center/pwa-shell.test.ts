@@ -14,6 +14,10 @@ const overview = readFileSync(
   new URL("../../components/data-center/OverviewSection.tsx", import.meta.url),
   "utf8"
 );
+const afterSales = readFileSync(
+  new URL("../../components/data-center/AfterSalesSection.tsx", import.meta.url),
+  "utf8"
+);
 const manifest = readFileSync(
   new URL("../../app/manifest.ts", import.meta.url),
   "utf8"
@@ -56,7 +60,8 @@ test("data center PWA stays scoped to the private application", () => {
 });
 
 test("planned modules are disabled and existing support remains reachable", () => {
-  assert.match(app, /href: "\/admin\/support"/);
+  assert.match(app, /<AfterSalesSection \/>/);
+  assert.match(afterSales, /href="\/admin\/support"/);
   assert.match(app, /section\.planned/);
   assert.match(app, /disabled=\{planned\}/);
   assert.match(app, /aria-pressed=\{active\}/);

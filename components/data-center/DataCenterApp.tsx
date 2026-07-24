@@ -6,6 +6,7 @@ import {
   Archive, BarChart3, Boxes, CircleHelp, FileWarning, LayoutDashboard, Megaphone,
   MessageSquareText, ReceiptText, Search, Settings, ShoppingBag, Users, type LucideIcon
 } from "lucide-react";
+import { AfterSalesSection } from "./AfterSalesSection";
 import { OverviewSection } from "./OverviewSection";
 
 export type DataCenterSection = "overview" | "orders" | "products" | "inventory" | "customers" | "traffic" | "social" | "marketing" | "after-sales" | "reviews" | "finance" | "cube" | "system";
@@ -27,7 +28,7 @@ const sections: SectionDefinition[] = [
   { id: "traffic", label: "流量", icon: BarChart3, planned: true },
   { id: "social", label: "社媒", icon: MessageSquareText, planned: true },
   { id: "marketing", label: "营销", icon: Megaphone, planned: true },
-  { id: "after-sales", label: "售后", icon: FileWarning, href: "/admin/support" },
+  { id: "after-sales", label: "售后", icon: FileWarning },
   { id: "reviews", label: "评价", icon: CircleHelp, href: "/admin/reviews" },
   { id: "finance", label: "财务", icon: Archive, planned: true },
   { id: "cube", label: "数据魔方", icon: Search, planned: true },
@@ -74,13 +75,17 @@ export function DataCenterApp() {
 
       <section className="dc-content">
         <header className="dc-topbar"><div><p>BoxSofa Data Center</p><h1>{active.label}</h1></div><Link className="dc-store-link" href="/">查看店铺</Link></header>
-        {activeSection === "overview" ? <OverviewSection /> : <SectionContent section={active} />}
+        {activeSection === "overview"
+          ? <OverviewSection />
+          : activeSection === "after-sales"
+            ? <AfterSalesSection />
+            : <SectionContent section={active} />}
       </section>
 
       <nav className="dc-mobile-nav" aria-label="移动数据中心导航">
         <MobileButton label="总览" icon={LayoutDashboard} active={activeSection === "overview"} onClick={() => selectSection("overview")} />
         <MobileLink label="订单" icon={ReceiptText} href="/admin/orders" />
-        <MobileLink label="售后" icon={FileWarning} href="/admin/support" />
+        <MobileButton label="售后" icon={FileWarning} active={activeSection === "after-sales"} onClick={() => selectSection("after-sales")} />
         <MobileButton label="数据" icon={BarChart3} active={false} planned onClick={() => undefined} />
         <MobileButton label="更多" icon={Settings} active={false} planned onClick={() => undefined} />
       </nav>
