@@ -54,3 +54,12 @@ test("notification admin routes never write full message snapshots to audit data
   assert.doesNotMatch(testNotificationRoute, /providerMessageId:/);
   assert.doesNotMatch(testNotificationRoute, /error:\s*sendResult\.error/);
 });
+
+test("migration scrubs notification and provider-test audits without retaining its helper", () => {
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/202607240026_localized_paid_order_email.sql", import.meta.url),
+    "utf8"
+  );
+  assert.match(migration, /where entity_type = 'email_provider'/i);
+  assert.match(migration, /drop function public\.sanitize_email_notification_audit_payload\(jsonb\)/i);
+});

@@ -72,6 +72,14 @@ test("release runbooks require a migration maintenance window and remote checkpo
   assert.match(productionSetup, /new app[\s\S]*health/i);
 });
 
+test("production setup separates disabled-payment staging from enabled-payment release verification", () => {
+  assert.match(productionSetup, /pre-payment|staging/i);
+  assert.match(productionSetup, /EXPECT_PAYMENT_ENABLED[^]*not true[^]*paymentEnabled false/i);
+  assert.match(productionSetup, /final release/i);
+  assert.match(productionSetup, /EXPECT_PAYMENT_ENABLED=true[^]*STRIPE_SECRET_KEY[^]*STRIPE_WEBHOOK_SECRET[^]*NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/i);
+  assert.match(productionSetup, /production:verify[^]*paymentEnabled true/i);
+});
+
 test("operational documentation and config never contain credentials or customer message data", () => {
   const operationalSources = [envExample, environmentCheck, readinessCheck, authAudit, operations].join("\n");
   assert.doesNotMatch(operationalSources, /BOXSOFA_MAIL_PASSWORD\s*=/);

@@ -169,3 +169,30 @@ Verification evidence:
 No live provider call, remote database mutation, deployment, or production
 credential use was performed. The remote checkpoint and guarded live
 integration remain operator-controlled release gates.
+
+## Final privacy and runbook cleanup
+
+- Migration 026 now scrubs historical `email_provider` test audit rows as well
+  as notification rows. Recipient addresses, provider message identifiers, and
+  raw provider text are replaced by allowlisted provider, status, error
+  category, and timestamps.
+- The migration-only audit sanitizer is dropped after the one-time scrub, and
+  executable upgrade coverage confirms it does not remain in the catalog.
+- Production setup now separates pre-payment/staging readiness
+  (`EXPECT_PAYMENT_ENABLED` not true and `paymentEnabled=false`) from final
+  release verification (`EXPECT_PAYMENT_ENABLED=true`, actual Stripe
+  configuration, remote checkpoint verification, and `paymentEnabled=true`).
+
+Fresh verification evidence:
+
+- focused privacy/runbook suite: 21 passed
+- full suite: 228 passed
+- build and sequential typecheck: passed
+- migration manifest: 26 files verified; 25 remote checkpoints
+- bootstrap lexical validation: 504 statements
+- disposable PGlite bootstrap: 26 tables, 9 functions, 44 owner policies,
+  26 RLS tables, and 24 critical RPCs
+- local production verification: tests, build, smoke audit, and API
+  authorization audit passed
+
+No external action or production credential use was performed.

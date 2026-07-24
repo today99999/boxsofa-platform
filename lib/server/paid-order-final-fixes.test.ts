@@ -216,6 +216,20 @@ test("migration 026 upgrades an existing outbox so expired quarantined leases re
           'last_error', 'buyer@example.test BODY: private provider response'
         )
       );
+
+      insert into public.admin_audit_log (
+        action, entity_type, before_data, after_data
+      ) values (
+        'email_test_failed',
+        'email_provider',
+        null,
+        jsonb_build_object(
+          'to', 'owner@example.test',
+          'provider', 'resend',
+          'providerMessageId', 'provider-secret-id',
+          'error', 'owner@example.test private provider response'
+        )
+      );
     `);
 
     await upgradedDatabase.exec(migration);
@@ -247,6 +261,24 @@ test("migration 026 upgrades an existing outbox so expired quarantined leases re
       provider: "resend",
       status: "failed"
     });
+    const scrubbedProviderAudit = await upgradedDatabase.query<{
+      after_data: Record<string, unknown>;
+    }>(
+      `select after_data from public.admin_audit_log
+       where entity_type = 'email_provider' and action = 'email_test_failed'`
+    );
+    assert.deepEqual(scrubbedProviderAudit.rows[0].after_data, {
+      lastError: "email_provider_failed",
+      provider: "resend",
+      status: "failed"
+    });
+    const migrationHelper = await upgradedDatabase.query<{ count: string }>(
+      `select count(*)::text as count
+       from pg_proc
+       where pronamespace = 'public'::regnamespace
+         and proname = 'sanitize_email_notification_audit_payload'`
+    );
+    assert.equal(migrationHelper.rows[0].count, "0");
     const notificationId = "15000000-0000-4000-8000-000000000001";
     await upgradedDatabase.query(
       `insert into public.email_notifications (

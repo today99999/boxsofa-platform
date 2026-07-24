@@ -332,8 +332,34 @@ set before_data = case when before_data is null then null else public.sanitize_e
     after_data = case when after_data is null then null else public.sanitize_email_notification_audit_payload(after_data) end
 where entity_type = 'email_notification';
 
-revoke all on function public.sanitize_email_notification_audit_payload(jsonb) from public, anon, authenticated;
-grant execute on function public.sanitize_email_notification_audit_payload(jsonb) to postgres;
+update public.admin_audit_log
+set before_data = case when before_data is null then null else jsonb_strip_nulls(jsonb_build_object(
+      'provider', to_jsonb(case
+        when before_data->>'provider' in ('pending', 'resend', 'not_configured')
+          then before_data->>'provider'
+        else 'unknown'
+      end),
+      'status', to_jsonb(case when action = 'email_test_sent' then 'sent' else 'failed' end),
+      'lastError', case when action = 'email_test_failed' then to_jsonb('email_provider_failed'::text) else null end,
+      'sentAt', coalesce(before_data->'sentAt', before_data->'sent_at'),
+      'createdAt', coalesce(before_data->'createdAt', before_data->'created_at'),
+      'updatedAt', coalesce(before_data->'updatedAt', before_data->'updated_at')
+    )) end,
+    after_data = case when after_data is null then null else jsonb_strip_nulls(jsonb_build_object(
+      'provider', to_jsonb(case
+        when after_data->>'provider' in ('pending', 'resend', 'not_configured')
+          then after_data->>'provider'
+        else 'unknown'
+      end),
+      'status', to_jsonb(case when action = 'email_test_sent' then 'sent' else 'failed' end),
+      'lastError', case when action = 'email_test_failed' then to_jsonb('email_provider_failed'::text) else null end,
+      'sentAt', coalesce(after_data->'sentAt', after_data->'sent_at'),
+      'createdAt', coalesce(after_data->'createdAt', after_data->'created_at'),
+      'updatedAt', coalesce(after_data->'updatedAt', after_data->'updated_at')
+    )) end
+where entity_type = 'email_provider';
+
+drop function public.sanitize_email_notification_audit_payload(jsonb);
 
 drop function if exists public.claim_email_notification_delivery(uuid, integer);
 
