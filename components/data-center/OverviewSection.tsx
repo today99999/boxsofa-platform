@@ -7,7 +7,7 @@ import type { DashboardAlert, DataCenterOverview, DataFreshness as Freshness } f
 import { DataFreshness } from "./DataFreshness";
 
 type OverviewRange = DataCenterOverview["range"];
-type RequestState = "loading" | "ready" | "error" | "unauthorized";
+type RequestState = "loading" | "ready" | "error" | "unauthorized" | "forbidden";
 
 const money = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "EUR" });
 const integer = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
@@ -29,6 +29,12 @@ const alertRank: Record<DashboardAlert["severity"], number> = {
   warning: 1,
   info: 2
 };
+
+function rangeFromUrl(): OverviewRange {
+  if (typeof window === "undefined") return "7d";
+  const value = new URL(window.location.href).searchParams.get("range");
+  return value === "today" || value === "30d" ? value : "7d";
+}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -86,10 +92,21 @@ function formatAlertTime(value: string) {
 
 export function OverviewSection() {
   const [range, setRange] = useState<OverviewRange>("7d");
+  const [rangeReady, setRangeReady] = useState(false);
   const [requestState, setRequestState] = useState<RequestState>("loading");
   const [overview, setOverview] = useState<DataCenterOverview | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    const syncRange = () => {
+      setRange(rangeFromUrl());
+      setRangeReady(true);
+    };
+    syncRange();
+    window.addEventListener("popstate", syncRange);
+    return () => window.removeEventListener("popstate", syncRange);
+  }, []);
 
   const loadOverview = useCallback((selectedRange: OverviewRange, signal: AbortSignal, id: number) => {
     setRequestState("loading");
@@ -101,8 +118,12 @@ export function OverviewSection() {
       signal
     })
       .then(async (response) => {
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           if (id === requestId.current) setRequestState("unauthorized");
+          return;
+        }
+        if (response.status === 403) {
+          if (id === requestId.current) setRequestState("forbidden");
           return;
         }
         if (!response.ok) throw new Error("overview unavailable");
@@ -122,11 +143,19 @@ export function OverviewSection() {
   }, []);
 
   useEffect(() => {
+    if (!rangeReady) return;
     const controller = new AbortController();
     const id = ++requestId.current;
     loadOverview(range, controller.signal, id);
     return () => controller.abort();
-  }, [loadOverview, range, requestVersion]);
+  }, [loadOverview, range, rangeReady, requestVersion]);
+
+  function selectRange(selectedRange: OverviewRange) {
+    setRange(selectedRange);
+    const url = new URL(window.location.href);
+    url.searchParams.set("range", selectedRange);
+    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
 
   const alerts = useMemo(
     () => overview
@@ -162,7 +191,7 @@ export function OverviewSection() {
               type="button"
               className={range === item.value ? "is-active" : ""}
               aria-pressed={range === item.value}
-              onClick={() => setRange(item.value)}
+              onClick={() => selectRange(item.value)}
             >
               {item.label}
             </button>
@@ -190,6 +219,14 @@ export function OverviewSection() {
           title="登录状态已失效"
           detail="重新登录店主账号后可继续查看经营数据。"
           action={<Link className="dc-retry-button" href="/login">前往登录</Link>}
+        />
+      )}
+      {requestState === "forbidden" && (
+        <OverviewMessage
+          icon={ShieldAlert}
+          title="此账号没有店主权限"
+          detail="经营数据仅对 BoxSofa 店主账号开放。"
+          action={<Link className="dc-retry-button" href="/">返回店铺</Link>}
         />
       )}
       {requestState === "ready" && overview && (

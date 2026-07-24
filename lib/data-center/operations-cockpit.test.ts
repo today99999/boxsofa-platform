@@ -18,6 +18,10 @@ const styles = readFileSync(
   new URL("../../app/data-center/data-center.css", import.meta.url),
   "utf8"
 );
+const overviewServer = readFileSync(
+  new URL("../server/data-center-overview.ts", import.meta.url),
+  "utf8"
+);
 
 test("operations cockpit only loads bounded ranges from the real owner API", () => {
   assert.match(overview, /"today"/);
@@ -44,11 +48,12 @@ test("operations cockpit renders all six requested metrics from the response", (
 });
 
 test("operations cockpit has stable request, empty, and authorization states", () => {
-  assert.match(overview, /type RequestState = "loading" \| "ready" \| "error" \| "unauthorized"/);
+  assert.match(overview, /type RequestState = "loading" \| "ready" \| "error" \| "unauthorized" \| "forbidden"/);
   assert.match(overview, /<OverviewLoading \/>/);
   assert.match(overview, /setRequestVersion/);
   assert.match(overview, /当前区间还没有经营活动/);
   assert.match(overview, /href="\/login"/);
+  assert.match(overview, /此账号没有店主权限/);
   assert.match(overview, /setOverview\(null\)/);
 });
 
@@ -68,6 +73,20 @@ test("shell persists non-sensitive section state in the URL", () => {
   assert.match(app, /searchParams\.set\("section", section\)/);
   assert.match(app, /window\.history\.pushState/);
   assert.doesNotMatch(app, /localStorage|sessionStorage/);
+});
+
+test("range selection survives reload and browser history", () => {
+  assert.match(overview, /searchParams\.get\("range"\)/);
+  assert.match(overview, /searchParams\.set\("range", selectedRange\)/);
+  assert.match(overview, /window\.addEventListener\("popstate", syncRange\)/);
+  assert.match(overview, /if \(!rangeReady\) return/);
+});
+
+test("source health exposes only bounded public messages", () => {
+  assert.match(overviewServer, /publicHealthState\(row\.state\)/);
+  assert.match(overviewServer, /publicHealthMessage\(state\)/);
+  assert.doesNotMatch(overviewServer, /message:\s*row\.last_error/);
+  assert.match(overviewServer, /最近一次数据同步失败/);
 });
 
 test("cockpit keeps a two-column metric grid and fixed navigation at 390px", () => {

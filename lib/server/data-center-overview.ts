@@ -262,13 +262,37 @@ function toFreshness(
         message: "No source health record is available."
       } satisfies DataFreshness;
     }
+    const state = publicHealthState(row.state);
     return {
       sourceKey,
       label: labels[sourceKey],
-      state: row.state as DataFreshness["state"],
+      state,
       lastSuccessAt: typeof row.last_success_at === "string" ? row.last_success_at : null,
       recordCount: Number(row.record_count ?? 0),
-      ...(typeof row.last_error === "string" ? { message: row.last_error } : {})
+      ...(typeof row.last_error === "string" ? { message: publicHealthMessage(state) } : {})
     } satisfies DataFreshness;
   });
+}
+
+function publicHealthState(value: unknown): DataFreshness["state"] {
+  return value === "current" ||
+    value === "delayed" ||
+    value === "failed" ||
+    value === "disconnected" ||
+    value === "manual" ||
+    value === "partial"
+    ? value
+    : "failed";
+}
+
+function publicHealthMessage(state: DataFreshness["state"]) {
+  const messages: Record<DataFreshness["state"], string> = {
+    current: "数据源运行正常。",
+    delayed: "数据同步存在延迟。",
+    failed: "最近一次数据同步失败。",
+    disconnected: "数据源尚未连接。",
+    manual: "此数据源需要手动更新。",
+    partial: "当前仅有部分数据可用。"
+  };
+  return messages[state];
 }
