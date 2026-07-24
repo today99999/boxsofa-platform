@@ -336,3 +336,10 @@ limit 5;
 - 数据中心模块状态继续保存在 `?section=`，点击模块会写入浏览历史，浏览器前进/后退可恢复上一模块；全局搜索结果统一返回 `/data-center?section=...` 并触发同一站内切换流程。
 - 手机底部导航的 5 个入口全部可用：总览、订单、产品、售后、客户；“查看店铺”改为新窗口打开，数据中心本身保持不动。
 - 回归验证：189/189 自动测试通过，TypeScript 类型检查和 Next.js 正式构建通过。
+
+## 23. 社交自动发布（2026-07-24 20:05 Europe/Madrid）
+
+- 本轮 20:00 档选择审核等级 A、此前未发布或预约的原始竖版 `D:\压缩沙发\沙发视频\可发布的视频\1.mp4`（灰色灯芯绒沙发拆包；720 × 1280、15.042 秒、H.264/AAC 双声道）。已验证源文件及公开源可访问；未裁切、补边或重编码。AiToEarn 媒体 ID：`6a63a9047ce74e5c1c743601`，实际发布源为其原始上传。
+- YouTube Shorts 已发布：`https://www.youtube.com/watch?v=uZ54ZDOPMIE`（任务 `6a63a9647ce74e5c1c74377c`，flow `8f4144ae-1f3c-47ff-9e6a-88a32df54fd3`）。文案使用 YouTube UTM `grey_corduroy_unboxing_20260724`，仅陈述视觉产品演示、小户型/出租房、窄楼梯/小电梯、西班牙免费基础配送、Stripe 安全支付与预计 23–30 个工作日。
+- TikTok：任务 `6a63a9677ce74e5c1c74379e`（flow `f3919369-eded-4a82-a5eb-b3c6fc18762c`）已提交平台处理（status 2），尚无公开链接；Instagram Reels：任务 `6a63a9687ce74e5c1c7437a8`（flow `6a796602-3208-4b53-84ef-ff7109327e64`）处理（status 2），尚无公开链接；Pinterest：任务 `6a63a96b7ce74e5c1c7437bc`（flow `692a9de3-8cca-46f8-b6bc-403729251ddc`）处理（status 2），尚无公开链接。Pinterest 未附外链，以避开既有 spam 风险。下次仅查询这三项状态，禁止新建或重复上传。
+- Facebook：AiToEarn 仍无公共主页授权；Chrome 扩展浏览器连接不可用，按 Chrome 控制流程未打开新窗口重连，因此尚未手动补发。等待用户确认后，仅使用同一原片、Facebook UTM 和 AI 内容标识补发。
