@@ -1,6 +1,15 @@
 # BoxSofa Production Setup Notes
 
-These steps must be completed before the non-payment launch can be treated as production-ready.
+These steps must be completed before the payment launch can be treated as production-ready.
+
+## Migration 026 maintenance window
+
+Start a maintenance window before applying migration 026. Disable customer
+checkout and admin order changes from migration start until the new app health
+check passes. Apply migration 026, verify and record the remote checkpoint,
+deploy the new app, then confirm `/api/health` reports the expected redacted
+readiness state before reopening checkout or admin order operations. The
+missing locale default intentionally makes old-app inserts fail closed.
 
 ## Vercel project
 
@@ -20,6 +29,14 @@ Required before real production use:
 - NEXT_PUBLIC_SUPABASE_ANON_KEY
 - SUPABASE_SERVICE_ROLE_KEY
 - NEXT_PUBLIC_SITE_URL=https://boxsofa.eu
+- CRON_SECRET
+- EMAIL_PROVIDER=resend
+- EMAIL_FROM
+- EMAIL_API_KEY
+- EXPECT_PAYMENT_ENABLED=true
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 Recommended before customer launch:
 

@@ -96,6 +96,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   const shouldConfirmOfflinePayment =
     isPaymentConfirmation && order.payment_status !== "confirmed_offline" && order.payment_status !== "paid";
+  const shippedEmailPreview = patch.status === "shipped"
+    ? buildOrderEmailPreview("order_shipped", {
+        orderNumber,
+        customerName: order.customer_name,
+        customerEmail: order.customer_email,
+        totalEur: order.total_eur,
+        carrier: patch.carrier,
+        trackingNumber: patch.trackingNumber
+      })
+    : null;
   const shouldReleaseReservedInventory = isCancellation && order.status === "pending_confirm";
   let offlinePayment: {
     ok?: boolean;
@@ -115,7 +125,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         p_payment_method_note: patch.paymentMethodNote ?? order.payment_method_note ?? null,
         p_target_status: patch.status,
         p_carrier: patch.carrier ?? null,
-        p_tracking_number: patch.trackingNumber ?? null
+        p_tracking_number: patch.trackingNumber ?? null,
+        p_shipped_subject: shippedEmailPreview?.subject ?? null,
+        p_shipped_preview_text: shippedEmailPreview?.previewText ?? null,
+        p_shipped_body_text: shippedEmailPreview?.bodyText ?? null
       }
     );
     offlinePayment = Array.isArray(offlinePaymentRows) ? offlinePaymentRows[0] ?? null : null;

@@ -14,7 +14,7 @@ set locale = 'en'
 where locale is null;
 
 alter table public.orders
-  alter column locale set default 'en';
+  alter column locale drop default;
 
 alter table public.orders
   alter column locale set not null;
@@ -39,7 +39,14 @@ alter table public.email_notifications
 alter table public.email_notifications
   add column if not exists automatic_delivery_eligible boolean not null default false,
   add column if not exists automatic_quarantined_at timestamptz,
-  add column if not exists next_attempt_at timestamptz;
+  add column if not exists next_attempt_at timestamptz,
+  add column if not exists first_provider_attempt_at timestamptz;
+
+update public.email_notifications
+set first_provider_attempt_at = created_at
+where first_provider_attempt_at is null
+  and attempts > 0
+  and status in ('queued', 'failed', 'sending');
 
 update public.profiles profile_row
 set membership_welcomed_at = coalesce(
@@ -137,6 +144,9 @@ drop trigger if exists enforce_membership_welcome_marker on public.profiles;
 create trigger enforce_membership_welcome_marker
 before update of membership_welcomed_at on public.profiles
 for each row execute function public.enforce_membership_welcome_marker();
+
+revoke all on function public.enforce_order_communication_snapshot() from public, anon, authenticated;
+revoke all on function public.enforce_membership_welcome_marker() from public, anon, authenticated;
 
 create or replace function public.refresh_customer_membership(customer uuid)
 returns void
@@ -280,7 +290,7 @@ set search_path = public, pg_temp
 as $$
   select case
     when length(coalesce(p_error, '')) <= 64
-      and coalesce(p_error, '') ~ '^email_provider_(not_configured|unsupported|request_failed|failed|http_error:[1-5][0-9]{2})$'
+      and coalesce(p_error, '') ~ '^email_provider_(not_configured|unsupported|request_failed|failed|ambiguity_window_expired|http_error:[1-5][0-9]{2})$'
     then p_error
     else 'email_provider_failed'
   end
@@ -290,6 +300,40 @@ update public.email_notifications
 set last_error = public.sanitize_email_delivery_error(last_error)
 where status = 'failed'
   and last_error is not null;
+
+create or replace function public.sanitize_email_notification_audit_payload(p_payload jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'notificationId', coalesce(p_payload->'notificationId', p_payload->'id'),
+    'orderNumber', coalesce(p_payload->'orderNumber', p_payload->'order_number'),
+    'event', p_payload->'event',
+    'status', p_payload->'status',
+    'attempts', p_payload->'attempts',
+    'provider', to_jsonb(case
+      when p_payload->>'provider' in ('pending', 'resend', 'not_configured')
+        then p_payload->>'provider'
+      else 'unknown'
+    end),
+    'lastError', case when coalesce(p_payload->>'lastError', p_payload->>'last_error') is null then null else
+      to_jsonb(public.sanitize_email_delivery_error(coalesce(p_payload->>'lastError', p_payload->>'last_error')))
+    end,
+    'sentAt', coalesce(p_payload->'sentAt', p_payload->'sent_at'),
+    'createdAt', coalesce(p_payload->'createdAt', p_payload->'created_at'),
+    'updatedAt', coalesce(p_payload->'updatedAt', p_payload->'updated_at')
+  ));
+$$;
+
+update public.admin_audit_log
+set before_data = case when before_data is null then null else public.sanitize_email_notification_audit_payload(before_data) end,
+    after_data = case when after_data is null then null else public.sanitize_email_notification_audit_payload(after_data) end
+where entity_type = 'email_notification';
+
+revoke all on function public.sanitize_email_notification_audit_payload(jsonb) from public, anon, authenticated;
+grant execute on function public.sanitize_email_notification_audit_payload(jsonb) to postgres;
 
 drop function if exists public.claim_email_notification_delivery(uuid, integer);
 
@@ -315,9 +359,30 @@ begin
     raise exception 'Invalid email delivery claim input' using errcode = '22023';
   end if;
 
+  if p_automatic then
+    update public.email_notifications notification_row
+    set status = 'failed',
+        automatic_quarantined_at = coalesce(notification_row.automatic_quarantined_at, now()),
+        next_attempt_at = null,
+        delivery_lease_token = null,
+        delivery_lease_expires_at = null,
+        last_error = 'email_provider_ambiguity_window_expired'
+    where notification_row.id = p_notification_id
+      and notification_row.event = 'payment_confirmed'
+      and notification_row.automatic_delivery_eligible
+      and notification_row.automatic_quarantined_at is null
+      and notification_row.first_provider_attempt_at <= now() - interval '24 hours'
+      and notification_row.status in ('queued', 'failed', 'sending');
+    if found then
+      return query select false, null::uuid, null::jsonb;
+      return;
+    end if;
+  end if;
+
   update public.email_notifications notification_row
   set status = 'sending',
       attempts = notification_row.attempts + 1,
+      first_provider_attempt_at = coalesce(notification_row.first_provider_attempt_at, now()),
       delivery_lease_token = v_lease_token,
       delivery_lease_expires_at = now() + make_interval(secs => p_lease_seconds),
       next_attempt_at = null,
@@ -524,6 +589,7 @@ begin
         delivery_lease_token = null,
         delivery_lease_expires_at = null,
         next_attempt_at = now(),
+        first_provider_attempt_at = null,
         automatic_quarantined_at = null,
         automatic_delivery_eligible = event = 'payment_confirmed'
     where id = p_notification_id
@@ -772,7 +838,10 @@ create or replace function public.record_offline_order_payment(
   p_payment_method_note text,
   p_target_status text,
   p_carrier text,
-  p_tracking_number text
+  p_tracking_number text,
+  p_shipped_subject text default null,
+  p_shipped_preview_text text default null,
+  p_shipped_body_text text default null
 )
 returns table(
   ok boolean,
@@ -806,6 +875,12 @@ begin
       and (
         coalesce(nullif(trim(p_carrier), ''), '') = ''
         or coalesce(nullif(trim(p_tracking_number), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_subject), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_preview_text), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_body_text), ''), '') = ''
+        or length(p_shipped_subject) > 500
+        or length(p_shipped_preview_text) > 1000
+        or length(p_shipped_body_text) > 20000
       )
     )
   then
@@ -876,6 +951,17 @@ begin
           v_order.id, 'shipped', trim(p_carrier), trim(p_tracking_number), now(), p_confirmed_by
         );
       end if;
+
+      insert into public.email_notifications (
+        order_id, order_number, customer_email, event, subject, preview_text,
+        body_text, member_welcome, automatic_delivery_eligible, next_attempt_at,
+        provider, status, attempts
+      ) values (
+        v_order.id, v_order.order_number, v_order.customer_email, 'order_shipped',
+        p_shipped_subject, p_shipped_preview_text, p_shipped_body_text, false,
+        false, null, 'pending', 'queued', 0
+      )
+      on conflict (order_id, event) where order_id is not null do nothing;
     end if;
 
     select notification_row.member_welcome
@@ -900,6 +986,19 @@ begin
     from public.profiles profile_row
     where profile_row.id = v_order.customer_id
     for update;
+  end if;
+
+  if p_target_status = 'shipped' then
+    insert into public.email_notifications (
+      order_id, order_number, customer_email, event, subject, preview_text,
+      body_text, member_welcome, automatic_delivery_eligible, next_attempt_at,
+      provider, status, attempts
+    ) values (
+      v_order.id, v_order.order_number, v_order.customer_email, 'order_shipped',
+      p_shipped_subject, p_shipped_preview_text, p_shipped_body_text, false,
+      false, null, 'pending', 'queued', 0
+    )
+    on conflict (order_id, event) where order_id is not null do nothing;
   end if;
 
   for v_item in
@@ -1055,8 +1154,8 @@ end;
 $$;
 
 revoke all on function public.record_stripe_refund(text, text, text, text, bigint, text, text, text, jsonb) from public, anon, authenticated;
-revoke all on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.record_stripe_refund(text, text, text, text, bigint, text, text, text, jsonb) to service_role;
-grant execute on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text) to service_role;
+grant execute on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text, text, text, text) to service_role;
 
 commit;

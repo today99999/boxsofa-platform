@@ -35,6 +35,8 @@ test("orders persist an immutable supported checkout locale", () => {
     migration,
     /case when profiles\.preferred_locale in \('zh', 'en', 'es', 'fr', 'de'\) then profiles\.preferred_locale else 'en' end/i
   );
+  assert.match(migration, /alter column locale drop default/i);
+  assert.doesNotMatch(migration, /alter column locale set default 'en'/i);
   assert.match(migration, /check \(locale in \('zh', 'en', 'es', 'fr', 'de'\)\)/i);
   assert.match(orderRoute, /locale: z\.enum\(\["zh", "en", "es", "fr", "de"\]\)/);
   assert.match(orderRoute, /locale: order\.locale/);
@@ -43,7 +45,11 @@ test("orders persist an immutable supported checkout locale", () => {
 test("checkout sends its current website language and bootstrap schema preserves the locale contract", () => {
   assert.match(cartClient, /const \{ language, t \} = useTranslation\(\)/);
   assert.match(cartClient, /locale: language/);
-  assert.match(bootstrapSchema, /locale text not null default 'en' check \(locale in \('zh', 'en', 'es', 'fr', 'de'\)\)/i);
+  assert.match(bootstrapSchema, /locale text not null check \(locale in \('zh', 'en', 'es', 'fr', 'de'\)\)/i);
+  assert.doesNotMatch(
+    bootstrapSchema,
+    /create table if not exists public\.orders\s*\([^;]*locale text not null default 'en'/i
+  );
 });
 
 test("payment-confirmed email helper owns the five approved templates", () => {

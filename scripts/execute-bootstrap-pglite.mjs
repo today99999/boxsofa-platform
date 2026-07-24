@@ -122,7 +122,7 @@ export const criticalFunctions = [
   { name: "mark_stripe_webhook_failure", identity: "p_event_id text,p_event_type text,p_error_code text", authenticated: false },
   { name: "record_stripe_refund", identity: "p_event_id text,p_event_type text,p_provider_refund_id text,p_provider_payment_id text,p_amount_cents bigint,p_currency text,p_status text,p_reason text,p_raw_payload jsonb", authenticated: false },
   { name: "record_stripe_checkout_payment", identity: "p_event_id text,p_event_type text,p_order_id uuid,p_order_number text,p_provider_payment_id text,p_session_id text,p_amount_cents bigint,p_currency text,p_raw_payload jsonb", authenticated: false },
-  { name: "record_offline_order_payment", identity: "p_order_id uuid,p_order_number text,p_confirmed_by uuid,p_payment_method_note text,p_target_status text,p_carrier text,p_tracking_number text", authenticated: false },
+  { name: "record_offline_order_payment", identity: "p_order_id uuid,p_order_number text,p_confirmed_by uuid,p_payment_method_note text,p_target_status text,p_carrier text,p_tracking_number text,p_shipped_subject text,p_shipped_preview_text text,p_shipped_body_text text", authenticated: false },
   { name: "record_stripe_checkout_payment_v012", identity: "p_event_id text,p_event_type text,p_order_id uuid,p_order_number text,p_provider_payment_id text,p_session_id text,p_amount_cents bigint,p_currency text,p_raw_payload jsonb", authenticated: false, serviceRole: false },
   { name: "reconcile_stripe_source_health_count", identity: "", authenticated: false },
   { name: "create_after_sales_case", identity: "p_order_number text,p_case_type text,p_reason text,p_requested_remedy text,p_due_at timestamp with time zone,p_created_by uuid", authenticated: false },

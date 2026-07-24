@@ -131,3 +131,41 @@ remote checkpoint.
 
 The live two-client Supabase integration remains a pre-release verification
 step once explicit, guarded non-production credentials are available.
+
+## Second final-review wave
+
+- Migration 026 now backfills `orders.locale`, removes its insert default, and
+  keeps the column required so old-app writes fail closed during rollout.
+- A pending unpaid order confirmed directly as shipped records one offline
+  payment, one shipment, and both immutable `payment_confirmed` and
+  `order_shipped` notification snapshots in the same transaction.
+- Delivery claims persist the first provider-attempt timestamp. Automatic
+  retries retain the stable key inside Resend's 24-hour window and quarantine
+  ambiguous work at the boundary without calling the provider again.
+- Notification audit writes and historical notification audit rows retain only
+  allowlisted operational metadata; recipient, subject, preview, body,
+  provider message identifiers, and provider-controlled text are removed.
+- Release preflight requires Stripe secret, webhook, and publishable keys when
+  payment is expected. Post-deploy readiness relies only on the redacted health
+  response and no longer requires local service-role or email credentials.
+- Migration trigger-function ACLs now match bootstrap, and the production,
+  prelaunch, and email runbooks describe the migration maintenance window,
+  remote checkpoint gate, retry quarantine, and complete release prerequisites.
+
+Verification evidence:
+
+- focused final-review tests: 44 passed
+- full test suite: 226 passed
+- TypeScript typecheck: passed
+- migration manifest: 26 files verified; 25 remote checkpoints
+- bootstrap lexical validation: 504 statements
+- disposable PGlite bootstrap: 26 tables, 9 functions, 44 owner policies,
+  26 RLS tables, and 24 critical RPCs
+- production build: passed
+- local production verification: build, smoke audit, and API authorization
+  audit passed
+- `git diff --check`: passed
+
+No live provider call, remote database mutation, deployment, or production
+credential use was performed. The remote checkpoint and guarded live
+integration remain operator-controlled release gates.

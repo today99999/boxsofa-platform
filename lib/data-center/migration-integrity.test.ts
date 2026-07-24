@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import test from "node:test";
 import {
   normalizeMigrationText,
@@ -40,6 +42,21 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
     encoding: "utf8",
     env: { ...process.env, ...env }
   });
+}
+
+async function runScriptAsync(script: string, args: string[] = [], env: Record<string, string | undefined> = {}) {
+  const child = spawn(process.execPath, [script, ...args], {
+    cwd: new URL("../..", import.meta.url),
+    env: { ...process.env, ...env }
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk) => { stdout += chunk; });
+  child.stderr?.on("data", (chunk) => { stderr += chunk; });
+  const [status] = await once(child, "exit") as [number | null];
+  return { status, stdout, stderr };
 }
 
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
@@ -255,7 +272,10 @@ test("Vercel deploy preflight rejects missing release email and cron configurati
   const secretValues = [
     "service-role-do-not-print",
     "email-api-do-not-print",
-    "cron-secret-do-not-print"
+    "cron-secret-do-not-print",
+    "sk_test_stripe-secret-do-not-print-1234567890",
+    "whsec_webhook-secret-do-not-print-1234567890",
+    "pk_test_publishable-do-not-print-1234567890"
   ];
   const commonReleaseEnvironment = {
     NEXT_PUBLIC_SUPABASE_URL: "https://osmjevtynywbkokzejcp.supabase.co",
@@ -263,7 +283,10 @@ test("Vercel deploy preflight rejects missing release email and cron configurati
     SUPABASE_SERVICE_ROLE_KEY: secretValues[0],
     NEXT_PUBLIC_SITE_URL: "https://boxsofa.eu",
     EMAIL_API_KEY: secretValues[1],
-    EXPECT_PAYMENT_ENABLED: "true"
+    EXPECT_PAYMENT_ENABLED: "true",
+    STRIPE_SECRET_KEY: secretValues[3],
+    STRIPE_WEBHOOK_SECRET: secretValues[4],
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: secretValues[5]
   };
   const missingCron = runScript("scripts/check-env.mjs", ["--release"], {
     ...commonReleaseEnvironment,
@@ -311,6 +334,99 @@ test("Vercel deploy preflight rejects missing release email and cron configurati
   const deployPreflight = readFileSync(new URL("../../scripts/deploy-preflight.mjs", import.meta.url), "utf8");
   assert.match(deployPreflight, /env:check:release/);
   assert.match(deployPreflight, /production:ready:release-config/);
+});
+
+test("release configuration requires complete Stripe settings and accepts a valid redacted set", () => {
+  const valid = {
+    NEXT_PUBLIC_SUPABASE_URL: "https://testprojectref000001.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-test-key",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-do-not-print",
+    NEXT_PUBLIC_SITE_URL: "https://boxsofa.eu",
+    EMAIL_PROVIDER: "resend",
+    EMAIL_FROM: "BoxSofa <sender@example.test>",
+    EMAIL_API_KEY: "re_email-api-do-not-print-1234567890",
+    CRON_SECRET: "cron-secret-do-not-print-12345678901234567890",
+    EXPECT_PAYMENT_ENABLED: "true",
+    STRIPE_SECRET_KEY: "sk_test_stripe-secret-do-not-print-1234567890",
+    STRIPE_WEBHOOK_SECRET: "whsec_webhook-secret-do-not-print-1234567890",
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_publishable-do-not-print-1234567890"
+  };
+  const secretValues = [
+    valid.SUPABASE_SERVICE_ROLE_KEY,
+    valid.EMAIL_API_KEY,
+    valid.CRON_SECRET,
+    valid.STRIPE_SECRET_KEY,
+    valid.STRIPE_WEBHOOK_SECRET,
+    valid.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ];
+
+  const envPass = runScript("scripts/check-env.mjs", ["--release"], valid);
+  const readinessPass = runScript(
+    "scripts/production-readiness.mjs",
+    ["--release", "--environment-only"],
+    valid
+  );
+  assert.equal(envPass.status, 0, envPass.stderr || envPass.stdout);
+  assert.equal(readinessPass.status, 0, readinessPass.stderr || readinessPass.stdout);
+
+  for (const missingName of [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  ]) {
+    const missing = { ...valid, [missingName]: "" };
+    const envFailure = runScript("scripts/check-env.mjs", ["--release"], missing);
+    const readinessFailure = runScript(
+      "scripts/production-readiness.mjs",
+      ["--release", "--environment-only"],
+      missing
+    );
+    const output = envFailure.stdout + envFailure.stderr + readinessFailure.stdout + readinessFailure.stderr;
+    assert.notEqual(envFailure.status, 0, output);
+    assert.notEqual(readinessFailure.status, 0, output);
+    assert.match(output, new RegExp(missingName));
+    for (const secret of secretValues) assert.doesNotMatch(output, new RegExp(secret));
+  }
+});
+
+test("post-deploy readiness relies on the redacted health contract without local service credentials", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({
+      ok: true,
+      service: "boxsofa-platform",
+      siteUrl: "https://boxsofa.eu",
+      supabaseConfigured: true,
+      emailProviderConfigured: true,
+      emailProviderStatus: { configured: true, issues: [] },
+      paymentEnabled: true
+    }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+
+  try {
+    const result = await runScriptAsync("scripts/production-readiness.mjs", [], {
+      PRODUCTION_BASE_URL: `http://127.0.0.1:${address.port}`,
+      EXPECTED_SITE_URL: "https://boxsofa.eu",
+      EXPECT_PAYMENT_ENABLED: "true",
+      SUPABASE_SERVICE_ROLE_KEY: "",
+      EMAIL_PROVIDER: "",
+      EMAIL_FROM: "",
+      EMAIL_API_KEY: "",
+      CRON_SECRET: "",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ""
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /Production readiness passed/);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
 });
 
 test("Vercel build gives remote credentials only to the preflight child", () => {

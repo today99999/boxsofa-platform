@@ -8,6 +8,8 @@ const environmentCheck = readFileSync(new URL("../../scripts/check-env.mjs", imp
 const readinessCheck = readFileSync(new URL("../../scripts/production-readiness.mjs", import.meta.url), "utf8");
 const authAudit = readFileSync(new URL("../../scripts/api-auth-audit.mjs", import.meta.url), "utf8");
 const operations = readFileSync(new URL("../../docs/EMAIL-OPERATIONS.md", import.meta.url), "utf8");
+const productionSetup = readFileSync(new URL("../../docs/PRODUCTION-SETUP.md", import.meta.url), "utf8");
+const prelaunchChecklist = readFileSync(new URL("../../docs/PRELAUNCH-CHECKLIST.md", import.meta.url), "utf8");
 
 test("Vercel invokes the email notification cron every five minutes", () => {
   assert.deepEqual(vercel.crons, [
@@ -42,9 +44,32 @@ test("email operations explain safe delivery, recovery, and configuration", () =
     /EMAIL_API_KEY/,
     /SUPABASE_SERVICE_ROLE_KEY/,
     /CRON_SECRET/,
+    /EXPECT_PAYMENT_ENABLED/,
+    /STRIPE_SECRET_KEY/,
+    /STRIPE_WEBHOOK_SECRET/,
+    /NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/,
     /payment remains successful during an email outage/i,
-    /no mailbox\s+credentials/i
+    /no mailbox\s+credentials/i,
+    /24[- ]hour/i,
+    /quarantin/i,
+    /historical[\s\S]*not[\s\S]*automatic/i
   ]) assert.match(operations, requiredTopic);
+});
+
+test("release runbooks require a migration maintenance window and remote checkpoint gate", () => {
+  for (const document of [productionSetup, prelaunchChecklist]) {
+    assert.match(document, /maintenance window/i);
+    assert.match(document, /checkout/i);
+    assert.match(document, /admin order/i);
+    assert.match(document, /migration 026/i);
+    assert.match(document, /remote checkpoint/i);
+    assert.match(document, /EXPECT_PAYMENT_ENABLED/);
+    assert.match(document, /STRIPE_SECRET_KEY/);
+    assert.match(document, /STRIPE_WEBHOOK_SECRET/);
+    assert.match(document, /NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
+    assert.match(document, /CRON_SECRET/);
+  }
+  assert.match(productionSetup, /new app[\s\S]*health/i);
 });
 
 test("operational documentation and config never contain credentials or customer message data", () => {

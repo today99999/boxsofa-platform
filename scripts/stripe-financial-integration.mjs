@@ -152,7 +152,10 @@ async function callOfflinePayment(client, fixture, confirmedBy) {
     p_payment_method_note: "Technical integration fixture",
     p_target_status: "paid_confirmed",
     p_carrier: null,
-    p_tracking_number: null
+    p_tracking_number: null,
+    p_shipped_subject: null,
+    p_shipped_preview_text: null,
+    p_shipped_body_text: null
   });
   return { row: data ? firstRow(data, "offline payment RPC must return one row") : null, error };
 }

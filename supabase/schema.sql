@@ -185,7 +185,7 @@ create table if not exists public.orders (
   customer_email text not null,
   customer_name text not null,
   customer_phone text not null,
-  locale text not null default 'en' check (locale in ('zh', 'en', 'es', 'fr', 'de')),
+  locale text not null check (locale in ('zh', 'en', 'es', 'fr', 'de')),
   status public.order_status not null default 'pending_confirm',
   payment_status public.payment_status not null default 'not_started',
   subtotal_eur numeric(12, 2) not null check (subtotal_eur >= 0),
@@ -429,6 +429,7 @@ create table if not exists public.email_notifications (
   automatic_delivery_eligible boolean not null default false,
   automatic_quarantined_at timestamptz,
   next_attempt_at timestamptz,
+  first_provider_attempt_at timestamptz,
   provider text not null default 'pending',
   status text not null default 'queued' check (status in ('queued', 'sent', 'failed', 'skipped')),
   attempts integer not null default 0,
@@ -2995,7 +2996,7 @@ set search_path = public, pg_temp
 as $$
   select case
     when length(coalesce(p_error, '')) <= 64
-      and coalesce(p_error, '') ~ '^email_provider_(not_configured|unsupported|request_failed|failed|http_error:[1-5][0-9]{2})$'
+      and coalesce(p_error, '') ~ '^email_provider_(not_configured|unsupported|request_failed|failed|ambiguity_window_expired|http_error:[1-5][0-9]{2})$'
     then p_error
     else 'email_provider_failed'
   end
@@ -3028,9 +3029,30 @@ begin
     raise exception 'Invalid email delivery claim input' using errcode = '22023';
   end if;
 
+  if p_automatic then
+    update public.email_notifications notification_row
+    set status = 'failed',
+        automatic_quarantined_at = coalesce(notification_row.automatic_quarantined_at, now()),
+        next_attempt_at = null,
+        delivery_lease_token = null,
+        delivery_lease_expires_at = null,
+        last_error = 'email_provider_ambiguity_window_expired'
+    where notification_row.id = p_notification_id
+      and notification_row.event = 'payment_confirmed'
+      and notification_row.automatic_delivery_eligible
+      and notification_row.automatic_quarantined_at is null
+      and notification_row.first_provider_attempt_at <= now() - interval '24 hours'
+      and notification_row.status in ('queued', 'failed', 'sending');
+    if found then
+      return query select false, null::uuid, null::jsonb;
+      return;
+    end if;
+  end if;
+
   update public.email_notifications notification_row
   set status = 'sending',
       attempts = notification_row.attempts + 1,
+      first_provider_attempt_at = coalesce(notification_row.first_provider_attempt_at, now()),
       delivery_lease_token = v_lease_token,
       delivery_lease_expires_at = now() + make_interval(secs => p_lease_seconds),
       next_attempt_at = null,
@@ -3396,7 +3418,10 @@ create or replace function public.record_offline_order_payment(
   p_payment_method_note text,
   p_target_status text,
   p_carrier text,
-  p_tracking_number text
+  p_tracking_number text,
+  p_shipped_subject text default null,
+  p_shipped_preview_text text default null,
+  p_shipped_body_text text default null
 )
 returns table(
   ok boolean,
@@ -3430,6 +3455,12 @@ begin
       and (
         coalesce(nullif(trim(p_carrier), ''), '') = ''
         or coalesce(nullif(trim(p_tracking_number), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_subject), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_preview_text), ''), '') = ''
+        or coalesce(nullif(trim(p_shipped_body_text), ''), '') = ''
+        or length(p_shipped_subject) > 500
+        or length(p_shipped_preview_text) > 1000
+        or length(p_shipped_body_text) > 20000
       )
     )
   then
@@ -3500,6 +3531,17 @@ begin
           v_order.id, 'shipped', trim(p_carrier), trim(p_tracking_number), now(), p_confirmed_by
         );
       end if;
+
+      insert into public.email_notifications (
+        order_id, order_number, customer_email, event, subject, preview_text,
+        body_text, member_welcome, automatic_delivery_eligible, next_attempt_at,
+        provider, status, attempts
+      ) values (
+        v_order.id, v_order.order_number, v_order.customer_email, 'order_shipped',
+        p_shipped_subject, p_shipped_preview_text, p_shipped_body_text, false,
+        false, null, 'pending', 'queued', 0
+      )
+      on conflict (order_id, event) where order_id is not null do nothing;
     end if;
 
     select notification_row.member_welcome
@@ -3524,6 +3566,19 @@ begin
     from public.profiles profile_row
     where profile_row.id = v_order.customer_id
     for update;
+  end if;
+
+  if p_target_status = 'shipped' then
+    insert into public.email_notifications (
+      order_id, order_number, customer_email, event, subject, preview_text,
+      body_text, member_welcome, automatic_delivery_eligible, next_attempt_at,
+      provider, status, attempts
+    ) values (
+      v_order.id, v_order.order_number, v_order.customer_email, 'order_shipped',
+      p_shipped_subject, p_shipped_preview_text, p_shipped_body_text, false,
+      false, null, 'pending', 'queued', 0
+    )
+    on conflict (order_id, event) where order_id is not null do nothing;
   end if;
 
   for v_item in
@@ -3680,8 +3735,8 @@ $$;
 
 revoke all on function public.enforce_order_communication_snapshot() from public, anon, authenticated;
 revoke all on function public.enforce_membership_welcome_marker() from public, anon, authenticated;
-revoke all on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text) from public, anon, authenticated;
-grant execute on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text) to service_role;
+revoke all on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.record_offline_order_payment(uuid, text, uuid, text, text, text, text, text, text, text) to service_role;
 
 commit;
 -- Owner-only after-sales writes must be auditable and transactionally ordered.
@@ -4098,6 +4153,7 @@ begin
         delivery_lease_token = null,
         delivery_lease_expires_at = null,
         next_attempt_at = now(),
+        first_provider_attempt_at = null,
         automatic_quarantined_at = null,
         automatic_delivery_eligible = event = 'payment_confirmed'
     where id = p_notification_id

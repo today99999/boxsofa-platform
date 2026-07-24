@@ -28,7 +28,10 @@ const required = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'NEXT_PUBLIC_SITE_URL',
   'CRON_SECRET',
-  ...(releaseMode ? ['EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_API_KEY', 'EXPECT_PAYMENT_ENABLED'] : []),
+  ...(releaseMode ? [
+    'EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_API_KEY', 'EXPECT_PAYMENT_ENABLED',
+    'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'
+  ] : []),
 ];
 
 const recommendedBeforeLaunch = releaseMode ? [] : [
@@ -59,6 +62,23 @@ if (missingRequired.length) {
 if (releaseMode && getEnv('EXPECT_PAYMENT_ENABLED') !== 'true') {
   console.error('EXPECT_PAYMENT_ENABLED must be true for release mode.');
   process.exit(1);
+}
+
+if (releaseMode) {
+  const stripeIssues = [];
+  if (!/^sk_(test|live)_[A-Za-z0-9_-]{20,}$/.test(getEnv('STRIPE_SECRET_KEY'))) {
+    stripeIssues.push('STRIPE_SECRET_KEY is invalid.');
+  }
+  if (!/^whsec_[A-Za-z0-9_-]{20,}$/.test(getEnv('STRIPE_WEBHOOK_SECRET'))) {
+    stripeIssues.push('STRIPE_WEBHOOK_SECRET is invalid.');
+  }
+  if (!/^pk_(test|live)_[A-Za-z0-9_-]{20,}$/.test(getEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'))) {
+    stripeIssues.push('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is invalid.');
+  }
+  if (stripeIssues.length) {
+    console.error('Stripe release configuration needs review: ' + stripeIssues.join(' '));
+    process.exit(1);
+  }
 }
 
 if (cronSecret.length < 32) {

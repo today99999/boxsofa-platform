@@ -83,6 +83,7 @@ async function createOrder(input: {
 }
 
 async function confirmOffline(orderId: string, orderNumber: string, targetStatus = "paid_confirmed") {
+  const shipped = targetStatus === "shipped";
   return database.query<{
     ok: boolean;
     error_code: string | null;
@@ -90,15 +91,22 @@ async function confirmOffline(orderId: string, orderNumber: string, targetStatus
     email_queued: boolean;
     member_welcome: boolean;
   }>(
-    `select * from public.record_offline_order_payment($1, $2, $3, $4, $5, $6, $7)`,
+    `select * from public.record_offline_order_payment(
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+     )`,
     [
       orderId,
       orderNumber,
       ADMIN_ID,
       "Bank transfer",
       targetStatus,
-      targetStatus === "shipped" ? "DHL" : null,
-      targetStatus === "shipped" ? "TRACK-001" : null
+      shipped ? "DHL" : null,
+      shipped ? "TRACK-001" : null,
+      shipped ? `BoxSofa order shipped: ${orderNumber}` : null,
+      shipped ? "Your sofa has shipped. Tracking details are included when available." : null,
+      shipped
+        ? `Your BoxSofa order ${orderNumber} has shipped.\nCarrier: DHL\nTracking number: TRACK-001`
+        : null
     ]
   );
 }
@@ -119,8 +127,12 @@ test("migration and bootstrap expose one transactional offline paid-confirmation
     assert.match(sql, /create or replace function public\.record_offline_order_payment\(/i);
     assert.match(sql, /from public\.build_payment_confirmed_email\(/i);
     assert.match(sql, /grant execute on function public\.record_offline_order_payment\([^;]+to service_role;/is);
+    assert.match(sql, /revoke all on function public\.enforce_order_communication_snapshot\(\) from public, anon, authenticated;/i);
+    assert.match(sql, /revoke all on function public\.enforce_membership_welcome_marker\(\) from public, anon, authenticated;/i);
   }
   assert.match(alternateOrderRoute, /\.rpc\(\s*["']record_offline_order_payment["']/);
+  assert.match(alternateOrderRoute, /p_shipped_subject:\s*shippedEmailPreview\?\.subject/);
+  assert.match(alternateOrderRoute, /p_shipped_body_text:\s*shippedEmailPreview\?\.bodyText/);
   assert.doesNotMatch(alternateOrderRoute, /\.from\(["']payments["']\)\.insert/);
   assert.doesNotMatch(runtimeEmailCopy, /payment_confirmed/);
 
@@ -177,6 +189,33 @@ test("migration 026 upgrades an existing outbox so expired quarantined leases re
         1,
         'buyer@example.test BODY: private provider response'
       );
+
+      insert into public.admin_audit_log (
+        action, entity_type, entity_id, before_data, after_data
+      ) values (
+        'email_notification_send_failed',
+        'email_notification',
+        '15000000-0000-4000-8000-000000000002',
+        jsonb_build_object(
+          'id', '15000000-0000-4000-8000-000000000002',
+          'order_number', 'UPGRADE-ERROR-001',
+          'customer_email', 'buyer@example.test',
+          'event', 'payment_confirmed',
+          'subject', 'Secret subject',
+          'preview_text', 'Secret preview',
+          'body_text', 'Secret body',
+          'status', 'failed',
+          'attempts', 1,
+          'provider', 'resend',
+          'last_error', 'buyer@example.test BODY: private provider response'
+        ),
+        jsonb_build_object(
+          'id', '15000000-0000-4000-8000-000000000002',
+          'status', 'failed',
+          'provider', 'resend',
+          'last_error', 'buyer@example.test BODY: private provider response'
+        )
+      );
     `);
 
     await upgradedDatabase.exec(migration);
@@ -185,6 +224,29 @@ test("migration 026 upgrades an existing outbox so expired quarantined leases re
        where id = '15000000-0000-4000-8000-000000000002'`
     );
     assert.equal(scrubbedError.rows[0].last_error, "email_provider_failed");
+    const scrubbedAudit = await upgradedDatabase.query<{
+      before_data: Record<string, unknown>;
+      after_data: Record<string, unknown>;
+    }>(
+      `select before_data, after_data
+       from public.admin_audit_log
+       where entity_id = '15000000-0000-4000-8000-000000000002'`
+    );
+    assert.deepEqual(scrubbedAudit.rows[0].before_data, {
+      attempts: 1,
+      event: "payment_confirmed",
+      lastError: "email_provider_failed",
+      notificationId: "15000000-0000-4000-8000-000000000002",
+      orderNumber: "UPGRADE-ERROR-001",
+      provider: "resend",
+      status: "failed"
+    });
+    assert.deepEqual(scrubbedAudit.rows[0].after_data, {
+      lastError: "email_provider_failed",
+      notificationId: "15000000-0000-4000-8000-000000000002",
+      provider: "resend",
+      status: "failed"
+    });
     const notificationId = "15000000-0000-4000-8000-000000000001";
     await upgradedDatabase.query(
       `insert into public.email_notifications (
@@ -231,6 +293,29 @@ test("order communication snapshot rejects each field mutation while allowing st
   await database.query("update public.orders set status = 'paid_confirmed' where id = $1", [orderId]);
   const status = await database.query<{ status: string }>("select status from public.orders where id = $1", [orderId]);
   assert.equal(status.rows[0].status, "paid_confirmed");
+});
+
+test("rolling migration fails closed when an old app inserts an order without locale", async () => {
+  await assert.rejects(
+    database.query(
+      `insert into public.orders (
+         id, order_number, customer_email, customer_name, customer_phone,
+         subtotal_eur, total_eur, recipient, phone, address_snapshot
+       ) values (
+         '20000000-0000-4000-8000-000000000010',
+         'OLD-APP-NO-LOCALE',
+         'old-app@example.test',
+         'Old App',
+         '+34 600 000 000',
+         50,
+         50,
+         'Old App',
+         '+34 600 000 000',
+         '{}'::jsonb
+       )`
+    ),
+    /null value in column "locale"|not-null constraint/i
+  );
 });
 
 test("localized offline payment is atomic and idempotent", async () => {
@@ -294,18 +379,27 @@ test("mixed paid and shipped offline confirmations converge on one shipped trans
   const state = await database.query<{
     status: string;
     payments: number;
-    notifications: number;
+    events: string[];
     shipments: number;
     carrier: string;
     tracking_number: string;
+    shipped_subject: string;
+    shipped_body: string;
+    shipped_automatic: boolean;
   }>(
     `select
        order_row.status,
        (select count(*)::integer from public.payments where order_id = order_row.id) as payments,
-       (select count(*)::integer from public.email_notifications where order_id = order_row.id) as notifications,
+       (select array_agg(event order by event) from public.email_notifications where order_id = order_row.id) as events,
        (select count(*)::integer from public.shipments where order_id = order_row.id) as shipments,
        (select carrier from public.shipments where order_id = order_row.id limit 1) as carrier,
-       (select tracking_number from public.shipments where order_id = order_row.id limit 1) as tracking_number
+       (select tracking_number from public.shipments where order_id = order_row.id limit 1) as tracking_number,
+       (select subject from public.email_notifications
+         where order_id = order_row.id and event = 'order_shipped') as shipped_subject,
+       (select body_text from public.email_notifications
+         where order_id = order_row.id and event = 'order_shipped') as shipped_body,
+       (select automatic_delivery_eligible from public.email_notifications
+         where order_id = order_row.id and event = 'order_shipped') as shipped_automatic
      from public.orders order_row
      where order_row.id = $1`,
     [orderId]
@@ -313,10 +407,13 @@ test("mixed paid and shipped offline confirmations converge on one shipped trans
   assert.deepEqual(state.rows[0], {
     status: "shipped",
     payments: 1,
-    notifications: 1,
+    events: ["order_shipped", "payment_confirmed"],
     shipments: 1,
     carrier: "DHL",
-    tracking_number: "TRACK-001"
+    tracking_number: "TRACK-001",
+    shipped_subject: "BoxSofa order shipped: OFF-MIXED-001",
+    shipped_body: "Your BoxSofa order OFF-MIXED-001 has shipped.\nCarrier: DHL\nTracking number: TRACK-001",
+    shipped_automatic: false
   });
 });
 
@@ -522,6 +619,83 @@ test("automatic retries back off, quarantine at the bound, sanitize errors, and 
     [notificationId]
   );
   assert.equal(ambiguousManualRecovery.rows[0].transitioned, true);
+});
+
+test("automatic ambiguity retries keep one timestamp before 24h and quarantine at the provider window", async () => {
+  const retryId = "50000000-0000-4000-8000-000000000010";
+  await database.query(
+    `insert into public.email_notifications (
+       id, order_number, customer_email, event, subject, preview_text, body_text,
+       automatic_delivery_eligible
+     ) values (
+       $1, 'AMBIGUOUS-RETRY', 'buyer@example.test', 'payment_confirmed',
+       'Subject', 'Preview', 'Body', true
+     )`,
+    [retryId]
+  );
+
+  const firstClaim = await database.query<{
+    claimed: boolean;
+    first_provider_attempt_at: string | null;
+  }>(
+    `select claimed,
+       (notification->>'first_provider_attempt_at')::text as first_provider_attempt_at
+     from public.claim_email_notification_delivery($1, 30, true)`,
+    [retryId]
+  );
+  assert.equal(firstClaim.rows[0].claimed, true);
+  assert.ok(firstClaim.rows[0].first_provider_attempt_at);
+  await database.query(
+    `update public.email_notifications
+     set delivery_lease_expires_at = now() - interval '1 second'
+     where id = $1`,
+    [retryId]
+  );
+  const beforeWindowClaim = await database.query<{
+    claimed: boolean;
+    first_provider_attempt_at: string | null;
+  }>(
+    `select claimed,
+       (notification->>'first_provider_attempt_at')::text as first_provider_attempt_at
+     from public.claim_email_notification_delivery($1, 30, true)`,
+    [retryId]
+  );
+  assert.equal(beforeWindowClaim.rows[0].claimed, true);
+  assert.equal(
+    beforeWindowClaim.rows[0].first_provider_attempt_at,
+    firstClaim.rows[0].first_provider_attempt_at
+  );
+
+  const expiredId = "50000000-0000-4000-8000-000000000011";
+  await database.query(
+    `insert into public.email_notifications (
+       id, order_number, customer_email, event, subject, preview_text, body_text,
+       automatic_delivery_eligible, status, attempts, delivery_lease_token,
+       delivery_lease_expires_at, first_provider_attempt_at
+     ) values (
+       $1, 'AMBIGUOUS-EXPIRED', 'buyer@example.test', 'payment_confirmed',
+       'Subject', 'Preview', 'Body', true, 'sending', 1, gen_random_uuid(),
+       now() - interval '1 second', now() - interval '24 hours'
+     )`,
+    [expiredId]
+  );
+  const expiredClaim = await database.query<{ claimed: boolean }>(
+    "select claimed from public.claim_email_notification_delivery($1, 30, true)",
+    [expiredId]
+  );
+  assert.equal(expiredClaim.rows[0].claimed, false);
+  const expiredState = await database.query<{
+    status: string;
+    automatic_quarantined_at: string | null;
+    delivery_lease_token: string | null;
+  }>(
+    `select status, automatic_quarantined_at::text, delivery_lease_token::text
+     from public.email_notifications where id = $1`,
+    [expiredId]
+  );
+  assert.equal(expiredState.rows[0].status, "failed");
+  assert.ok(expiredState.rows[0].automatic_quarantined_at);
+  assert.equal(expiredState.rows[0].delivery_lease_token, null);
 });
 
 test("concurrent Stripe and offline confirmation serialize membership refresh and produce one welcome", async () => {

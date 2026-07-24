@@ -46,7 +46,7 @@ function sanitizeEmailProviderError(error: string | undefined) {
   if (
     typeof error === "string"
     && error.length <= 64
-    && /^email_provider_(?:not_configured|unsupported|request_failed|failed|http_error:[1-5]\d{2})$/.test(error)
+    && /^email_provider_(?:not_configured|unsupported|request_failed|failed|ambiguity_window_expired|http_error:[1-5]\d{2})$/.test(error)
   ) {
     return error;
   }
