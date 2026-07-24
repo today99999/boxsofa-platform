@@ -3166,7 +3166,7 @@ grant execute on function public.reconcile_stripe_source_health_count() to servi
 
 commit;
 
-+-- Owner-only after-sales writes must be auditable and transactionally ordered.
+-- Owner-only after-sales writes must be auditable and transactionally ordered.
 begin;
 
 create sequence if not exists public.after_sales_case_number_seq;
@@ -3217,6 +3217,7 @@ declare
   v_order public.orders%rowtype;
   v_case public.after_sales_cases%rowtype;
   v_case_number text;
+  v_case_sequence bigint;
 begin
   if p_order_number is null or length(btrim(p_order_number)) not between 3 and 80
     or p_case_type not in ('return', 'refund', 'replacement', 'damage', 'delivery', 'quality', 'other')
@@ -3239,10 +3240,11 @@ begin
     return;
   end if;
 
+  v_case_sequence := nextval('public.after_sales_case_number_seq');
   v_case_number := format(
     'AS-%s-%s',
     to_char(clock_timestamp() at time zone 'UTC', 'YYYYMMDDHH24MISSMS'),
-    lpad(nextval('public.after_sales_case_number_seq')::text, 8, '0')
+    lpad(v_case_sequence::text, greatest(8, length(v_case_sequence::text)), '0')
   );
 
   insert into public.after_sales_cases (

@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AFTER_SALES_CASE_STATUSES, AFTER_SALES_CASE_TYPES } from "@/lib/data-center/after-sales";
+import {
+  AFTER_SALES_CASE_STATUSES,
+  AFTER_SALES_CASE_TYPES,
+  afterSalesMutationStatus,
+  buildAfterSalesCursorPostgrestFilter,
+  decodeAfterSalesCursor,
+  encodeAfterSalesCursor,
+  isFutureAfterSalesDueAt,
+  normalizeAfterSalesCaseSearch
+} from "@/lib/data-center/after-sales";
 import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
@@ -46,7 +55,7 @@ function positiveInteger(value: string | null, fallback: number, maximum: number
   if (value === null) return fallback;
   if (!/^\d+$/.test(value)) return null;
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= maximum ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= maximum ? parsed : null;
 }
 
 export async function GET(request: Request) {
@@ -59,33 +68,53 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limit = positiveInteger(url.searchParams.get("limit"), 50, 200);
-  const offset = positiveInteger(url.searchParams.get("offset"), 0, 1000000);
   const status = url.searchParams.get("status");
-  const search = url.searchParams.get("search")?.trim() ?? "";
-  if (limit === null || offset === null || (status !== null && !AFTER_SALES_CASE_STATUSES.includes(status as never)) || search.length > 80) {
+  const search = normalizeAfterSalesCaseSearch(url.searchParams.get("search"));
+  const rawCursor = url.searchParams.get("cursor");
+  const cursor = rawCursor === null ? null : decodeAfterSalesCursor(rawCursor);
+  if (
+    limit === null
+    || url.searchParams.has("offset")
+    || (status !== null && !AFTER_SALES_CASE_STATUSES.includes(status as never))
+    || !search.ok
+    || (rawCursor !== null && cursor === null)
+  ) {
     return NextResponse.json({ ok: false, message: "Invalid after-sales filters." }, { status: 400 });
   }
 
   const supabase = createSupabaseServiceRoleClient();
   let query = supabase
     .from("after_sales_cases")
-    .select("id, case_number, case_type, status, responsibility, requested_remedy, reason, due_at, refund_amount_eur, internal_note, version, created_at, updated_at, orders!inner(order_number, customer_name)", { count: "exact" })
+    .select("id, case_number, case_type, status, responsibility, requested_remedy, reason, due_at, refund_amount_eur, internal_note, version, created_at, updated_at, orders!inner(order_number, customer_name)")
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .limit(limit + 1);
   if (status) query = query.eq("status", status);
-  if (search) query = query.or(`case_number.ilike.%${search.replace(/[,%()]/g, "")}%`);
+  if (search.value) query = query.ilike("case_number", `%${search.value}%`);
+  if (cursor) query = query.or(buildAfterSalesCursorPostgrestFilter(cursor));
 
-  const { data, error, count } = await query;
+  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ ok: false, message: "Could not load after-sales cases." }, { status: 500 });
   }
 
-  const cases = (data ?? []).map((row) => {
+  const fetched = data ?? [];
+  const hasMore = fetched.length > limit;
+  const pageRows = hasMore ? fetched.slice(0, limit) : fetched;
+  const cases = pageRows.map((row) => {
     const order = Array.isArray(row.orders) ? row.orders[0] : row.orders;
     return mapCase({ ...row, order_number: order?.order_number ?? null, customer_name: order?.customer_name ?? null });
   });
-  return NextResponse.json({ ok: true, mode: "supabase", cases, page: { offset, limit, total: count ?? 0 } });
+  const last = pageRows.at(-1);
+  const nextCursor = hasMore && last
+    ? encodeAfterSalesCursor({ createdAt: String(last.created_at), id: String(last.id) })
+    : null;
+  return NextResponse.json({
+    ok: true,
+    mode: "supabase",
+    cases,
+    page: { limit, ...(nextCursor ? { nextCursor } : {}) }
+  });
 }
 
 export async function POST(request: Request) {
@@ -106,6 +135,9 @@ export async function POST(request: Request) {
   if (!payload.success) {
     return NextResponse.json({ ok: false, message: "After-sales case information is incomplete." }, { status: 400 });
   }
+  if (payload.data.dueAt && !isFutureAfterSalesDueAt(payload.data.dueAt)) {
+    return NextResponse.json({ ok: false, message: "The follow-up date must be in the future." }, { status: 400 });
+  }
 
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase.rpc("create_after_sales_case", {
@@ -117,7 +149,11 @@ export async function POST(request: Request) {
     p_created_by: access.userId
   });
   if (error) {
-    return NextResponse.json({ ok: false, message: "Could not create after-sales case." }, { status: 500 });
+    const status = afterSalesMutationStatus(error.code);
+    return NextResponse.json(
+      { ok: false, message: status === 400 ? "After-sales case information is incomplete." : "Could not create after-sales case." },
+      { status }
+    );
   }
   const created = data?.[0] as Record<string, unknown> | undefined;
   if (!created) {

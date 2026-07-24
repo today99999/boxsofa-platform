@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AFTER_SALES_CASE_STATUSES, eurToCents } from "@/lib/data-center/after-sales";
+import {
+  AFTER_SALES_CASE_STATUSES,
+  afterSalesMutationStatus,
+  isFutureAfterSalesDueAt,
+  parseRefundAmountEur
+} from "@/lib/data-center/after-sales";
 import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const uuidSchema = z.string().uuid();
-const centsNumber = z.number().finite().nonnegative().refine((value) => eurToCents(value) !== null, "Amount must have at most two decimal places.");
+const refundAmountInput = z.union([z.string(), z.number()]).refine(
+  (value) => parseRefundAmountEur(value).ok,
+  "Amount must be a non-negative EUR amount with no more than two decimal places."
+);
 const patchSchema = z.object({
   version: z.number().int().positive(),
   status: z.enum(AFTER_SALES_CASE_STATUSES).optional(),
   responsibility: z.enum(["customer", "boxsofa", "carrier", "supplier", "unknown"]).nullable().optional(),
-  refundAmountEur: centsNumber.nullable().optional(),
+  refundAmountEur: refundAmountInput.nullable().optional(),
   internalNote: z.string().trim().max(4000).nullable().optional(),
   dueAt: z.string().datetime({ offset: true }).nullable().optional()
 }).strict().refine((value) => Object.keys(value).some((key) => key !== "version"), "At least one change is required.");
@@ -68,6 +76,15 @@ export async function PATCH(request: Request, { params }: { params: { caseId: st
   }
 
   const update = payload.data;
+  if (typeof update.dueAt === "string" && !isFutureAfterSalesDueAt(update.dueAt)) {
+    return NextResponse.json({ ok: false, message: "The follow-up date must be in the future." }, { status: 400 });
+  }
+  const refundAmount = Object.hasOwn(update, "refundAmountEur") && update.refundAmountEur !== null
+    ? parseRefundAmountEur(update.refundAmountEur)
+    : null;
+  if (refundAmount && !refundAmount.ok) {
+    return NextResponse.json({ ok: false, message: "Invalid after-sales case update." }, { status: 400 });
+  }
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase.rpc("update_after_sales_case", {
     p_case_id: params.caseId,
@@ -76,7 +93,7 @@ export async function PATCH(request: Request, { params }: { params: { caseId: st
     p_status: update.status ?? null,
     p_responsibility: update.responsibility ?? null,
     p_responsibility_set: Object.hasOwn(update, "responsibility"),
-    p_refund_amount_cents: update.refundAmountEur === null ? null : eurToCents(update.refundAmountEur ?? 0),
+    p_refund_amount_cents: refundAmount?.ok ? refundAmount.cents : null,
     p_refund_amount_set: Object.hasOwn(update, "refundAmountEur"),
     p_internal_note: update.internalNote ?? null,
     p_internal_note_set: Object.hasOwn(update, "internalNote"),
@@ -84,12 +101,16 @@ export async function PATCH(request: Request, { params }: { params: { caseId: st
     p_due_at_set: Object.hasOwn(update, "dueAt")
   });
   if (error) {
-    return NextResponse.json({ ok: false, message: "Could not update after-sales case." }, { status: 500 });
+    const status = afterSalesMutationStatus(error.code);
+    return NextResponse.json(
+      { ok: false, message: status === 400 ? "After-sales case update was rejected." : "Could not update after-sales case." },
+      { status }
+    );
   }
   const result = data?.[0] as Record<string, unknown> | undefined;
   if (!result) return NextResponse.json({ ok: false, message: "Could not update after-sales case." }, { status: 500 });
   if (result.ok !== true) {
-    const status = result.error_code === "not_found" ? 404 : result.error_code === "conflict" ? 409 : 400;
+    const status = afterSalesMutationStatus(result.error_code);
     return NextResponse.json({ ok: false, message: "After-sales case update was rejected.", code: result.error_code }, { status });
   }
   return NextResponse.json({ ok: true, mode: "supabase", case: mapCase(result) });

@@ -146,7 +146,6 @@ declare
   v_next_responsibility text;
   v_next_refund_cents bigint;
   v_successful_refund_cents bigint;
-  v_other_case_refund_cents bigint;
   v_before jsonb;
 begin
   if p_case_id is null or p_expected_version is null or p_expected_version < 1 then
@@ -204,7 +203,7 @@ begin
       null::bigint, null::timestamptz, null::timestamptz;
     return;
   end if;
-  if p_refund_amount_set and p_refund_amount_cents is not null and p_refund_amount_cents < 0 then
+  if p_refund_amount_set and (p_refund_amount_cents is null or p_refund_amount_cents < 0) then
     return query select false, 'invalid_refund_amount', null::uuid, null::text, null::text, null::text, null::text,
       null::text, null::text, null::text, null::text, null::timestamptz, null::numeric, null::text,
       null::bigint, null::timestamptz, null::timestamptz;
@@ -217,15 +216,10 @@ begin
     return;
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended('after-sales-refund:' || v_order.id::text, 0));
   select coalesce(sum(round(refund_row.amount_eur * 100)::bigint), 0) into v_successful_refund_cents
   from public.payment_refunds refund_row
   where refund_row.order_id = v_order.id and refund_row.status = 'succeeded' and refund_row.currency = 'EUR';
-  select coalesce(sum(round(case_row.refund_amount_eur * 100)::bigint), 0) into v_other_case_refund_cents
-  from public.after_sales_cases case_row
-  where case_row.order_id = v_order.id and case_row.id <> v_case.id;
-  if coalesce(v_next_refund_cents, 0) > round(v_order.total_eur * 100)::bigint
-    or v_other_case_refund_cents + coalesce(v_next_refund_cents, 0) > v_successful_refund_cents then
+  if v_next_refund_cents > round(v_order.total_eur * 100)::bigint or v_next_refund_cents > v_successful_refund_cents then
     return query select false, 'refund_not_verified', null::uuid, null::text, null::text, null::text, null::text,
       null::text, null::text, null::text, null::text, null::timestamptz, null::numeric, null::text,
       null::bigint, null::timestamptz, null::timestamptz;

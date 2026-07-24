@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "migrations": [
+    { "file": "202607230001_data_center_foundation.sql", "sha256": "3444897598c33398e74099376d3ee92d9f30630afce268049dba09d85e80738e" },
+    { "file": "202607230002_data_center_owner_only_policies.sql", "sha256": "79b4edf43881189a4d4a67bf9fc7a0c6317374be73c02cc02a999abadc5b50b0" },
+    { "file": "202607230003_harden_analytics_ingestion.sql", "sha256": "35259fd0fb8696e51f2911decd42437f162034a80f697b0d02bcda5fc30fd79d" },
+    { "file": "202607230004_finalize_analytics_consent_lock.sql", "sha256": "17bb4870c7e400e4ea3b5de5afe7b05d23897f8073865cde430358390eeaa67b" },
+    { "file": "202607230005_secure_analytics_attribution_and_maintenance.sql", "sha256": "830a6595dbb0d71e8f61258e3cd34c9d18f52a839ea2427238582ba03421779f" },
+    { "file": "202607230006_database_ordered_consent_intents.sql", "sha256": "556306169b99d4724c9081658a926a926f4f6ba31bd5c26a8442cea6b5125707" },
+    { "file": "202607230007_finalize_analytics_consent_intent_ordering.sql", "sha256": "32812965c0ea45cec97741d5ff9fa89455f689dd59bde205c90c9c4c3a0fe010" },
+    { "file": "202607230008_reassert_analytics_consent_superseded_constraint.sql", "sha256": "1d72ee6fbce07652d7a0154ed42e9d44b1e5c4177148f369364954130be0ccc5" },
+    { "file": "202607230009_fix_analytics_consent_intent_rpc_output.sql", "sha256": "c4034e66f559845c4b168ef1e386ec152ccedf7161ac62133e96a993cd3429c5" },
+    { "file": "202607230010_fix_analytics_consent_record_rpc_output.sql", "sha256": "dd082d9b98f9b5dcbb9159adf0f7b4787a4d916f734127cacb0d3160bd440b51" },
+    { "file": "202607240011_stripe_financial_transactions.sql", "sha256": "d129bcc5c036cd5cf15049492c6ba31e67c3ade4bf4f641697ba5bc247bd726b" },
+    { "file": "202607240012_promote_stripe_payment_identity_constraint.sql", "sha256": "1b59d75dc51afccc61161ba60ee8fcb4d8ea824fc84400041f71be1f0ab5e611" },
+    { "file": "202607240013_harden_task5_production_safety.sql", "sha256": "01ac6cfdcee9910314c93163eee37e0da98862fdcad637cbc5818304acf9a01a" },
+    { "file": "202607240014_enforce_stripe_webhook_identity_immutability.sql", "sha256": "ca9729bf7d98fdc8274e5a88f98a21b6ff4f605d748d44ab738b2ba9ad97f8cb" },
+    { "file": "202607240015_finalize_task5_refund_identity_and_health.sql", "sha256": "b0f6ef066b654cfd0dad723017d4dcbaa28d6ad236fe322151a8027b32bf1b3b" },
+    { "file": "202607240016_finalize_task5_email_state_machine.sql", "sha256": "a5025f4b0ce11d56d691ff6b25f3eb1465529a83407e1aaec9d5bc81208ffb48" },
+    { "file": "202607240017_serialize_stripe_source_health_count.sql", "sha256": "bb780d2211bbc12ca8107209da38d6deb2e70b31e737b036e1de878def815eec" },
+    { "file": "202607240018_after_sales_foundation.sql", "sha256": "bd2092be7f48e880a693f8b6784f01de3b00f06aeb407ae143e90d000700baf9" },
+    { "file": "202607240019_after_sales_refund_amount_nullability.sql", "sha256": "47298c9a2f2d7d545baa671b42facc326c43a821d8395dd3d5e3509815098c06" },
+    { "file": "202607240020_after_sales_cumulative_refund_truth.sql", "sha256": "71e26f55eacef700f58efc268f86de3748889ea5db23605c961a47ece5e783d1" },
+    { "file": "202607240021_after_sales_cursor_and_case_number_safety.sql", "sha256": "9d2c4ee2460999faa027823a00448a6b7e421620268d806d62f7b11a763012e6" }
+  ]
+}
