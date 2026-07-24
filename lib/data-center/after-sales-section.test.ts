@@ -100,7 +100,7 @@ test("after-sales editor follows the canonical workflow and maps business failur
   assert.match(section, /code === "invalid_transition"/);
   assert.match(section, /code === "refund_not_verified"/);
   assert.match(section, /status === 409/);
-  assert.match(section, /该订单已有相同售后工单/);
+  assert.match(section, /创建工单时发生编号冲突/);
   assert.match(section, /超过了已核实成功退款/);
 });
 

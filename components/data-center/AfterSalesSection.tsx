@@ -163,7 +163,7 @@ function mutationErrorMessage(payload: unknown, status: number, operation: "crea
   if (status === 404) return operation === "create" ? "找不到对应订单，请检查订单号。" : "工单不存在，可能已被删除。";
   if (status === 409 || code === "conflict") {
     return operation === "create"
-      ? "该订单已有相同售后工单，请检查现有记录。"
+      ? "创建工单时发生编号冲突，请重试。"
       : "工单已被其他操作更新，请刷新后再试。";
   }
   if (code === "invalid_transition") return "当前状态不能进行这项流转，请刷新工单后重试。";
