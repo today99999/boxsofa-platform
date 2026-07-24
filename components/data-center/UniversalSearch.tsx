@@ -1,7 +1,6 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSafeOwnerSearchHref, normalizeOwnerSearchQuery } from "@/lib/data-center/universal-search";
 
@@ -37,7 +36,6 @@ function isResult(value: unknown): value is SearchResult {
 }
 
 export function UniversalSearch() {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [state, setState] = useState<SearchState>("idle");
@@ -119,7 +117,8 @@ export function UniversalSearch() {
   function navigate(result: SearchResult) {
     if (!isSafeOwnerSearchHref(result.href)) return;
     clearSearch();
-    router.push(result.href);
+    window.history.pushState({}, "", result.href);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {

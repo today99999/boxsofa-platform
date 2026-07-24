@@ -77,21 +77,21 @@ export async function GET(request: Request) {
       kind: "order" as const,
       title: text(item.order_number, "Order"),
       subtitle: [text(item.customer_name), text(item.status)].filter(Boolean).join(" · "),
-      href: "/admin/orders"
+      href: "/data-center?section=orders"
     })),
     ...(customers.data ?? []).map((item) => ({
       id: String(item.id),
       kind: "customer" as const,
       title: text(item.full_name, text(item.email, "Customer")),
       subtitle: text(item.email),
-      href: "/admin/customers"
+      href: "/data-center?section=customers"
     })),
     ...(products.data ?? []).map((item) => ({
       id: String(item.id),
       kind: "product" as const,
       title: text(item.sku, "Product"),
       subtitle: text(item.name_en, text(item.name_zh, text(item.slug))),
-      href: "/admin/products"
+      href: "/data-center?section=products"
     })),
     ...(afterSales.data ?? []).map((item) => ({
       id: String(item.id),

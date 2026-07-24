@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   AlertCircle,
   CalendarClock,
@@ -181,7 +180,7 @@ function draftFor(item: AfterSalesCase): EditDraft {
   };
 }
 
-export function AfterSalesSection() {
+export function AfterSalesSection({ onOpenSupport }: { onOpenSupport: () => void }) {
   const [requestState, setRequestState] = useState<RequestState>("loading");
   const [cases, setCases] = useState<AfterSalesCase[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -423,7 +422,7 @@ export function AfterSalesSection() {
           <p>最多显示最近 200 条真实工单，时间均为 Europe/Madrid。</p>
         </div>
         <div className="dc-toolbar-actions">
-          <Link className="dc-secondary-button" href="/admin/support">客服消息</Link>
+          <button className="dc-secondary-button" type="button" onClick={onOpenSupport}>客服消息</button>
           <button className="dc-primary-button" type="button" onClick={() => { setCreateOpen(true); setCreateError(""); }}>
             <ClipboardPlus aria-hidden size={16} />
             新建工单

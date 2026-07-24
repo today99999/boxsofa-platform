@@ -137,7 +137,7 @@ type TestCustomerResponse = {
 };
 type NotificationStatusFilter = "all" | "queued" | "sent" | "failed" | "skipped";
 type SupportFilter = "all" | "needs_reply" | "open" | "closed";
-type AdminSection = "dashboard" | "launch" | "traffic" | "leads" | "orders" | "products" | "reviews" | "customers" | "stock" | "audit" | "notifications" | "support";
+export type AdminSection = "dashboard" | "launch" | "traffic" | "leads" | "orders" | "products" | "reviews" | "customers" | "stock" | "audit" | "notifications" | "support";
 type AdminAccess = "checking" | "allowed" | "denied";
 
 const PRODUCT_DRAFTS_KEY = "boxsofa_admin_product_drafts_v1";
@@ -263,7 +263,13 @@ function inDateRange(date: string, range: DateRange) {
   return created >= now - oneDay * 30;
 }
 
-export function AdminClient({ initialSection = "dashboard" }: { initialSection?: AdminSection } = {}) {
+export function AdminClient({
+  initialSection = "dashboard",
+  embedded = false
+}: {
+  initialSection?: AdminSection;
+  embedded?: boolean;
+} = {}) {
   const [orders, setOrders] = useState<LocalOrder[]>([]);
   const [analyticsEvents, setAnalyticsEvents] = useState<AnalyticsEvent[]>([]);
   const [activeSection, setActiveSection] = useState<AdminSection>(initialSection);
@@ -344,14 +350,15 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
       }
     }
 
-    syncSectionFromLocation();
+    if (!embedded) syncSectionFromLocation();
+    if (embedded) return;
     window.addEventListener("hashchange", syncSectionFromLocation);
     window.addEventListener("popstate", syncSectionFromLocation);
     return () => {
       window.removeEventListener("hashchange", syncSectionFromLocation);
       window.removeEventListener("popstate", syncSectionFromLocation);
     };
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
     if (adminAccess !== "allowed") return;
@@ -422,7 +429,9 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
 
   function openSection(section: AdminSection) {
     setActiveSection(section);
-    window.history.replaceState(null, "", section === "dashboard" ? "/admin" : `/admin/${section}`);
+    if (!embedded) {
+      window.history.replaceState(null, "", section === "dashboard" ? "/admin" : `/admin/${section}`);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1271,20 +1280,22 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
   });
 
   if (adminAccess === "checking") {
+    const AccessShell = embedded ? "div" : "main";
     return (
-      <main className="admin-locked">
+      <AccessShell className={`admin-locked${embedded ? " admin-locked-embedded" : ""}`}>
         <section className="panel">
           <p className="eyebrow">BoxSofa Admin</p>
           <h1>Checking merchant access</h1>
           <p>Please wait while we confirm the current account permission.</p>
         </section>
-      </main>
+      </AccessShell>
     );
   }
 
   if (adminAccess === "denied") {
+    const AccessShell = embedded ? "div" : "main";
     return (
-      <main className="admin-locked">
+      <AccessShell className={`admin-locked${embedded ? " admin-locked-embedded" : ""}`}>
         <section className="panel">
           <p className="eyebrow">BoxSofa Admin</p>
           <h1>需要商家登录</h1>
@@ -1299,13 +1310,14 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
             </Link>
           </div>
         </section>
-      </main>
+      </AccessShell>
     );
   }
 
+  const AdminShell = embedded ? "div" : "main";
   return (
-    <main className="admin-layout">
-      <aside className="admin-nav">
+    <AdminShell className={`admin-layout${embedded ? " admin-layout-embedded" : ""}`}>
+      {!embedded && <aside className="admin-nav">
         <Link className="brand" href="/">
           BoxSofa Admin
         </Link>
@@ -1322,10 +1334,10 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
         <Link className="button" href="/">
           返回前台
         </Link>
-      </aside>
+      </aside>}
 
       <section className="admin-main">
-        <div className="admin-title">
+        {!embedded && <div className="admin-title">
           <div>
             <p className="eyebrow">BoxSofa 运营后台</p>
             <h1>商家工作台</h1>
@@ -1334,7 +1346,7 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
             <span>当前角色</span>
             <strong>老板 / 客服 / 仓库</strong>
           </div>
-        </div>
+        </div>}
 
         <section className="admin-stat-grid" hidden={activeSection !== "dashboard"} id="dashboard">
           <div className="stat-card">
@@ -2412,6 +2424,6 @@ export function AdminClient({ initialSection = "dashboard" }: { initialSection?:
           </div>
         </section>
       </section>
-    </main>
+    </AdminShell>
   );
 }

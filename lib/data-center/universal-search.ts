@@ -1,7 +1,7 @@
 const allowedSearchHrefs = new Set([
-  "/admin/orders",
-  "/admin/customers",
-  "/admin/products",
+  "/data-center?section=orders",
+  "/data-center?section=customers",
+  "/data-center?section=products",
   "/data-center?section=after-sales"
 ]);
 

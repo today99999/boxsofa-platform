@@ -59,9 +59,16 @@ test("data center PWA stays scoped to the private application", () => {
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
 });
 
-test("planned modules are disabled and existing support remains reachable", () => {
-  assert.match(app, /<AfterSalesSection \/>/);
-  assert.match(afterSales, /href="\/admin\/support"/);
+test("operational modules stay inside the data center shell", () => {
+  assert.match(app, /<AfterSalesSection onOpenSupport=/);
+  assert.match(app, /<AdminClient[\s\S]*embedded/);
+  assert.doesNotMatch(app, /href: "\/admin\//);
+  assert.doesNotMatch(afterSales, /href="\/admin\/support"/);
+  assert.match(afterSales, /onOpenSupport/);
+  assert.match(app, /target="_blank"/);
+});
+
+test("planned modules remain disabled", () => {
   assert.match(app, /section\.planned/);
   assert.match(app, /disabled=\{planned\}/);
   assert.match(app, /aria-pressed=\{active\}/);

@@ -43,9 +43,9 @@ test("PostgREST OR values quote grammar and escape LIKE wildcards", () => {
 
 test("search result navigation is constrained to known internal destinations", () => {
   for (const href of [
-    "/admin/orders",
-    "/admin/customers",
-    "/admin/products",
+    "/data-center?section=orders",
+    "/data-center?section=customers",
+    "/data-center?section=products",
     "/data-center?section=after-sales"
   ]) {
     assert.equal(isSafeOwnerSearchHref(href), true);
@@ -104,6 +104,8 @@ test("universal search implements accessible, race-safe keyboard interaction", (
   assert.match(component, /搜索暂时不可用/);
   assert.match(component, /clearSearch\(\)/);
   assert.match(component, /isSafeOwnerSearchHref/);
+  assert.match(component, /window\.dispatchEvent\(new PopStateEvent\("popstate"\)\)/);
+  assert.doesNotMatch(component, /router\.push\(result\.href\)/);
 });
 
 test("universal search is mounted in the data center and covered by auth audit", () => {

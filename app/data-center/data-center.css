@@ -1,7 +1,7 @@
 :root { --dc-brand: #173f35; --dc-ink: #18302a; --dc-muted: #64736e; --dc-line: #d7dfdb; --dc-surface: #ffffff; --dc-page: #f4f6f5; --dc-critical: #b42318; --dc-warning: #a15c08; --dc-info: #286f9b; }
 .dc-app { min-height: 100vh; background: var(--dc-page); color: var(--dc-ink); display: grid; grid-template-columns: 220px minmax(0, 1fr); font-family: Arial, Helvetica, sans-serif; }
 .dc-sidebar { min-width: 0; background: var(--dc-brand); color: #f9fcfa; padding: 20px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.dc-brand { display: flex; gap: 10px; align-items: center; color: inherit; font-size: 17px; font-weight: 700; text-decoration: none; padding: 0 8px 22px; }
+.dc-brand { display: flex; gap: 10px; align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; font-size: 17px; font-weight: 700; padding: 0 8px 22px; text-align: left; text-decoration: none; width: 100%; }
 .dc-brand-mark { align-items: center; background: #d5e8df; color: var(--dc-brand); display: inline-flex; font-size: 15px; height: 28px; justify-content: center; width: 28px; }
 .dc-nav { display: grid; gap: 2px; }
 .dc-nav-link { align-items: center; background: transparent; border: 0; border-radius: 4px; color: #dce8e2; cursor: pointer; display: flex; font: inherit; font-size: 14px; gap: 11px; min-height: 40px; padding: 0 10px; text-align: left; text-decoration: none; width: 100%; }
@@ -78,6 +78,11 @@
 .dc-empty h2 { font-size: 18px; margin: 6px 0 0; }
 .dc-empty span { color: var(--dc-muted); font-size: 13px; }
 .dc-empty a { color: var(--dc-brand); font-size: 14px; }
+.dc-admin-embed { min-width: 0; padding-top: 20px; }
+.dc-admin-embed .admin-layout-embedded { background: transparent; display: block; min-height: 0; }
+.dc-admin-embed .admin-main { min-width: 0; padding: 0; }
+.dc-admin-embed .admin-locked-embedded { min-height: 320px; padding: 0; }
+.dc-admin-embed .admin-locked-embedded .panel { max-width: none; }
 .dc-after-sales { padding-top: 20px; }
 .dc-after-sales-toolbar { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .dc-after-sales-toolbar h2 { font-size: 17px; margin: 0; }

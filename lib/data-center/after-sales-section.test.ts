@@ -70,10 +70,11 @@ test("after-sales API response types include every mapped field", () => {
 });
 
 test("data center routes after-sales into the real section and keeps support reachable", () => {
-  assert.match(app, /<AfterSalesSection \/>/);
+  assert.match(app, /<AfterSalesSection onOpenSupport=/);
   assert.match(app, /selectSection\("after-sales"\)/);
   assert.doesNotMatch(app, /id: "after-sales"[\s\S]{0,100}href: "\/admin\/support"/);
-  assert.match(section, /href="\/admin\/support"/);
+  assert.match(section, /onOpenSupport/);
+  assert.doesNotMatch(section, /href="\/admin\/support"/);
 });
 
 test("Madrid overdue display and 390px forms stay explicit", () => {
