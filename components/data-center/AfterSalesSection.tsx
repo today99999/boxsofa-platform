@@ -19,6 +19,11 @@ import type {
   AfterSalesMutationResponse,
   DataCenterApiError
 } from "@/lib/data-center/types";
+import {
+  canTransitionAfterSalesStatus,
+  madridLocalDateTimeToIso,
+  parseRefundAmountEur
+} from "@/lib/data-center/after-sales";
 
 type RequestState = "loading" | "ready" | "error";
 type CaseType = AfterSalesCase["type"];
@@ -118,36 +123,6 @@ function toDateTimeLocal(value: string | null) {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 
-function madridLocalToIso(value: string) {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
-  const desiredUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]));
-  let candidate = desiredUtc;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Madrid",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }).formatToParts(new Date(candidate));
-    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    const representedUtc = Date.UTC(
-      Number(values.year),
-      Number(values.month) - 1,
-      Number(values.day),
-      Number(values.hour),
-      Number(values.minute)
-    );
-    candidate += desiredUtc - representedUtc;
-  }
-  const result = new Date(candidate);
-  return Number.isNaN(result.getTime()) ? null : result.toISOString();
-}
-
 function isAfterSalesCase(value: unknown): value is AfterSalesCase {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<AfterSalesCase>;
@@ -179,6 +154,19 @@ function publicMessage(payload: unknown, fallback: string) {
     : fallback;
 }
 
+function mutationErrorMessage(payload: unknown, status: number, operation: "create" | "update") {
+  const code = payload && typeof payload === "object" && typeof (payload as DataCenterApiError).code === "string"
+    ? (payload as DataCenterApiError).code
+    : null;
+  if (status === 401) return "登录状态已失效，请重新登录后再试。";
+  if (status === 403) return "当前账号没有店主权限。";
+  if (status === 404) return operation === "create" ? "找不到对应订单，请检查订单号。" : "工单不存在，可能已被删除。";
+  if (status === 409 || code === "conflict") return "工单已被其他操作更新，请刷新后再试。";
+  if (code === "invalid_transition") return "当前状态不能进行这项流转，请刷新工单后重试。";
+  if (code === "refund_not_verified") return "只有已核实的退款才能将工单标记为已退款。";
+  return publicMessage(payload, operation === "create" ? "无法创建售后工单。" : "无法保存工单，已保留编辑内容。");
+}
+
 function draftFor(item: AfterSalesCase): EditDraft {
   return {
     status: item.status,
@@ -206,6 +194,10 @@ export function AfterSalesSection() {
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
   const requestId = useRef(0);
+  const selectedIdRef = useRef<string | null>(null);
+  const createInFlight = useRef(false);
+  const saveInFlight = useRef(false);
+  const saveMutationId = useRef(0);
 
   const loadCases = useCallback((signal: AbortSignal, id: number) => {
     setRequestState("loading");
@@ -262,12 +254,14 @@ export function AfterSalesSection() {
   const selectedCase = cases.find((item) => item.id === selectedId) ?? null;
 
   function selectCase(item: AfterSalesCase) {
+    selectedIdRef.current = item.id;
     setSelectedId(item.id);
     setEditDraft(draftFor(item));
     setEditError("");
   }
 
   function closeEditor() {
+    selectedIdRef.current = null;
     setSelectedId(null);
     setEditDraft(null);
     setEditError("");
@@ -275,8 +269,9 @@ export function AfterSalesSection() {
 
   async function createCase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (createInFlight.current) return;
     setCreateError("");
-    const dueAt = madridLocalToIso(createDraft.dueAt);
+    const dueAt = createDraft.dueAt ? madridLocalDateTimeToIso(createDraft.dueAt) : null;
     if (createDraft.dueAt && !dueAt) {
       setCreateError("请选择有效的跟进日期。");
       return;
@@ -291,6 +286,7 @@ export function AfterSalesSection() {
     ].join("\n"));
     if (!confirmed) return;
 
+    createInFlight.current = true;
     setCreating(true);
     try {
       const response = await fetch("/api/admin/after-sales", {
@@ -307,9 +303,7 @@ export function AfterSalesSection() {
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        setCreateError(publicMessage(payload, response.status === 404 || response.status === 409
-          ? "找不到对应订单或订单状态已变化。"
-          : "无法创建售后工单。"));
+        setCreateError(mutationErrorMessage(payload, response.status, "create"));
         return;
       }
       const result = payload as Partial<AfterSalesMutationResponse>;
@@ -325,15 +319,18 @@ export function AfterSalesSection() {
     } catch {
       setCreateError("网络连接失败，已保留填写内容。");
     } finally {
+      createInFlight.current = false;
       setCreating(false);
     }
   }
 
   async function saveCase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedCase || !editDraft) return;
+    if (!selectedCase || !editDraft || saveInFlight.current) return;
+    const caseId = selectedCase.id;
+    const mutationId = ++saveMutationId.current;
     setEditError("");
-    const dueAt = madridLocalToIso(editDraft.dueAt);
+    const dueAt = editDraft.dueAt ? madridLocalDateTimeToIso(editDraft.dueAt) : null;
     if (editDraft.dueAt && !dueAt) {
       setEditError("请选择有效的跟进日期。");
       return;
@@ -348,21 +345,29 @@ export function AfterSalesSection() {
 
     const normalizedCurrentDueAt = selectedCase.dueAt ? new Date(selectedCase.dueAt).getTime() : null;
     const normalizedNextDueAt = dueAt ? new Date(dueAt).getTime() : null;
-    const currentRefund = selectedCase.refundAmountEur === null ? null : selectedCase.refundAmountEur.toFixed(2);
-    const nextRefund = editDraft.refundAmountEur.trim() || null;
+    const currentRefund = selectedCase.refundAmountEur === null ? null : parseRefundAmountEur(selectedCase.refundAmountEur);
+    const nextRefundText = editDraft.refundAmountEur.trim();
+    const nextRefund = nextRefundText ? parseRefundAmountEur(nextRefundText) : null;
+    if (nextRefundText && (!nextRefund || !nextRefund.ok)) {
+      setEditError("退款金额最多保留两位小数，且不能为负数。");
+      return;
+    }
     const currentNote = selectedCase.internalNote?.trim() || null;
     const nextNote = editDraft.internalNote.trim() || null;
     const changes: Record<string, unknown> = { version: selectedCase.version };
     if (editDraft.status !== selectedCase.status) changes.status = editDraft.status;
     if (editDraft.responsibility !== selectedCase.responsibility) changes.responsibility = editDraft.responsibility;
     if (normalizedNextDueAt !== normalizedCurrentDueAt) changes.dueAt = dueAt;
-    if (nextRefund !== currentRefund) changes.refundAmountEur = nextRefund;
+    const currentRefundCents = currentRefund?.ok ? currentRefund.cents : null;
+    const nextRefundCents = nextRefund?.ok ? nextRefund.cents : null;
+    if (nextRefundCents !== currentRefundCents) changes.refundAmountEur = nextRefundText || null;
     if (nextNote !== currentNote) changes.internalNote = nextNote;
     if (Object.keys(changes).length === 1) {
       setEditError("没有需要保存的变更。");
       return;
     }
 
+    saveInFlight.current = true;
     setSaving(true);
     try {
       const response = await fetch(`/api/admin/after-sales/${encodeURIComponent(selectedCase.id)}`, {
@@ -373,22 +378,29 @@ export function AfterSalesSection() {
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        setEditError(publicMessage(payload, response.status === 409
-          ? "工单已被其他操作更新，请刷新后再试。"
-          : "无法保存工单，已保留编辑内容。"));
+        if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
+          setEditError(mutationErrorMessage(payload, response.status, "update"));
+        }
         return;
       }
       const result = payload as Partial<AfterSalesMutationResponse>;
       if (result.ok !== true || !isAfterSalesCase(result.case)) {
-        setEditError("工单返回格式无效，已保留编辑内容。");
+        if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
+          setEditError("工单返回格式无效，已保留编辑内容。");
+        }
         return;
       }
       const updatedCase = result.case;
       setCases((current) => current.map((item) => item.id === updatedCase.id ? updatedCase : item));
-      setEditDraft(draftFor(updatedCase));
+      if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
+        setEditDraft(draftFor(updatedCase));
+      }
     } catch {
-      setEditError("网络连接失败，已保留编辑内容。");
+      if (mutationId === saveMutationId.current && selectedIdRef.current === caseId) {
+        setEditError("网络连接失败，已保留编辑内容。");
+      }
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   }
@@ -500,6 +512,9 @@ function CaseEditor({
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
+  const statusOptions = caseStatuses.filter((option) => (
+    option.value === item.status || canTransitionAfterSalesStatus(item.status, option.value)
+  ));
   return (
     <aside className="dc-case-editor" aria-labelledby="dc-case-editor-heading">
       <div className="dc-panel-heading">
@@ -512,7 +527,7 @@ function CaseEditor({
         <p><strong>客户诉求</strong>{item.requestedRemedy || "未填写"}</p>
       </div>
       <form className="dc-case-form dc-edit-form" onSubmit={onSubmit}>
-        <label>状态<select value={draft.status} onChange={(event) => onDraft((current) => current ? { ...current, status: event.target.value as CaseStatus } : current)}>{caseStatuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label>状态<select value={draft.status} disabled={statusOptions.length === 1} onChange={(event) => onDraft((current) => current ? { ...current, status: event.target.value as CaseStatus } : current)}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>责任归属<select value={draft.responsibility ?? ""} onChange={(event) => onDraft((current) => current ? { ...current, responsibility: (event.target.value || null) as AfterSalesCase["responsibility"] } : current)}><option value="">未设置</option>{responsibilities.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label>跟进日期<input type="datetime-local" value={draft.dueAt} onChange={(event) => onDraft((current) => current ? { ...current, dueAt: event.target.value } : current)} /></label>
         <label>记录退款金额（EUR）<input inputMode="decimal" pattern="^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$" placeholder="仅记录，不会调用 Stripe" value={draft.refundAmountEur} onChange={(event) => onDraft((current) => current ? { ...current, refundAmountEur: event.target.value } : current)} /><small>仅作售后台账记录，不会触发 Stripe 退款。</small></label>

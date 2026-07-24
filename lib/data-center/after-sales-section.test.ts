@@ -84,3 +84,23 @@ test("Madrid overdue display and 390px forms stay explicit", () => {
   assert.match(styles, /\.dc-form-actions > button \{ width: 100%; \}/);
   assert.match(section, /className=\{`dc-case-row[\s\S]*type="button"/);
 });
+
+test("after-sales saves reject stale UI responses and duplicate submissions", () => {
+  assert.match(section, /selectedIdRef\.current === caseId/);
+  assert.match(section, /saveMutationId\.current/);
+  assert.match(section, /saveInFlight\.current/);
+  assert.match(section, /createInFlight\.current/);
+});
+
+test("after-sales editor follows the canonical workflow and maps business failures", () => {
+  assert.match(section, /canTransitionAfterSalesStatus/);
+  assert.match(section, /statusOptions\.length === 1/);
+  assert.match(section, /code === "invalid_transition"/);
+  assert.match(section, /code === "refund_not_verified"/);
+  assert.match(section, /status === 409/);
+});
+
+test("equivalent refund amounts compare exact cents before mutation", () => {
+  assert.match(section, /parseRefundAmountEur\(nextRefundText\)/);
+  assert.match(section, /nextRefundCents !== currentRefundCents/);
+});

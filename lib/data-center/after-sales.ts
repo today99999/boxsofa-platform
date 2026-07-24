@@ -83,6 +83,42 @@ export function isFutureAfterSalesDueAt(value: string, now = Date.now()) {
   return Number.isFinite(time) && time > now;
 }
 
+export function madridLocalDateTimeToIso(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const desiredUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]));
+  let candidate = desiredUtc;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(candidate));
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const representedUtc = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute)
+    );
+    candidate += desiredUtc - representedUtc;
+  }
+
+  const result = new Date(candidate);
+  if (Number.isNaN(result.getTime())) return null;
+  const parts = formatter.formatToParts(result);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const roundTrip = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  return roundTrip === value ? result.toISOString() : null;
+}
+
 export function afterSalesMutationStatus(errorCode: unknown) {
   switch (errorCode) {
     case "not_found":

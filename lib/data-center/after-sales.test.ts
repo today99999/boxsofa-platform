@@ -10,6 +10,7 @@ import {
   eurToCents,
   formatAfterSalesCaseNumber,
   isFutureAfterSalesDueAt,
+  madridLocalDateTimeToIso,
   normalizeAfterSalesCaseSearch,
   pageAfterSalesRows,
   parseRefundAmountEur
@@ -142,6 +143,12 @@ test("after-sales workflow prevents terminal and backward transitions", () => {
   assert.equal(canTransitionAfterSalesStatus("requested", "reviewing"), true);
   assert.equal(canTransitionAfterSalesStatus("reviewing", "requested"), false);
   assert.equal(canTransitionAfterSalesStatus("refunded", "reviewing"), false);
+});
+
+test("Madrid local due dates reject nonexistent daylight-saving times", () => {
+  assert.equal(madridLocalDateTimeToIso("2026-03-29T02:30"), null);
+  assert.equal(madridLocalDateTimeToIso("2026-03-29T01:30"), "2026-03-29T00:30:00.000Z");
+  assert.equal(madridLocalDateTimeToIso("not-a-date"), null);
 });
 
 test("after-sales migration history stays distinct while the final migration preserves refund truth", () => {
