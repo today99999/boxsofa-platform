@@ -17,6 +17,7 @@
     "stripe:financial:integration": "node scripts/stripe-financial-integration.mjs",
     "after-sales:integration": "node scripts/after-sales-integration.mjs",
     "db:migrations:verify": "node scripts/verify-migration-manifest.mjs",
+    "db:migrations:verify-remote": "node scripts/verify-migration-manifest.mjs --remote",
     "db:bootstrap:validate": "node scripts/validate-bootstrap-sql.mjs",
     "db:bootstrap:execute": "node scripts/execute-bootstrap-pglite.mjs",
     "env:check": "node scripts/check-env.mjs",
