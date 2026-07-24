@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getEmailProviderStatus, sendTransactionalEmail } from "@/lib/server/email-provider";
 import { writeAdminAuditLog } from "@/lib/server/admin-audit";
-import { requireAdminAccess } from "@/lib/server/admin-auth";
+import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function POST() {
     return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
-  const adminAccess = await requireAdminAccess();
+  const adminAccess = await requireOwnerAccess();
   if (!adminAccess.ok) {
     return NextResponse.json({ ok: false, message: "Merchant login is required." }, { status: 401 });
   }

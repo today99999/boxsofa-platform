@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { assertSafeStripeFinancialIntegrationTarget } from "./stripe-financial-integration-guard.mjs";
 
 const RUN_FLAG = "RUN_SUPABASE_STRIPE_INTEGRATION";
 const requiredEnvironment = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
@@ -15,6 +16,8 @@ for (const name of requiredEnvironment) {
   }
 }
 
+assertSafeStripeFinancialIntegrationTarget(process.env);
+
 const clientA = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
@@ -28,7 +31,7 @@ const state = {
   styleIds: [],
   eventIds: [],
   analyticsEventPrefix: `${runPrefix}-analytics-`,
-  originalStripeHealth: null
+  consentIds: []
 };
 
 function firstRow(data, message) {
@@ -64,7 +67,8 @@ async function insertOrderFixture(client, suffix, { stock = 1, reservedStock = 1
       color_zh: "test",
       price_eur: 100,
       stock,
-      reserved_stock: reservedStock
+      reserved_stock: reservedStock,
+      is_active: false
     })
     .select("id")
     .single();
@@ -275,6 +279,14 @@ async function testPaymentRollback() {
 
 async function testAggregateBeyondPostgrestLimit() {
   const createdAt = "2099-07-24T12:00:00.000Z";
+  const visitorId = `${state.analyticsEventPrefix}visitor-consented`;
+  const { data: consent, error: consentError } = await clientA
+    .from("analytics_consents")
+    .insert({ visitor_id: visitorId, consent: "analytics", locale: "en", consent_version: "technical-test" })
+    .select("id")
+    .single();
+  assert.equal(consentError, null, "temporary analytics consent must insert");
+  state.consentIds.push(consent.id);
   const batch = Array.from({ length: 1001 }, (_, index) => ({
     event_type: "page_view",
     event_key: `${state.analyticsEventPrefix}${index}`,
@@ -283,7 +295,8 @@ async function testAggregateBeyondPostgrestLimit() {
     path: "/technical-integration",
     source: "direct",
     created_at: createdAt,
-    raw_utm: {}
+    raw_utm: {},
+    consent_id: consent.id
   }));
   for (let offset = 0; offset < batch.length; offset += 250) {
     const { error } = await clientA.from("analytics_events").insert(batch.slice(offset, offset + 250));
@@ -300,41 +313,27 @@ async function testAggregateBeyondPostgrestLimit() {
   assert.equal(Number(aggregate.paid_gmv_cents), 0, "isolated technical range must not fabricate GMV");
 }
 
-async function restoreStripeHealth() {
-  if (state.originalStripeHealth) {
-    const { error } = await clientA.from("data_source_health").upsert(state.originalStripeHealth, { onConflict: "source_key" });
-    assert.equal(error, null, "Stripe source health must restore after integration");
-  } else {
-    const { error } = await clientA.from("data_source_health").delete().eq("source_key", "stripe");
-    assert.equal(error, null, "temporary Stripe source health must be removed");
-  }
-}
-
 async function cleanup() {
-  if (state.eventIds.length) {
-    const { error } = await clientA.from("stripe_webhook_events").delete().in("event_id", state.eventIds);
-    assert.equal(error, null, "temporary Stripe webhook events must delete");
-  }
+  const failures = [];
+  const run = async (label, operation) => {
+    try {
+      const { error } = await operation();
+      if (error) failures.push(`${label}: ${error.message}`);
+    } catch (error) {
+      failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  if (state.eventIds.length) await run("stripe webhook events", () => clientA.from("stripe_webhook_events").delete().in("event_id", state.eventIds));
   if (state.orderIds.length) {
     for (const table of ["email_notifications", "payment_refunds", "payments", "inventory_movements", "order_items"]) {
-      const { error } = await clientA.from(table).delete().in("order_id", state.orderIds);
-      assert.equal(error, null, `${table} cleanup must succeed`);
+      await run(table, () => clientA.from(table).delete().in("order_id", state.orderIds));
     }
-    const { error } = await clientA.from("orders").delete().in("id", state.orderIds);
-    assert.equal(error, null, "temporary orders must delete");
+    await run("orders", () => clientA.from("orders").delete().in("id", state.orderIds));
   }
-  if (state.productIds.length) {
-    const { error } = await clientA.from("products").delete().in("id", state.productIds);
-    assert.equal(error, null, "temporary products must delete");
-  }
-  if (state.styleIds.length) {
-    const { error } = await clientA.from("product_styles").delete().in("id", state.styleIds);
-    assert.equal(error, null, "temporary styles must delete");
-  }
-  const { error: analyticsError } = await clientA.from("analytics_events").delete().like("event_key", `${state.analyticsEventPrefix}%`);
-  assert.equal(analyticsError, null, "temporary analytics events must delete");
-
-  await restoreStripeHealth();
+  if (state.productIds.length) await run("products", () => clientA.from("products").delete().in("id", state.productIds));
+  if (state.styleIds.length) await run("product styles", () => clientA.from("product_styles").delete().in("id", state.styleIds));
+  await run("analytics events", () => clientA.from("analytics_events").delete().like("event_key", `${state.analyticsEventPrefix}%`));
+  if (state.consentIds.length) await run("analytics consents", () => clientA.from("analytics_consents").delete().in("id", state.consentIds));
 
   for (const [table, column, values] of [
     ["stripe_webhook_events", "event_id", state.eventIds],
@@ -353,17 +352,15 @@ async function cleanup() {
     .like("event_key", `${state.analyticsEventPrefix}%`);
   assert.equal(analyticsCountError, null);
   assert.equal(analyticsCount, 0, "analytics cleanup must leave zero technical rows");
+  if (state.consentIds.length) {
+    const { count, error } = await clientA.from("analytics_consents").select("*", { count: "exact", head: true }).in("id", state.consentIds);
+    assert.equal(error, null, "analytics consent cleanup count must succeed");
+    assert.equal(count, 0, "analytics cleanup must leave zero technical consents");
+  }
+  if (failures.length) throw new AggregateError(failures, "Stripe financial integration cleanup failed");
 }
 
 try {
-  const { data, error } = await clientA
-    .from("data_source_health")
-    .select("source_key, source_type, state, last_attempt_at, last_success_at, last_error, record_count, metadata, updated_at")
-    .eq("source_key", "stripe")
-    .maybeSingle();
-  assert.equal(error, null, "Stripe source health snapshot must load");
-  state.originalStripeHealth = data;
-
   await testPaymentTransactionAndReplay();
   await testPaymentRollback();
   await testAggregateBeyondPostgrestLimit();

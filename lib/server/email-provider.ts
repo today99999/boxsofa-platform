@@ -2,6 +2,7 @@ type EmailSendInput = {
   to: string;
   subject: string;
   text: string;
+  idempotencyKey?: string;
 };
 
 type EmailSendResult = {
@@ -83,7 +84,8 @@ export async function sendTransactionalEmail(input: EmailSendInput): Promise<Ema
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {})
     },
     body: JSON.stringify({
       from,

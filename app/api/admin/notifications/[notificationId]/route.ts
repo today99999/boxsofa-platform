@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendTransactionalEmail } from "@/lib/server/email-provider";
+import { EMAIL_DELIVERY_LEASE_SECONDS, getEmailDeliveryIdempotencyKey } from "@/lib/server/email-notification-delivery";
 import { writeAdminAuditLog } from "@/lib/server/admin-audit";
-import { requireAdminAccess } from "@/lib/server/admin-auth";
+import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, message: "Supabase is not configured." }, { status: 503 });
   }
 
-  const adminAccess = await requireAdminAccess();
+  const adminAccess = await requireOwnerAccess();
   if (!adminAccess.ok) {
     return NextResponse.json({ ok: false, message: "Merchant login is required." }, { status: 401 });
   }
@@ -46,47 +47,62 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   if (loadError || !beforeNotification) {
     return NextResponse.json(
-      { ok: false, message: "Email notification was not found.", detail: loadError?.message },
+      { ok: false, message: "Email notification was not found." },
       { status: 404 }
     );
   }
 
   if (payload.data.action === "send") {
-    const sendResult = await sendTransactionalEmail({
-      to: beforeNotification.customer_email,
-      subject: beforeNotification.subject,
-      text: beforeNotification.body_text
+    const { data: claimRows, error: claimError } = await supabase.rpc("claim_email_notification_delivery", {
+      p_notification_id: notificationId,
+      p_lease_seconds: EMAIL_DELIVERY_LEASE_SECONDS
     });
+    const claim = Array.isArray(claimRows) ? claimRows[0] : null;
 
-    const sendUpdate = sendResult.ok
-      ? {
-          status: "sent",
-          provider: sendResult.provider,
-          attempts: (beforeNotification.attempts ?? 0) + 1,
-          last_error: null,
-          sent_at: new Date().toISOString()
-        }
-      : {
-          status: "failed",
-          provider: sendResult.provider,
-          attempts: (beforeNotification.attempts ?? 0) + 1,
-          last_error: sendResult.error || "Email sending failed.",
-          sent_at: null
-        };
-
-    const { data: notification, error: updateError } = await supabase
-      .from("email_notifications")
-      .update(sendUpdate)
-      .eq("id", notificationId)
-      .select("id, order_number, customer_email, event, subject, preview_text, body_text, provider, status, attempts, last_error, sent_at, created_at, updated_at")
-      .single();
-
-    if (updateError || !notification) {
+    if (claimError || !claim) {
       return NextResponse.json(
-        { ok: false, message: "Could not update email notification.", detail: updateError?.message },
+        { ok: false, message: "Could not claim email notification for delivery." },
         { status: 500 }
       );
     }
+
+    if (claim.claimed !== true) {
+      return NextResponse.json(
+        { ok: false, message: "Email notification is already being delivered or has been sent." },
+        { status: 409 }
+      );
+    }
+
+    let sendResult;
+    try {
+      sendResult = await sendTransactionalEmail({
+        to: beforeNotification.customer_email,
+        subject: beforeNotification.subject,
+        text: beforeNotification.body_text,
+        idempotencyKey: getEmailDeliveryIdempotencyKey(notificationId)
+      });
+    } catch {
+      sendResult = { ok: false, provider: "resend", error: "Email provider request failed." };
+    }
+
+    const { data: finalizedRows, error: finalizeError } = await supabase.rpc("finalize_email_notification_delivery", {
+      p_notification_id: notificationId,
+      p_lease_token: claim.lease_token,
+      p_succeeded: sendResult.ok,
+      p_provider: sendResult.provider,
+      p_provider_message_id: sendResult.providerMessageId ?? null,
+      p_error: sendResult.error ?? null
+    });
+    const finalized = Array.isArray(finalizedRows) ? finalizedRows[0] : null;
+
+    if (finalizeError || !finalized || finalized.finalized !== true) {
+      return NextResponse.json(
+        { ok: false, message: "Email delivery result could not be recorded." },
+        { status: 500 }
+      );
+    }
+
+    const notification = finalized.notification;
 
     await writeAdminAuditLog(supabase, {
       actorId: adminAccess.userId,
@@ -101,7 +117,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       ok: sendResult.ok,
       mode: "supabase",
       notification,
-      message: sendResult.ok ? "Email notification sent." : sendResult.error || "Email sending failed."
+      message: sendResult.ok ? "Email notification sent." : "Email sending failed."
     }, { status: sendResult.ok ? 200 : 502 });
   }
 
@@ -113,12 +129,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .from("email_notifications")
     .update(update)
     .eq("id", notificationId)
+    .neq("status", "sending")
     .select("id, order_number, customer_email, event, subject, preview_text, body_text, provider, status, attempts, last_error, sent_at, created_at, updated_at")
     .single();
 
   if (updateError || !notification) {
     return NextResponse.json(
-      { ok: false, message: "Could not update email notification.", detail: updateError?.message },
+      { ok: false, message: "Could not update email notification." },
       { status: 500 }
     );
   }

@@ -40,3 +40,12 @@ export async function requireAdminAccess() {
 
   return { ok: true as const, userId: user.id, email: user.email ?? "", role: profile.role as "owner" | "service" };
 }
+
+export async function requireOwnerAccess() {
+  const access = await requireAdminAccess();
+  if (!access.ok) return access;
+  if (access.role !== "owner") {
+    return { ok: false as const, reason: "not_authorized" as const };
+  }
+  return access;
+}
