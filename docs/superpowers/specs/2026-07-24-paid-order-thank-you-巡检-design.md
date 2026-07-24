@@ -1,82 +1,99 @@
-# Paid Order Thank-You Inspection Design
+# 已付款订单感谢信巡检方案
 
-## Decision
+## 方案决定
 
-This design supersedes the automatic website outbox and Vercel cron design in `2026-07-24-paid-order-thank-you-email-design.md`.
+本方案取代之前的“网站邮件队列与 Vercel 定时任务”方案。
 
-BoxSofa will send paid-order thank-you emails from the existing local customer-service automation. The website application will not own automatic thank-you delivery.
+BoxSofa 的已付款订单感谢信由现有的本地客服自动化发送。网站程序本身不再负责自动发送感谢信。
 
-## Schedule
+## 巡检时间
 
-Keep the existing `boxsofa` automation schedule:
+保留现有 `boxsofa` 自动化的运行时间：
 
-- Monday through Friday
-- 09:00 and 16:00 Europe/Madrid time
+- 周一至周五；
+- 马德里时间每天 09:00 和 16:00。
 
-Each run checks paid orders first, then performs the existing unread support-mail inspection.
+每次运行时，先检查已付款订单，再执行现有的客服邮箱未读邮件巡检。
 
-## Order Selection
+## 订单筛选条件
 
-The local inspection script reads the BoxSofa backend using server-side credentials already stored outside the repository. It selects a bounded list of orders that:
+本地巡检脚本通过保存在代码仓库之外的服务器凭据读取 BoxSofa 后台。
 
-- have confirmed successful payment;
-- contain a customer name and valid email address;
-- have not previously recorded a successful thank-you send.
+只选择同时满足以下条件的订单：
 
-Pending, failed, disputed, refunded-before-send, malformed, or otherwise uncertain payments are not emailed automatically and are reported for owner review.
+- 已确认付款成功；
+- 包含客户姓名和有效邮箱；
+- 尚未记录感谢信发送成功。
 
-## Email
+以下订单不得自动发送邮件，需要报告并交由人工确认：
 
-The automation sends from `info@boxsofa.eu` through the existing local mail client.
+- 等待付款；
+- 付款失败；
+- 付款存在争议；
+- 发送感谢信前已经退款；
+- 订单或付款信息不完整；
+- 其他无法确认付款状态的订单。
 
-It uses the customer name, email, order number, and order language. Supported languages remain Chinese, English, Spanish, French, and German. The approved copy thanks the customer for purchasing from `boxsofa.eu` and says BoxSofa will arrange shipment as soon as possible.
+## 邮件发送
 
-If the customer has newly reached the existing EUR 300 membership threshold, the same message also thanks the customer for becoming a BoxSofa member.
+自动化通过现有本地邮件工具，从 `info@boxsofa.eu` 发送感谢信。
 
-## Duplicate Prevention
+邮件读取订单中的客户姓名、客户邮箱、订单号和下单语言。
 
-The order number is the idempotency key.
+支持中文、英文、西班牙语、法语和德语。邮件使用已经确认的文案：感谢客户在 `boxsofa.eu` 购买产品，并告知客户 BoxSofa 会尽快安排发货。
 
-After the mail client confirms a successful send, the local process records:
+如果客户此次付款后首次达到累计消费 EUR 300 的会员门槛，同一封邮件还要感谢客户成为 BoxSofa 会员。
 
-- order number;
-- send timestamp;
-- recipient language;
-- membership paragraph included or omitted.
+## 防止重复发送
 
-The record contains no mailbox password, API key, full email body, or payment data. An order with a successful record is skipped on later runs. Failed sends are not recorded as successful and may be retried on the next scheduled run.
+使用订单号作为防重复标识。
 
-## Run Report
+邮件工具确认发送成功后，本地流程记录：
 
-Each automation run reports:
+- 订单号；
+- 发送时间；
+- 邮件语言；
+- 是否包含会员感谢段落。
 
-- number of new paid orders found;
-- order numbers successfully emailed;
-- failed or manual-review order numbers;
-- unread customer-mail summary from the existing mailbox inspection.
+记录中不得保存邮箱密码、API 密钥、完整邮件正文或付款资料。
 
-It never prints credentials or full payment/customer records.
+以后再次巡检时，已经有成功记录的订单会被跳过。发送失败不得记录为成功，并在下一次定时巡检时重试。
 
-## Website Rollback
+## 每次运行的报告
 
-Use Git revert commits to remove the recently merged website implementation, including:
+每次自动化运行后报告：
 
-- migration 026 and its application dependencies;
-- database email templates and automatic-delivery state;
-- the Vercel email cron route and schedule;
-- automatic dispatcher, retry, and release-gate additions that exist only for this feature.
+- 发现多少个新的已付款订单；
+- 哪些订单已成功发送感谢信；
+- 哪些订单发送失败或需要人工确认；
+- 原有客服邮箱未读邮件的分类和回复草稿情况。
 
-Revert operations must preserve unrelated website work and the existing local mailbox scripts.
+报告不得输出邮箱凭据、API 密钥、完整客户资料或完整付款资料。
 
-## Safety and Testing
+## 撤回网站复杂方案
 
-Before enabling sends:
+使用 Git revert 撤回最近合并的网站端方案，包括：
 
-- prove paid/pending/refunded classification with fixtures;
-- prove the five language selections;
-- prove one successful send per order number across repeated runs;
-- prove a failed send retries;
-- prove uncertain payments require manual review;
-- run in dry-run mode against current paid orders and inspect the proposed recipient/order list without sending.
+- migration 026 及其相关依赖；
+- 数据库邮件模板；
+- 数据库自动投递状态；
+- Vercel 邮件 cron 路由及定时配置；
+- 自动投递器、重试机制；
+- 仅为该网站自动发信功能增加的发布门禁。
 
-The first live run occurs only after the dry-run output is reviewed. The automation is then updated to allow direct sends under these rules.
+撤回时必须保留其他无关的网站功能、现有本地客服邮箱脚本，以及用户已有的未跟踪文件和修改。
+
+## 启用前测试
+
+正式自动发送前必须验证：
+
+- 能正确区分已付款、待付款和已退款订单；
+- 能正确选择五种邮件语言；
+- 同一个订单重复巡检时只发送一次；
+- 发送失败后下次能够重试；
+- 付款状态不确定时不会自动发送；
+- 不会输出或记录任何凭据。
+
+第一次运行必须先使用 dry-run 模式，只列出准备发送的订单号、语言和会员状态，不实际发信。
+
+检查 dry-run 结果确认无误后，再更新自动化，允许按照上述规则直接发送。
