@@ -312,3 +312,11 @@ limit 5;
 - 390 x 844 实测分类页仍保持 2 x 2 首屏四款，页面宽度 390 px；商品、购物车、登录、订单、指南和配送页均未出现横向溢出。
 - 商品页确认主图位于首屏，产品视频继续放在下方详情区域；类型检查、7 项自动测试和 46 页生产构建全部通过。
 - 最终审查记录、健康结果、可访问性边界与截图保存于 `docs/audits/2026-07-23-final-customer-polish/`。
+
+## 20. 社交自动发布（2026-07-23 20:03 Europe/Madrid）
+
+- 在本次 20:00 巡检时，AiToEarn 已有同一时段的未记录发布：原始竖版 `D:\压缩沙发\沙发视频\可发布的视频\BoxSofa_Final.mp4`（1080 × 1920、49.125 秒、带音频）。因此未重复上传另一条候选 `1.mp4`。该素材已由先前发布流使用，并不是本次巡检重新制作或适配的版本。
+- TikTok：`https://www.tiktok.com/@boxsofaeurope/video/7665785823673011478`（任务/记录 `6a625779b35dbe3991393f7d`，flow `e2ba14a2-4fb7-4f56-8fad-7b19bc07b63d`）；平台处理已完成，禁止重建或重复发布。
+- YouTube Shorts：`https://www.youtube.com/watch?v=HfC-NELpsYc`（任务/记录 `6a62577bb35dbe3991393f8a`，flow `9005518e-d425-4359-bbb3-cbadee985738`）。Instagram Reels：`https://www.instagram.com/reel/DbJQ_X-lHGb/`（任务/记录 `6a62577cb35dbe3991393f97`，flow `1d885a69-26df-493a-b8f8-e70f76ef8208`）。Pinterest video Pin：`https://www.pinterest.com/pin/1109363320813714282/`（任务/记录 `6a62577eb35dbe3991393fa3`，flow `b5650063-aa5f-456a-9b40-81829c2412fb`）。Pinterest 未附外链，以避开既有 spam 风险。
+- 已发布文案使用各平台 `boxsofa_final_20260723` UTM，限定为视觉产品演示，说明小户型、出租房、窄楼梯/小电梯、欧洲免费基础配送、Stripe 安全支付和预计 23–30 个工作日；未作折扣、快速到货、真实客户案例或政策例外承诺。
+- Facebook：AiToEarn 仍无公共主页授权，但已通过登录的 `BoxSofa Europe` 主页后台发布同一原片，且主页已显示 AI 内容标识。公开 Reel：`https://www.facebook.com/reel/1012090414790053/`。此素材五个平台均已完成，禁止重复上传。
