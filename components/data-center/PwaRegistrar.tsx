@@ -5,7 +5,7 @@ import { useEffect } from "react";
 export function PwaRegistrar() {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js");
+      void navigator.serviceWorker.register("/sw.js", { scope: "/data-center" });
     }
   }, []);
 

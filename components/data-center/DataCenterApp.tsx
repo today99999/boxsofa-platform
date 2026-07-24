@@ -6,6 +6,7 @@ import {
   Archive, BarChart3, Boxes, CircleHelp, FileWarning, LayoutDashboard, Megaphone,
   MessageSquareText, ReceiptText, Search, Settings, ShoppingBag, Users, type LucideIcon
 } from "lucide-react";
+import type { DataCenterOverview } from "@/lib/data-center/types";
 
 export type DataCenterSection = "overview" | "orders" | "products" | "inventory" | "customers" | "traffic" | "social" | "marketing" | "after-sales" | "reviews" | "finance" | "cube" | "system";
 
@@ -14,6 +15,7 @@ type SectionDefinition = {
   label: string;
   icon: LucideIcon;
   href?: string;
+  planned?: boolean;
 };
 
 const sections: SectionDefinition[] = [
@@ -22,28 +24,34 @@ const sections: SectionDefinition[] = [
   { id: "products", label: "产品", icon: ShoppingBag, href: "/admin/products" },
   { id: "inventory", label: "库存", icon: Boxes, href: "/admin/stock" },
   { id: "customers", label: "客户", icon: Users, href: "/admin/customers" },
-  { id: "traffic", label: "流量", icon: BarChart3 },
-  { id: "social", label: "社媒", icon: MessageSquareText },
-  { id: "marketing", label: "营销", icon: Megaphone },
-  { id: "after-sales", label: "售后", icon: FileWarning },
+  { id: "traffic", label: "流量", icon: BarChart3, planned: true },
+  { id: "social", label: "社媒", icon: MessageSquareText, planned: true },
+  { id: "marketing", label: "营销", icon: Megaphone, planned: true },
+  { id: "after-sales", label: "售后", icon: FileWarning, href: "/admin/support" },
   { id: "reviews", label: "评价", icon: CircleHelp, href: "/admin/reviews" },
-  { id: "finance", label: "财务", icon: Archive },
-  { id: "cube", label: "数据魔方", icon: Search },
-  { id: "system", label: "系统", icon: Settings }
+  { id: "finance", label: "财务", icon: Archive, planned: true },
+  { id: "cube", label: "数据魔方", icon: Search, planned: true },
+  { id: "system", label: "系统", icon: Settings, planned: true }
 ];
 
 type OverviewState = "loading" | "ready" | "login" | "unavailable";
 
-function valueFromOverview(data: unknown, key: string) {
-  if (!data || typeof data !== "object") return "--";
-  const value = (data as Record<string, unknown>)[key];
-  return typeof value === "number" || typeof value === "string" ? String(value) : "--";
+function isOverview(value: unknown): value is DataCenterOverview {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<DataCenterOverview>;
+  return Boolean(
+    candidate.metrics &&
+    typeof candidate.metrics.gmvEur === "number" &&
+    typeof candidate.metrics.paidOrders === "number" &&
+    typeof candidate.visitors === "number" &&
+    typeof candidate.openAfterSales === "number"
+  );
 }
 
 export function DataCenterApp() {
   const [activeSection, setActiveSection] = useState<DataCenterSection>("overview");
   const [overviewState, setOverviewState] = useState<OverviewState>("loading");
-  const [overview, setOverview] = useState<unknown>(null);
+  const [overview, setOverview] = useState<DataCenterOverview | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -55,7 +63,9 @@ export function DataCenterApp() {
           return;
         }
         if (!response.ok) throw new Error("overview unavailable");
-        setOverview(await response.json());
+        const payload = await response.json() as { overview?: unknown };
+        if (!isOverview(payload.overview)) throw new Error("invalid overview");
+        setOverview(payload.overview);
         setOverviewState("ready");
       })
       .catch(() => current && setOverviewState("unavailable"));
@@ -83,9 +93,9 @@ export function DataCenterApp() {
       <nav className="dc-mobile-nav" aria-label="移动数据中心导航">
         <MobileButton label="总览" icon={LayoutDashboard} active={activeSection === "overview"} onClick={() => setActiveSection("overview")} />
         <MobileLink label="订单" icon={ReceiptText} href="/admin/orders" />
-        <MobileButton label="售后" icon={FileWarning} active={activeSection === "after-sales"} onClick={() => setActiveSection("after-sales")} />
-        <MobileButton label="数据" icon={BarChart3} active={activeSection === "cube"} onClick={() => setActiveSection("cube")} />
-        <MobileButton label="更多" icon={Settings} active={activeSection === "system"} onClick={() => setActiveSection("system")} />
+        <MobileLink label="售后" icon={FileWarning} href="/admin/support" />
+        <MobileButton label="数据" icon={BarChart3} active={false} planned onClick={() => undefined} />
+        <MobileButton label="更多" icon={Settings} active={false} planned onClick={() => undefined} />
       </nav>
     </main>
   );
@@ -94,28 +104,29 @@ export function DataCenterApp() {
 function SectionButton({ section, active, onSelect }: { section: SectionDefinition; active: boolean; onSelect: (section: DataCenterSection) => void }) {
   const Icon = section.icon;
   if (section.href) return <Link className="dc-nav-link" href={section.href}><Icon size={18} /><span>{section.label}</span></Link>;
-  return <button className={`dc-nav-link${active ? " is-active" : ""}`} type="button" onClick={() => onSelect(section.id)}><Icon size={18} /><span>{section.label}</span></button>;
+  if (section.planned) return <button className="dc-nav-link is-planned" type="button" disabled><Icon size={18} /><span>{section.label}</span><small>Planned</small></button>;
+  return <button className={`dc-nav-link${active ? " is-active" : ""}`} type="button" aria-pressed={active} onClick={() => onSelect(section.id)}><Icon size={18} /><span>{section.label}</span></button>;
 }
 
-function MobileButton({ label, icon: Icon, active, onClick }: { label: string; icon: SectionDefinition["icon"]; active: boolean; onClick: () => void }) {
-  return <button className={`dc-mobile-link${active ? " is-active" : ""}`} type="button" onClick={onClick}><Icon size={19} /><span>{label}</span></button>;
+function MobileButton({ label, icon: Icon, active, planned = false, onClick }: { label: string; icon: SectionDefinition["icon"]; active: boolean; planned?: boolean; onClick: () => void }) {
+  return <button className={`dc-mobile-link${active ? " is-active" : ""}`} type="button" aria-pressed={active} disabled={planned} onClick={onClick}><Icon size={19} /><span>{label}</span>{planned && <small>Planned</small>}</button>;
 }
 
 function MobileLink({ label, icon: Icon, href }: { label: string; icon: SectionDefinition["icon"]; href: string }) {
   return <Link className="dc-mobile-link" href={href}><Icon size={19} /><span>{label}</span></Link>;
 }
 
-function Overview({ state, data }: { state: OverviewState; data: unknown }) {
+function Overview({ state, data }: { state: OverviewState; data: DataCenterOverview | null }) {
   if (state === "login") return <section className="dc-empty"><h2>需要登录</h2><Link href="/login">前往登录</Link></section>;
   if (state === "unavailable") return <section className="dc-empty"><h2>数据暂不可用</h2></section>;
   return <section className="dc-overview" aria-busy={state === "loading"}>
     <div className="dc-metric-grid">
-      <Metric label="GMV" value={state === "loading" ? "--" : valueFromOverview(data, "gmvEur")} />
-      <Metric label="订单" value={state === "loading" ? "--" : valueFromOverview(data, "paidOrderCount")} />
-      <Metric label="访问" value={state === "loading" ? "--" : valueFromOverview(data, "visitorCount")} />
-      <Metric label="售后" value={state === "loading" ? "--" : valueFromOverview(data, "openAfterSalesCount")} />
+      <Metric label="GMV" value={state === "ready" && data ? `€${data.metrics.gmvEur.toLocaleString("en-IE")}` : "--"} />
+      <Metric label="订单" value={state === "ready" && data ? data.metrics.paidOrders.toLocaleString("en-IE") : "--"} />
+      <Metric label="访问" value={state === "ready" && data ? data.visitors.toLocaleString("en-IE") : "--"} />
+      <Metric label="售后" value={state === "ready" && data ? data.openAfterSales.toLocaleString("en-IE") : "--"} />
     </div>
-    <section className="dc-status-line"><span>数据状态</span><strong>{state === "loading" ? "同步中" : "实时"}</strong></section>
+    <section className="dc-status-line"><span>数据状态</span><strong>{state === "ready" ? "实时" : "同步中"}</strong></section>
   </section>;
 }
 
