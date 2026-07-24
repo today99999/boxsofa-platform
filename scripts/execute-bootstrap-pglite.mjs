@@ -14,7 +14,13 @@ const bootstrapPath = join(root, "supabase", "schema.sql");
 // ACLs must be created by the bootstrap SQL and verified below.
 const supabaseBootstrapStubs = `
   create schema auth;
+  create schema supabase_migrations;
   create table auth.users (id uuid primary key);
+  create table supabase_migrations.schema_migrations (
+    version text primary key,
+    name text not null,
+    statements text[] not null
+  );
   create function auth.uid()
   returns uuid
   language sql
@@ -44,26 +50,54 @@ const coreFunctions = [
   "record_stripe_checkout_payment", "create_after_sales_case", "update_after_sales_case", "transition_email_notification"
 ];
 
-// These are the complete policy rows for every owner-only/internal table that
-// contains financial, customer-support, analytics, or webhook data. Tables
-// intentionally accessed only through SECURITY DEFINER RPCs are listed with
-// no policy rows so a later permissive policy cannot slip through unnoticed.
-export const sensitivePolicyTables = [
-  "payments", "payment_refunds", "email_notifications", "after_sales_cases",
-  "analytics_events", "analytics_consents", "analytics_consent_intents",
-  "analytics_consent_intent_heads", "analytics_rate_limit_buckets",
-  "data_source_health", "dashboard_alerts", "stripe_webhook_events"
-];
-
-export const sensitivePolicyExpectations = [
+// This is deliberately the exact policy catalog for every public base table.
+// Tables absent from the fixture must have no policy rows; the catalog is not
+// inferred from the current schema at test time.
+export const publicPolicyExpectations = [
+  { table: "addresses", name: "users manage own addresses", command: "ALL", roles: "{public}", qual: "((customer_id=(selectauth.uid()asuid))or(selectis_admin()asis_admin))", withCheck: "((customer_id=(selectauth.uid()asuid))or(selectis_admin()asis_admin))" },
+  { table: "admin_audit_log", name: "admins read audit log", command: "SELECT", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "after_sales_cases", name: "owners manage after sales", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
   { table: "analytics_consents", name: "owners read analytics consents", command: "SELECT", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
   { table: "analytics_events", name: "owners read analytics events", command: "SELECT", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "chat_messages", name: "chat participants read messages", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(exists(select1fromchat_threadswhere((chat_threads.id=chat_messages.thread_id)and(chat_threads.customer_id=(selectauth.uid()asuid))))))", withCheck: null },
+  { table: "chat_threads", name: "chat participants read threads", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(customer_id=(selectauth.uid()asuid)))", withCheck: null },
   { table: "dashboard_alerts", name: "owners manage dashboard alerts", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
   { table: "data_source_health", name: "owners manage source health", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
-  { table: "payments", name: "owners manage payments", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
-  { table: "after_sales_cases", name: "owners manage after sales", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "email_notifications", name: "owners manage email notifications", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "inventory_movements", name: "inventory movements readable by admin or owner", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(selectis_owner()asis_owner))", withCheck: null },
+  { table: "inventory_movements", name: "owners delete inventory movements", command: "DELETE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "inventory_movements", name: "owners insert inventory movements", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_owner()asis_owner)" },
+  { table: "inventory_movements", name: "owners update inventory movements", command: "UPDATE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "newsletter_subscriptions", name: "admins manage newsletter", command: "ALL", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: "(selectis_admin()asis_admin)" },
+  { table: "order_items", name: "admins read order items", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(exists(select1fromorderswhere((orders.id=order_items.order_id)and(orders.customer_id=(selectauth.uid()asuid))))))", withCheck: null },
+  { table: "orders", name: "admins update orders", command: "UPDATE", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: "(selectis_admin()asis_admin)" },
+  { table: "orders", name: "orders readable by admin or customer", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(customer_id=(selectauth.uid()asuid)))", withCheck: null },
   { table: "payment_refunds", name: "owners manage payment refunds", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
-  { table: "email_notifications", name: "owners manage email notifications", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" }
+  { table: "payments", name: "owners manage payments", command: "ALL", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "product_media", name: "owners delete product media", command: "DELETE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "product_media", name: "owners insert product media", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_owner()asis_owner)" },
+  { table: "product_media", name: "owners update product media", command: "UPDATE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "product_media", name: "product media readable when active or owner", command: "SELECT", roles: "{public}", qual: "((is_active=true)or(selectis_owner()asis_owner))", withCheck: null },
+  { table: "product_reviews", name: "admins delete reviews", command: "DELETE", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: null },
+  { table: "product_reviews", name: "admins update reviews", command: "UPDATE", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: "(selectis_admin()asis_admin)" },
+  { table: "product_reviews", name: "reviews insertable by customer or admin", command: "INSERT", roles: "{public}", qual: null, withCheck: "((customer_id=(selectauth.uid()asuid))or(selectis_admin()asis_admin))" },
+  { table: "product_reviews", name: "reviews readable when visible or admin", command: "SELECT", roles: "{public}", qual: "(((is_visible=true)and(deleted_atisnull))or(selectis_admin()asis_admin))", withCheck: null },
+  { table: "product_styles", name: "owners delete product styles", command: "DELETE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "product_styles", name: "owners insert product styles", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_owner()asis_owner)" },
+  { table: "product_styles", name: "owners update product styles", command: "UPDATE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "product_styles", name: "product styles readable when active or admin", command: "SELECT", roles: "{public}", qual: "((is_active=true)or(selectis_admin()asis_admin))", withCheck: null },
+  { table: "products", name: "owners delete products", command: "DELETE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "products", name: "owners insert products", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_owner()asis_owner)" },
+  { table: "products", name: "owners update products", command: "UPDATE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: "(selectis_owner()asis_owner)" },
+  { table: "products", name: "products readable when active or admin", command: "SELECT", roles: "{public}", qual: "((is_active=true)or(selectis_admin()asis_admin))", withCheck: null },
+  { table: "profiles", name: "profiles deletable by owner", command: "DELETE", roles: "{public}", qual: "(selectis_owner()asis_owner)", withCheck: null },
+  { table: "profiles", name: "profiles insertable by owner", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_owner()asis_owner)" },
+  { table: "profiles", name: "profiles readable by owner admin or self", command: "SELECT", roles: "{public}", qual: "((id=(selectauth.uid()asuid))or(selectis_admin()asis_admin)or(selectis_owner()asis_owner))", withCheck: null },
+  { table: "profiles", name: "profiles updatable by owner or self", command: "UPDATE", roles: "{public}", qual: "((id=(selectauth.uid()asuid))or(selectis_owner()asis_owner))", withCheck: "((id=(selectauth.uid()asuid))or(selectis_owner()asis_owner))" },
+  { table: "shipments", name: "admins delete shipments", command: "DELETE", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: null },
+  { table: "shipments", name: "admins insert shipments", command: "INSERT", roles: "{public}", qual: null, withCheck: "(selectis_admin()asis_admin)" },
+  { table: "shipments", name: "admins update shipments", command: "UPDATE", roles: "{public}", qual: "(selectis_admin()asis_admin)", withCheck: "(selectis_admin()asis_admin)" },
+  { table: "shipments", name: "shipments readable by admin or customer", command: "SELECT", roles: "{public}", qual: "((selectis_admin()asis_admin)or(exists(select1fromorderswhere((orders.id=shipments.order_id)and(orders.customer_id=(selectauth.uid()asuid))))))", withCheck: null }
 ];
 
 export const criticalFunctions = [
@@ -88,7 +122,13 @@ export const criticalFunctions = [
   { name: "stripe_source_record_count", identity: "", authenticated: false, serviceRole: false },
   { name: "update_after_sales_case", identity: "p_case_id uuid,p_actor_id uuid,p_expected_version bigint,p_status text,p_responsibility text,p_responsibility_set boolean,p_refund_amount_cents bigint,p_refund_amount_set boolean,p_internal_note text,p_internal_note_set boolean,p_due_at timestamp with time zone,p_due_at_set boolean", authenticated: false },
   { name: "transition_email_notification", identity: "p_notification_id uuid,p_action text", authenticated: false },
-  { name: "record_stripe_refund_v012", identity: "p_event_id text,p_event_type text,p_provider_refund_id text,p_provider_payment_id text,p_amount_cents bigint,p_currency text,p_status text,p_reason text,p_raw_payload jsonb", authenticated: false, serviceRole: false }
+  { name: "record_stripe_refund_v012", identity: "p_event_id text,p_event_type text,p_provider_refund_id text,p_provider_payment_id text,p_amount_cents bigint,p_currency text,p_status text,p_reason text,p_raw_payload jsonb", authenticated: false, serviceRole: false },
+  {
+    name: "get_applied_migration_checkpoints",
+    identity: "",
+    authenticated: false,
+    searchPath: "search_path=public, supabase_migrations, pg_temp"
+  }
 ];
 
 function quoted(values) {
@@ -114,7 +154,7 @@ function policySort(left, right) {
   return `${left.table}\u0000${left.name}`.localeCompare(`${right.table}\u0000${right.name}`);
 }
 
-export function validateBootstrapCatalog({ publicTables, sensitivePolicies, securityDefinerFunctions }) {
+export function validateBootstrapCatalog({ publicTables, publicPolicies, securityDefinerFunctions }) {
   const expectedTables = [...publicBaseTables].sort();
   const actualTables = publicTables.map((row) => row.relname).sort();
   assert.deepEqual(actualTables, expectedTables, "public base table catalog changed");
@@ -122,9 +162,9 @@ export function validateBootstrapCatalog({ publicTables, sensitivePolicies, secu
     assert.equal(row.relrowsecurity, true, `RLS is disabled: ${row.relname}`);
   }
 
-  const expectedPolicies = sensitivePolicyExpectations.map((row) => ({ ...row })).sort(policySort);
-  const actualPolicies = sensitivePolicies.map(normalizedPolicyRow).sort(policySort);
-  assert.deepEqual(actualPolicies, expectedPolicies, "sensitive owner policy catalog changed");
+  const expectedPolicies = publicPolicyExpectations.map((row) => ({ ...row })).sort(policySort);
+  const actualPolicies = publicPolicies.map(normalizedPolicyRow).sort(policySort);
+  assert.deepEqual(actualPolicies, expectedPolicies, "public policy catalog changed");
 
   assert.deepEqual(
     securityDefinerFunctions.map((row) => `${row.proname}(${normalizeCatalogExpression(row.identity_arguments)})`).sort(),
@@ -135,7 +175,7 @@ export function validateBootstrapCatalog({ publicTables, sensitivePolicies, secu
     const fn = securityDefinerFunctions.find((row) => row.proname === expected.name && normalizeCatalogExpression(row.identity_arguments) === normalizeCatalogExpression(expected.identity));
     assert.ok(fn, `critical RPC is missing: ${expected.name}`);
     assert.equal(fn.prosecdef, true, `critical RPC is not SECURITY DEFINER: ${expected.name}`);
-    assert.equal(fn.proconfig, "search_path=public, pg_temp", `critical RPC search_path is unsafe: ${expected.name}`);
+    assert.equal(fn.proconfig, expected.searchPath ?? "search_path=public, pg_temp", `critical RPC search_path is unsafe: ${expected.name}`);
     assert.equal(fn.public_execute, false, `PUBLIC can execute critical RPC: ${expected.name}`);
     assert.equal(fn.anon_execute, false, `anon can execute critical RPC: ${expected.name}`);
     assert.equal(fn.authenticated_execute, expected.authenticated, `authenticated ACL mismatch: ${expected.name}`);
@@ -150,10 +190,10 @@ export async function executeBootstrapWithPGlite() {
     await database.exec(supabaseBootstrapStubs);
     await database.exec(readFileSync(bootstrapPath, "utf8"));
 
-    const [{ rows: tableRows }, { rows: functionRows }, { rows: sensitivePolicyRows }, { rows: functionSecurityRows }, { rows: extensionRows }] = await Promise.all([
+    const [{ rows: tableRows }, { rows: functionRows }, { rows: publicPolicyRows }, { rows: functionSecurityRows }, { rows: extensionRows }] = await Promise.all([
       database.query("select c.relname, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by c.relname"),
       database.query(`select distinct p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in (${quoted(coreFunctions)}) order by p.proname`),
-      database.query(`select tablename, policyname, cmd, roles::text as roles, qual, with_check from pg_policies where schemaname = 'public' and tablename in (${quoted(sensitivePolicyTables)}) order by tablename, policyname`),
+      database.query("select tablename, policyname, cmd, roles::text as roles, qual, with_check from pg_policies where schemaname = 'public' order by tablename, policyname"),
       database.query("select p.proname, pg_get_function_identity_arguments(p.oid) as identity_arguments, p.prosecdef, array_to_string(p.proconfig, '|') as proconfig, has_function_privilege('public', p.oid, 'EXECUTE') as public_execute, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute, has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute, has_function_privilege('postgres', p.oid, 'EXECUTE') as postgres_execute from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef order by p.proname, pg_get_function_identity_arguments(p.oid)"),
       database.query("select extname from pg_extension where extname = 'pgcrypto'")
     ]);
@@ -161,7 +201,7 @@ export async function executeBootstrapWithPGlite() {
     assert.deepEqual(functionRows.map((row) => row.proname), [...coreFunctions].sort(), "bootstrap is missing a core function");
     validateBootstrapCatalog({
       publicTables: tableRows,
-      sensitivePolicies: sensitivePolicyRows,
+      publicPolicies: publicPolicyRows,
       securityDefinerFunctions: functionSecurityRows
     });
     assert.equal(extensionRows.length, 1, "pgcrypto extension was not loaded");
@@ -169,7 +209,7 @@ export async function executeBootstrapWithPGlite() {
     return {
       coreTables: tableRows.length,
       coreFunctions: functionRows.length,
-      ownerPolicies: sensitivePolicyRows.length,
+      ownerPolicies: publicPolicyRows.length,
       rlsTables: tableRows.length,
       criticalFunctions: functionSecurityRows.length
     };

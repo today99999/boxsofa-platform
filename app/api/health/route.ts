@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const emailProviderStatus = getEmailProviderStatus();
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     service: "boxsofa-platform",
     checkedAt: new Date().toISOString(),
@@ -18,4 +18,8 @@ export async function GET() {
     emailProviderStatus,
     paymentEnabled: hasStripeConfig()
   });
+  if (process.env.BOXSOFA_LOCAL_VERIFY_NONCE) {
+    response.headers.set("X-BoxSofa-Local-Verify-Nonce", process.env.BOXSOFA_LOCAL_VERIFY_NONCE);
+  }
+  return response;
 }

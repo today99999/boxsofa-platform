@@ -12,7 +12,7 @@ export type PolicyExpectation = {
   withCheck: string | null;
 };
 
-export type SensitivePolicyRow = {
+export type PublicPolicyRow = {
   tablename: string;
   policyname: string;
   cmd: string;
@@ -26,6 +26,7 @@ export type CriticalFunction = {
   identity: string;
   authenticated: boolean;
   serviceRole?: boolean;
+  searchPath?: string;
 };
 
 export type SecurityDefinerFunctionRow = {
@@ -41,12 +42,11 @@ export type SecurityDefinerFunctionRow = {
 };
 
 export const publicBaseTables: string[];
-export const sensitivePolicyTables: string[];
-export const sensitivePolicyExpectations: PolicyExpectation[];
+export const publicPolicyExpectations: PolicyExpectation[];
 export const criticalFunctions: CriticalFunction[];
 export function validateBootstrapCatalog(catalog: {
   publicTables: PublicTableRow[];
-  sensitivePolicies: SensitivePolicyRow[];
+  publicPolicies: PublicPolicyRow[];
   securityDefinerFunctions: SecurityDefinerFunctionRow[];
 }): void;
 export function executeBootstrapWithPGlite(): Promise<{

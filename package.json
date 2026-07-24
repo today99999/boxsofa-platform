@@ -25,7 +25,7 @@
     "production:ready": "node scripts/production-readiness.mjs",
     "production:verify:local": "node scripts/production-verify-local.mjs",
     "production:verify": "node scripts/production-verify.mjs --release",
-    "deploy:preflight": "npm run production:verify"
+    "deploy:preflight": "node scripts/deploy-preflight.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

@@ -7,18 +7,26 @@ import { normalizeMigrationText } from "../../scripts/verify-migration-manifest.
 import {
   criticalFunctions,
   publicBaseTables,
-  sensitivePolicyExpectations,
+  publicPolicyExpectations,
   validateBootstrapCatalog
 } from "../../scripts/execute-bootstrap-pglite.mjs";
 
 type RemoteMigrationVerifier = {
-  fetchRemoteMigrationRows: (options: {
+  fetchRemoteMigrationRowsWithManagementApi: (options: {
     projectRef: string;
     accessToken: string;
     checkpoints: unknown[];
     fetchImpl: (url: string, init: RequestInit) => Promise<Response>;
   }) => Promise<unknown[]>;
+  fetchRemoteMigrationCheckpointsWithServiceRole: (options: {
+    supabaseUrl: string;
+    serviceRoleKey: string;
+    fetchImpl: (url: string, init: RequestInit) => Promise<Response>;
+  }) => Promise<unknown[]>;
+  fetchRemoteMigrationTruth: (options: Record<string, unknown>) => Promise<{ mode: string; rows: unknown[] }>;
+  selectRemoteMigrationVerifier: (options: Record<string, unknown>) => { mode: string };
   verifyRemoteMigrationRows: (manifest: unknown, rows: unknown[], options?: { readMigration?: (file: string) => string }) => { remoteCheckpoints: number };
+  verifyRemoteMigrationCheckpoints: (manifest: unknown, rows: unknown[]) => { remoteCheckpoints: number };
 };
 
 async function loadRemoteMigrationVerifier() {
@@ -36,7 +44,7 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 21 SQL files/);
+  assert.match(result.stdout, /Migration manifest verified: 22 SQL files/);
   assert.match(result.stdout, /3 remote checkpoints/);
 });
 
@@ -61,6 +69,15 @@ function remoteRows() {
   }));
 }
 
+function remoteCheckpointRows() {
+  return manifest.remoteCheckpoints.map((checkpoint: { version: string; name: string; statementCount: number; normalizedMd5: string }) => ({
+    version: checkpoint.version,
+    name: checkpoint.name,
+    statement_count: checkpoint.statementCount,
+    normalized_md5: checkpoint.normalizedMd5
+  }));
+}
+
 test("remote migration truth rejects simultaneous local and manifest tampering", async () => {
   const { verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
   const changedSql = "select 'tampered local migration';\n";
@@ -75,30 +92,43 @@ test("remote migration truth rejects simultaneous local and manifest tampering",
   );
 });
 
-test("remote migration truth rejects missing versions, names, statement counts, and hashes", async () => {
-  const { verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
-  const cases = [
-    { rows: remoteRows().slice(1), message: /remote migration response has an unexpected row count/ },
-    { rows: remoteRows().map((row: { version: string; name: string; statements: string[] }, index: number) => index === 0 ? { ...row, name: "wrong_name" } : row), message: /remote migration name diverged/ },
-    { rows: remoteRows().map((row: { version: string; name: string; statements: string[] }, index: number) => index === 0 ? { ...row, statements: [...row.statements, "select 2;\n"] } : row), message: /remote statement count diverged/ },
-    { rows: remoteRows().map((row: { version: string; name: string; statements: string[] }, index: number) => index === 0 ? { ...row, statements: ["select 'wrong hash';\n"] } : row), message: /remote statement hash diverged/ }
-  ];
-  for (const { rows, message } of cases) {
-    assert.throws(() => verifyRemoteMigrationRows(manifest, rows), message);
-  }
+test("both remote credential modes reject missing, mismatched, and unexpected checkpoints", async () => {
+  const { selectRemoteMigrationVerifier, verifyRemoteMigrationRows, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  assert.throws(() => selectRemoteMigrationVerifier({}), /Remote migration verification requires/);
+  assert.throws(() => selectRemoteMigrationVerifier({ projectRef: "invalid", accessToken: "token" }), /Remote migration verification requires/);
+
+  assert.throws(
+    () => verifyRemoteMigrationRows(manifest, remoteRows().slice(1)),
+    /remote migration response has an unexpected row count/
+  );
+  const mismatchedServiceRows = remoteCheckpointRows();
+  mismatchedServiceRows[0].normalized_md5 = "00000000000000000000000000000000";
+  assert.throws(
+    () => verifyRemoteMigrationCheckpoints(manifest, mismatchedServiceRows),
+    /remote statement hash diverged/
+  );
+  assert.throws(
+    () => verifyRemoteMigrationCheckpoints(manifest, [...remoteCheckpointRows(), {
+      version: "20260724000000",
+      name: "unexpected",
+      statement_count: 1,
+      normalized_md5: "00000000000000000000000000000000"
+    }]),
+    /remote migration response has an unexpected row count/
+  );
 });
 
-test("remote migration truth accepts exact Management API rows", async () => {
-  const { fetchRemoteMigrationRows, verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
+test("Management API verifier accepts exact rows without exposing its credential", async () => {
+  const { fetchRemoteMigrationRowsWithManagementApi, verifyRemoteMigrationRows } = await loadRemoteMigrationVerifier();
   const rows = remoteRows();
-  const fetchedRows = await fetchRemoteMigrationRows({
+  const fetchedRows = await fetchRemoteMigrationRowsWithManagementApi({
     projectRef: "osmjevtynywbkokzejcp",
-    accessToken: "test-token",
+    accessToken: "management-test-token",
     checkpoints: manifest.remoteCheckpoints,
     fetchImpl: async (url: string, init: RequestInit) => {
       assert.match(url, /database\/query\/read-only$/);
       assert.equal(init.method, "POST");
-      assert.equal((init.headers as Record<string, string>).authorization, "Bearer test-token");
+      assert.equal((init.headers as Record<string, string>).authorization, "Bearer management-test-token");
       const body = JSON.parse(String(init.body));
       assert.match(body.query, /supabase_migrations\.schema_migrations/);
       assert.deepEqual(body.parameters, manifest.remoteCheckpoints.map((checkpoint: { version: string }) => checkpoint.version));
@@ -109,34 +139,84 @@ test("remote migration truth accepts exact Management API rows", async () => {
   assert.deepEqual(verifyRemoteMigrationRows(manifest, fetchedRows), { remoteCheckpoints: 3 });
 });
 
+test("restricted service-role RPC returns only checkpoint fingerprints and is preferred", async () => {
+  const { fetchRemoteMigrationCheckpointsWithServiceRole, fetchRemoteMigrationTruth, verifyRemoteMigrationCheckpoints } = await loadRemoteMigrationVerifier();
+  const rows = remoteCheckpointRows();
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    assert.match(url, /\/rest\/v1\/rpc\/get_applied_migration_checkpoints$/);
+    assert.equal(init.method, "POST");
+    assert.equal((init.headers as Record<string, string>).apikey, "service-role-test-key");
+    assert.equal((init.headers as Record<string, string>).authorization, "Bearer service-role-test-key");
+    assert.equal(init.body, "{}");
+    return new Response(JSON.stringify(rows), { status: 200 });
+  };
+  const fetchedRows = await fetchRemoteMigrationCheckpointsWithServiceRole({
+    supabaseUrl: "https://osmjevtynywbkokzejcp.supabase.co",
+    serviceRoleKey: "service-role-test-key",
+    fetchImpl
+  });
+  assert.deepEqual(verifyRemoteMigrationCheckpoints(manifest, fetchedRows), { remoteCheckpoints: 3 });
+  const preferred = await fetchRemoteMigrationTruth({
+    projectRef: "osmjevtynywbkokzejcp",
+    accessToken: "management-test-token",
+    supabaseUrl: "https://osmjevtynywbkokzejcp.supabase.co",
+    serviceRoleKey: "service-role-test-key",
+    checkpoints: manifest.remoteCheckpoints,
+    fetchImpl
+  });
+  assert.equal(preferred.mode, "service-role-rpc");
+  assert.deepEqual(preferred.rows, rows);
+});
+
+test("remote verifier sanitizes credential-bearing failure details", async () => {
+  const { fetchRemoteMigrationCheckpointsWithServiceRole } = await loadRemoteMigrationVerifier();
+  const secret = "do-not-print-this-service-key";
+  await assert.rejects(
+    () => fetchRemoteMigrationCheckpointsWithServiceRole({
+      supabaseUrl: "https://osmjevtynywbkokzejcp.supabase.co",
+      serviceRoleKey: secret,
+      fetchImpl: async () => new Response(`upstream mentioned ${secret}`, { status: 403 })
+    }),
+    (error: Error) => {
+      assert.match(error.message, /HTTP 403/);
+      assert.doesNotMatch(error.message, new RegExp(secret));
+      return true;
+    }
+  );
+});
+
 test("bootstrap SQL has no patch artifacts and passes lexical statement validation", () => {
   const result = runScript("scripts/validate-bootstrap-sql.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Bootstrap SQL lexical validation passed/);
 });
 
-test("production release gate requires remote migration credentials before live checks", () => {
+test("Vercel build always invokes the deploy preflight and fails closed without remote credentials", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+  const vercel = JSON.parse(readFileSync(new URL("../../vercel.json", import.meta.url), "utf8"));
   assert.equal(packageJson.scripts["production:verify"], "node scripts/production-verify.mjs --release");
   assert.equal(packageJson.scripts["production:verify:local"], "node scripts/production-verify-local.mjs");
-  assert.equal(packageJson.scripts["deploy:preflight"], "npm run production:verify");
-  for (const [name, value] of Object.entries<string>(packageJson.scripts)) {
-    if (name.startsWith("deploy")) assert.doesNotMatch(value, /production:verify:local/);
-  }
+  assert.equal(packageJson.scripts["deploy:preflight"], "node scripts/deploy-preflight.mjs");
+  assert.match(vercel.buildCommand, /npm run deploy:preflight/);
+  assert.match(vercel.buildCommand, /next build/);
+  assert.doesNotMatch(vercel.buildCommand, /production:verify:local/);
+  assert.doesNotMatch(readFileSync(new URL("../../scripts/deploy-preflight.mjs", import.meta.url), "utf8"), /run\([^\n]+["']build["']/);
 
   const result = runScript("scripts/production-verify.mjs", ["--release"], {
+    NEXT_PUBLIC_SUPABASE_URL: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
     SUPABASE_PROJECT_REF: "",
     SUPABASE_ACCESS_TOKEN: ""
   });
   assert.notEqual(result.status, 0, result.stdout);
-  assert.match(result.stderr, /SUPABASE_PROJECT_REF must be a Supabase project ref/);
+  assert.match(result.stderr, /Remote migration verification requires/);
   assert.match(result.stderr, /required release gate failed/);
 });
 
 function validBootstrapCatalog() {
   return {
     publicTables: publicBaseTables.map((relname: string) => ({ relname, relrowsecurity: true })),
-    sensitivePolicies: sensitivePolicyExpectations.map((policy) => ({
+    publicPolicies: publicPolicyExpectations.map((policy) => ({
       tablename: policy.table,
       policyname: policy.name,
       cmd: policy.command,
@@ -148,7 +228,7 @@ function validBootstrapCatalog() {
       proname: fn.name,
       identity_arguments: fn.identity,
       prosecdef: true,
-      proconfig: "search_path=public, pg_temp",
+      proconfig: fn.searchPath ?? "search_path=public, pg_temp",
       public_execute: false,
       anon_execute: false,
       authenticated_execute: fn.authenticated,
@@ -168,25 +248,26 @@ test("bootstrap catalog validator rejects an unlisted public table and disabled 
   assert.throws(() => validateBootstrapCatalog(noRls), /RLS is disabled/);
 });
 
-test("bootstrap catalog validator rejects permissive, wrong-role, and wrong-command sensitive policies", () => {
-  const permissive = validBootstrapCatalog();
-  permissive.sensitivePolicies.push({
-    tablename: "analytics_consent_intents",
-    policyname: "accidental public analytics access",
-    cmd: "SELECT",
-    roles: "{public}",
-    qual: "true",
-    with_check: null
-  });
-  assert.throws(() => validateBootstrapCatalog(permissive), /sensitive owner policy catalog changed/);
+test("bootstrap policy closure rejects permissive policies on previously omitted public tables", () => {
+  for (const table of ["orders", "profiles", "admin_audit_log", "chat_threads", "newsletter_subscriptions"]) {
+    const permissive = validBootstrapCatalog();
+    permissive.publicPolicies.push({
+      tablename: table,
+      policyname: "accidental public USING true",
+      cmd: "SELECT",
+      roles: "{public}",
+      qual: "true",
+      with_check: null
+    });
+    assert.throws(() => validateBootstrapCatalog(permissive), /public policy catalog changed/);
+  }
 
   const wrongRole = validBootstrapCatalog();
-  wrongRole.sensitivePolicies[0].roles = "{anon}";
-  assert.throws(() => validateBootstrapCatalog(wrongRole), /sensitive owner policy catalog changed/);
-
+  wrongRole.publicPolicies[0].roles = "{anon}";
+  assert.throws(() => validateBootstrapCatalog(wrongRole), /public policy catalog changed/);
   const wrongCommand = validBootstrapCatalog();
-  wrongCommand.sensitivePolicies[0].cmd = "ALL";
-  assert.throws(() => validateBootstrapCatalog(wrongCommand), /sensitive owner policy catalog changed/);
+  wrongCommand.publicPolicies[1].cmd = "ALL";
+  assert.throws(() => validateBootstrapCatalog(wrongCommand), /public policy catalog changed/);
 });
 
 test("bootstrap catalog validator rejects a changed critical RPC signature", () => {

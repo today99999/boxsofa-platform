@@ -8,12 +8,38 @@ const secondaryUrl = process.env.PRODUCTION_WWW_BASE_URL || 'https://www.boxsofa
 const expectedSiteUrl = process.env.EXPECTED_SITE_URL || 'https://boxsofa.eu';
 const releaseMode = process.argv.includes('--release') || !process.argv.includes('--local');
 
+function withoutRemoteMigrationSecrets(env = process.env) {
+  const sanitized = { ...env };
+  delete sanitized.SUPABASE_ACCESS_TOKEN;
+  delete sanitized.SUPABASE_SERVICE_ROLE_KEY;
+  return sanitized;
+}
+
+function remoteMigrationVerifierEnv() {
+  const sanitized = withoutRemoteMigrationSecrets();
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      ...sanitized,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+    };
+  }
+  if (process.env.SUPABASE_PROJECT_REF && process.env.SUPABASE_ACCESS_TOKEN) {
+    return {
+      ...sanitized,
+      SUPABASE_PROJECT_REF: process.env.SUPABASE_PROJECT_REF,
+      SUPABASE_ACCESS_TOKEN: process.env.SUPABASE_ACCESS_TOKEN
+    };
+  }
+  return sanitized;
+}
+
 const checks = [
   ...(releaseMode ? [{
     label: 'remote Supabase migration history',
     command: npmCommand,
     args: npmArgs('db:migrations:verify-remote'),
-    env: {},
+    env: remoteMigrationVerifierEnv(),
     failFast: true
   }] : []),
   { label: `smoke ${primaryUrl}`, command: npmCommand, args: npmArgs('smoke'), env: { SMOKE_BASE_URL: primaryUrl } },
@@ -39,7 +65,7 @@ for (const check of checks) {
   const result = spawnSync(check.command, check.args, {
     stdio: 'inherit',
     env: {
-      ...process.env,
+      ...withoutRemoteMigrationSecrets(),
       ...check.env
     }
   });
