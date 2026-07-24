@@ -184,6 +184,7 @@ create table if not exists public.orders (
   customer_email text not null,
   customer_name text not null,
   customer_phone text not null,
+  locale text not null default 'en' check (locale in ('zh', 'en', 'es', 'fr', 'de')),
   status public.order_status not null default 'pending_confirm',
   payment_status public.payment_status not null default 'not_started',
   subtotal_eur numeric(12, 2) not null check (subtotal_eur >= 0),

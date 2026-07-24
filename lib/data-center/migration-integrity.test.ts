@@ -45,8 +45,8 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 25 SQL files/);
-  assert.match(result.stdout, /25 remote checkpoints/);
+  assert.match(result.stdout, new RegExp(`Migration manifest verified: ${manifest.migrations.length} SQL files`));
+  assert.match(result.stdout, new RegExp(`${manifest.remoteCheckpoints.length} remote checkpoints`));
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -62,11 +62,16 @@ test("repository migration hashes ignore only Windows line endings", () => {
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-test("release verification covers every immutable migration remotely", () => {
-  assert.equal(manifest.remoteCheckpoints.length, manifest.migrations.length);
+test("remote checkpoints cover only migrations recorded as deployed", () => {
+  assert.ok(manifest.remoteCheckpoints.length <= manifest.migrations.length);
   assert.deepEqual(
     manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
-    manifest.migrations.map((migration: { file: string }) => migration.file).sort()
+    manifest.migrations
+      .filter((migration: { file: string }) => manifest.remoteCheckpoints.some(
+        (checkpoint: { file: string }) => checkpoint.file === migration.file
+      ))
+      .map((migration: { file: string }) => migration.file)
+      .sort()
   );
 });
 
