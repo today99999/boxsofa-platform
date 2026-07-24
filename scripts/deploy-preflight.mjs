@@ -4,10 +4,22 @@ const npmCliPath = process.env.npm_execpath;
 const npmCommand = npmCliPath ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
 const npmArgs = (script) => (npmCliPath ? [npmCliPath, "run", script] : ["run", script]);
 
+const managementOnlySecrets = [
+  "SUPABASE_ACCESS_TOKEN",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_DB_URL",
+  "SUPABASE_DB_PASSWORD",
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+  "POSTGRES_PASSWORD",
+  "PGPASSWORD"
+];
+
 function withoutRemoteMigrationSecrets(env = process.env) {
   const sanitized = { ...env };
-  delete sanitized.SUPABASE_ACCESS_TOKEN;
-  delete sanitized.SUPABASE_SERVICE_ROLE_KEY;
+  for (const name of managementOnlySecrets) delete sanitized[name];
   return sanitized;
 }
 

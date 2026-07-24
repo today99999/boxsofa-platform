@@ -14,6 +14,14 @@ function withoutRemoteMigrationSecrets(env = process.env) {
   const sanitized = { ...env };
   delete sanitized.SUPABASE_ACCESS_TOKEN;
   delete sanitized.SUPABASE_SERVICE_ROLE_KEY;
+  delete sanitized.SUPABASE_DB_URL;
+  delete sanitized.SUPABASE_DB_PASSWORD;
+  delete sanitized.DATABASE_URL;
+  delete sanitized.POSTGRES_URL;
+  delete sanitized.POSTGRES_PRISMA_URL;
+  delete sanitized.POSTGRES_URL_NON_POOLING;
+  delete sanitized.POSTGRES_PASSWORD;
+  delete sanitized.PGPASSWORD;
   return sanitized;
 }
 
@@ -111,6 +119,7 @@ try {
     env: {
       ...withoutRemoteMigrationSecrets(),
       PORT: String(port),
+      BOXSOFA_LOCAL_VERIFY: "1",
       BOXSOFA_LOCAL_VERIFY_NONCE: nonce
     }
   });

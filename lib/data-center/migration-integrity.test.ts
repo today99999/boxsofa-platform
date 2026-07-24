@@ -6,7 +6,7 @@ import test from "node:test";
 import { normalizeMigrationText } from "../../scripts/verify-migration-manifest.mjs";
 import {
   criticalFunctions,
-  publicBaseTables,
+  publicRelationExpectations,
   publicPolicyExpectations,
   validateBootstrapCatalog
 } from "../../scripts/execute-bootstrap-pglite.mjs";
@@ -191,14 +191,13 @@ test("bootstrap SQL has no patch artifacts and passes lexical statement validati
   assert.match(result.stdout, /Bootstrap SQL lexical validation passed/);
 });
 
-test("Vercel build always invokes the deploy preflight and fails closed without remote credentials", () => {
+test("Vercel build owns preflight and compilation in one credential-isolating process", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
   const vercel = JSON.parse(readFileSync(new URL("../../vercel.json", import.meta.url), "utf8"));
   assert.equal(packageJson.scripts["production:verify"], "node scripts/production-verify.mjs --release");
   assert.equal(packageJson.scripts["production:verify:local"], "node scripts/production-verify-local.mjs");
   assert.equal(packageJson.scripts["deploy:preflight"], "node scripts/deploy-preflight.mjs");
-  assert.match(vercel.buildCommand, /npm run deploy:preflight/);
-  assert.match(vercel.buildCommand, /next build/);
+  assert.equal(vercel.buildCommand, "node scripts/vercel-build.mjs");
   assert.doesNotMatch(vercel.buildCommand, /production:verify:local/);
   assert.doesNotMatch(readFileSync(new URL("../../scripts/deploy-preflight.mjs", import.meta.url), "utf8"), /run\([^\n]+["']build["']/);
 
@@ -213,9 +212,51 @@ test("Vercel build always invokes the deploy preflight and fails closed without 
   assert.match(result.stderr, /required release gate failed/);
 });
 
+test("Vercel build gives remote credentials only to the preflight child", () => {
+  const result = runScript("scripts/vercel-build.mjs", [], {
+    NODE_ENV: "test",
+    BOXSOFA_VERCEL_BUILD_TEST_ADAPTER: "scripts/test-fixtures/vercel-build-sentinel.mjs",
+    NEXT_PUBLIC_SUPABASE_URL: "https://osmjevtynywbkokzejcp.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-sentinel",
+    SUPABASE_ACCESS_TOKEN: "management-sentinel",
+    DATABASE_URL: "postgres://database-sentinel",
+    POSTGRES_PASSWORD: "password-sentinel"
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const childEnvironments = result.stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(childEnvironments, [
+    {
+      phase: "deploy preflight",
+      values: {
+        SUPABASE_ACCESS_TOKEN: null,
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-sentinel",
+        DATABASE_URL: null,
+        POSTGRES_PASSWORD: null
+      }
+    },
+    {
+      phase: "next build",
+      values: {
+        SUPABASE_ACCESS_TOKEN: null,
+        SUPABASE_SERVICE_ROLE_KEY: null,
+        DATABASE_URL: null,
+        POSTGRES_PASSWORD: null
+      }
+    }
+  ]);
+});
+
 function validBootstrapCatalog() {
   return {
-    publicTables: publicBaseTables.map((relname: string) => ({ relname, relrowsecurity: true })),
+    publicRelations: publicRelationExpectations.map(({ relname, relkind }) => ({
+      relname,
+      relkind,
+      relrowsecurity: true,
+      reloptions: null as string | null
+    })),
     publicPolicies: publicPolicyExpectations.map((policy) => ({
       tablename: policy.table,
       policyname: policy.name,
@@ -238,14 +279,39 @@ function validBootstrapCatalog() {
   };
 }
 
-test("bootstrap catalog validator rejects an unlisted public table and disabled RLS", () => {
+test("bootstrap catalog validator rejects an unlisted public relation and disabled RLS", () => {
   const unlisted = validBootstrapCatalog();
-  unlisted.publicTables.push({ relname: "accidental_public_table", relrowsecurity: false });
-  assert.throws(() => validateBootstrapCatalog(unlisted), /public base table catalog changed/);
+  unlisted.publicRelations.push({ relname: "accidental_public_table", relkind: "r", relrowsecurity: false, reloptions: null });
+  assert.throws(() => validateBootstrapCatalog(unlisted), /public data relation catalog changed/);
 
   const noRls = validBootstrapCatalog();
-  noRls.publicTables[0].relrowsecurity = false;
+  noRls.publicRelations[0].relrowsecurity = false;
   assert.throws(() => validateBootstrapCatalog(noRls), /RLS is disabled/);
+});
+
+test("bootstrap catalog validator rejects unlisted partitioned tables and views", () => {
+  for (const relation of [
+    { relname: "accidental_partition", relkind: "p", relrowsecurity: true, reloptions: null },
+    { relname: "accidental_view", relkind: "v", relrowsecurity: false, reloptions: "security_invoker=true" }
+  ]) {
+    const catalog = validBootstrapCatalog();
+    catalog.publicRelations.push(relation);
+    assert.throws(() => validateBootstrapCatalog(catalog), /public data relation catalog changed/);
+  }
+});
+
+test("a deliberately allowlisted public view must use security_invoker", () => {
+  const catalog = validBootstrapCatalog();
+  catalog.publicRelations.push({ relname: "reviewed_view", relkind: "v", relrowsecurity: false, reloptions: null });
+  assert.throws(() => validateBootstrapCatalog({
+    ...catalog,
+    relationExpectations: [...publicRelationExpectations, {
+      relname: "reviewed_view",
+      relkind: "v",
+      requiresRls: false,
+      securityInvoker: true
+    }]
+  }), /view is not security_invoker/);
 });
 
 test("bootstrap policy closure rejects permissive policies on previously omitted public tables", () => {

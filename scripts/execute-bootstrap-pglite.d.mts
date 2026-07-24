@@ -1,6 +1,15 @@
-export type PublicTableRow = {
+export type PublicRelationRow = {
   relname: string;
+  relkind: string;
   relrowsecurity: boolean;
+  reloptions: string | null;
+};
+
+export type PublicRelationExpectation = {
+  relname: string;
+  relkind: string;
+  requiresRls: boolean;
+  securityInvoker: boolean;
 };
 
 export type PolicyExpectation = {
@@ -42,12 +51,14 @@ export type SecurityDefinerFunctionRow = {
 };
 
 export const publicBaseTables: string[];
+export const publicRelationExpectations: PublicRelationExpectation[];
 export const publicPolicyExpectations: PolicyExpectation[];
 export const criticalFunctions: CriticalFunction[];
 export function validateBootstrapCatalog(catalog: {
-  publicTables: PublicTableRow[];
+  publicRelations: PublicRelationRow[];
   publicPolicies: PublicPolicyRow[];
   securityDefinerFunctions: SecurityDefinerFunctionRow[];
+  relationExpectations?: PublicRelationExpectation[];
 }): void;
 export function executeBootstrapWithPGlite(): Promise<{
   coreTables: number;

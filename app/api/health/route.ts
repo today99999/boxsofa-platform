@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getEmailProviderStatus, hasEmailProviderConfig } from "@/lib/server/email-provider";
 import { hasStripeConfig } from "@/lib/server/stripe";
 import { hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
+import { localVerifyNonce } from "@/lib/server/local-verify";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,9 @@ export async function GET() {
     emailProviderStatus,
     paymentEnabled: hasStripeConfig()
   });
-  if (process.env.BOXSOFA_LOCAL_VERIFY_NONCE) {
-    response.headers.set("X-BoxSofa-Local-Verify-Nonce", process.env.BOXSOFA_LOCAL_VERIFY_NONCE);
+  const nonce = localVerifyNonce();
+  if (nonce) {
+    response.headers.set("X-BoxSofa-Local-Verify-Nonce", nonce);
   }
   return response;
 }

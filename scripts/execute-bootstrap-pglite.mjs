@@ -45,6 +45,13 @@ export const publicBaseTables = [
   "analytics_rate_limit_buckets", "analytics_consent_intents", "analytics_consent_intent_heads", "stripe_webhook_events"
 ];
 
+export const publicRelationExpectations = publicBaseTables.map((relname) => ({
+  relname,
+  relkind: "r",
+  requiresRls: true,
+  securityInvoker: false
+}));
+
 const coreFunctions = [
   "record_analytics_consent", "ingest_analytics_event", "get_data_center_overview", "record_stripe_refund",
   "record_stripe_checkout_payment", "create_after_sales_case", "update_after_sales_case", "transition_email_notification"
@@ -154,12 +161,29 @@ function policySort(left, right) {
   return `${left.table}\u0000${left.name}`.localeCompare(`${right.table}\u0000${right.name}`);
 }
 
-export function validateBootstrapCatalog({ publicTables, publicPolicies, securityDefinerFunctions }) {
-  const expectedTables = [...publicBaseTables].sort();
-  const actualTables = publicTables.map((row) => row.relname).sort();
-  assert.deepEqual(actualTables, expectedTables, "public base table catalog changed");
-  for (const row of publicTables) {
-    assert.equal(row.relrowsecurity, true, `RLS is disabled: ${row.relname}`);
+function relationSort(left, right) {
+  return `${left.relname}\u0000${left.relkind}`.localeCompare(`${right.relname}\u0000${right.relkind}`);
+}
+
+function hasSecurityInvoker(reloptions) {
+  return typeof reloptions === "string" && reloptions.split(",").includes("security_invoker=true");
+}
+
+export function validateBootstrapCatalog({ publicRelations, publicPolicies, securityDefinerFunctions, relationExpectations = publicRelationExpectations }) {
+  const expectedRelations = relationExpectations
+    .map(({ relname, relkind }) => ({ relname, relkind }))
+    .sort(relationSort);
+  const actualRelations = publicRelations
+    .map(({ relname, relkind }) => ({ relname, relkind }))
+    .sort(relationSort);
+  assert.deepEqual(actualRelations, expectedRelations, "public data relation catalog changed");
+  for (const expected of relationExpectations) {
+    const row = publicRelations.find((candidate) => candidate.relname === expected.relname && candidate.relkind === expected.relkind);
+    assert.ok(row, `public data relation is missing: ${expected.relname}`);
+    if (expected.requiresRls) assert.equal(row.relrowsecurity, true, `RLS is disabled: ${expected.relname}`);
+    if (expected.relkind === "v" || expected.securityInvoker) {
+      assert.equal(hasSecurityInvoker(row.reloptions), true, `view is not security_invoker: ${expected.relname}`);
+    }
   }
 
   const expectedPolicies = publicPolicyExpectations.map((row) => ({ ...row })).sort(policySort);
@@ -191,7 +215,7 @@ export async function executeBootstrapWithPGlite() {
     await database.exec(readFileSync(bootstrapPath, "utf8"));
 
     const [{ rows: tableRows }, { rows: functionRows }, { rows: publicPolicyRows }, { rows: functionSecurityRows }, { rows: extensionRows }] = await Promise.all([
-      database.query("select c.relname, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by c.relname"),
+      database.query("select c.relname, c.relkind, c.relrowsecurity, array_to_string(c.reloptions, ',') as reloptions from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p', 'm', 'v', 'f') order by c.relname, c.relkind"),
       database.query(`select distinct p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in (${quoted(coreFunctions)}) order by p.proname`),
       database.query("select tablename, policyname, cmd, roles::text as roles, qual, with_check from pg_policies where schemaname = 'public' order by tablename, policyname"),
       database.query("select p.proname, pg_get_function_identity_arguments(p.oid) as identity_arguments, p.prosecdef, array_to_string(p.proconfig, '|') as proconfig, has_function_privilege('public', p.oid, 'EXECUTE') as public_execute, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute, has_function_privilege('service_role', p.oid, 'EXECUTE') as service_role_execute, has_function_privilege('postgres', p.oid, 'EXECUTE') as postgres_execute from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef order by p.proname, pg_get_function_identity_arguments(p.oid)"),
@@ -200,7 +224,7 @@ export async function executeBootstrapWithPGlite() {
 
     assert.deepEqual(functionRows.map((row) => row.proname), [...coreFunctions].sort(), "bootstrap is missing a core function");
     validateBootstrapCatalog({
-      publicTables: tableRows,
+      publicRelations: tableRows,
       publicPolicies: publicPolicyRows,
       securityDefinerFunctions: functionSecurityRows
     });

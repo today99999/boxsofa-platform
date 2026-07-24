@@ -148,3 +148,25 @@ The authoritative remote command was deliberately not run from this local shell 
 
 - The application has not been deployed, by instruction. Before the first Vercel build from this commit, configure either `NEXT_PUBLIC_SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` (preferred) or `SUPABASE_PROJECT_REF` plus a fine-grained `SUPABASE_ACCESS_TOKEN` with `database_read` in Vercel's build environment. Without one complete pair, the new automatic gate blocks the build by design.
 - The Supabase security advisor reports pre-existing informational no-policy tables that are intentionally service-RPC-only, plus existing warnings for the authenticated owner-gated `get_data_center_overview` RPC and leaked-password protection. Migration 022 created no new advisor finding and is not callable by anonymous or authenticated roles.
+
+## Final Vercel Isolation And Catalog Closure (2026-07-24)
+
+- Replaced the split Vercel build command with `scripts/vercel-build.mjs`. It gives the selected service-role or Management API credential only to the preflight child and starts `next build` only after removing service-role, management, database URL, and database-password variables. A sentinel-child test proves the preflight child receives its required service-role key while the build child receives none of the sensitive values.
+- Expanded the PGlite public catalog from ordinary tables to the closed set of ordinary/partitioned/materialized/view/foreign relations. Every current ordinary table remains explicitly allowlisted with RLS; future views require an explicit allowlist entry and `security_invoker=true`. Negative tests reject partitioned tables, views, and an intentionally allowlisted view without `security_invoker`.
+- Moved the bootstrap mirror of migration 022 after the final migration 021 after-sales block, without changing either migration file or its manifest fingerprint.
+- `/api/health` now exposes the local verifier nonce only with both `BOXSOFA_LOCAL_VERIFY=1` and a nonce, and suppresses it for all Vercel environments. The local production verifier sets the explicit local flag before it starts Next.
+
+### Final Validation
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd test` - passed: 150 tests.
+- `npm.cmd run db:migrations:verify` - passed: 22 SQL migrations and 3 repository checkpoints.
+- `npm.cmd run db:bootstrap:validate` - passed: 480 lexical statements.
+- `npm.cmd run db:bootstrap:execute` - passed: 26 exact public relations, 44 exact policy rows, and 23 critical `SECURITY DEFINER` RPCs.
+- `npm.cmd run build` - passed.
+- `npm.cmd run production:verify:local` - passed with dynamic loopback port; smoke and API authorization audits passed and the temporary server exited.
+- `git diff --check` - passed.
+
+### Residual
+
+- No deployment was performed. The first Vercel build still requires one complete remote migration-verification credential pair as documented above; the wrapper intentionally blocks the build if neither pair is configured.
