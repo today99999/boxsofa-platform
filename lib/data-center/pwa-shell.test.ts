@@ -10,6 +10,10 @@ const app = readFileSync(
   new URL("../../components/data-center/DataCenterApp.tsx", import.meta.url),
   "utf8"
 );
+const overview = readFileSync(
+  new URL("../../components/data-center/OverviewSection.tsx", import.meta.url),
+  "utf8"
+);
 const manifest = readFileSync(
   new URL("../../app/manifest.ts", import.meta.url),
   "utf8"
@@ -32,11 +36,12 @@ test("data center shell authenticates the owner before rendering private HTML", 
 });
 
 test("data center overview reads the real owner API response shape", () => {
-  assert.match(app, /payload\.overview/);
-  assert.match(app, /data\.metrics\.gmvEur/);
-  assert.match(app, /data\.metrics\.paidOrders/);
-  assert.match(app, /data\.visitors/);
-  assert.match(app, /data\.openAfterSales/);
+  assert.match(app, /<OverviewSection \/>/);
+  assert.match(overview, /payload\.overview/);
+  assert.match(overview, /overview\.metrics\.gmvEur/);
+  assert.match(overview, /overview\.metrics\.paidOrders/);
+  assert.match(overview, /overview\.visitors/);
+  assert.match(overview, /overview\.openAfterSales/);
 });
 
 test("data center PWA stays scoped to the private application", () => {
