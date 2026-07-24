@@ -9,11 +9,14 @@ import {
 } from "../server/stripe-refunds.ts";
 import {
   buildOverviewMetrics,
+  buildOverviewMetricsFromAggregate,
   getOverviewDateRange,
   getOverviewSourceFailure,
   parseOverviewRange,
   toPublicOverviewErrorMessage
 } from "../server/data-center-overview.ts";
+import { calculateCommerceMetrics } from "./metrics.ts";
+import { normalizeStripeRefundStatus, resolveMonotonicRefundStatus } from "../server/stripe-refunds.ts";
 
 type StoredRefund = {
   orderId: string;
@@ -24,6 +27,7 @@ type StoredRefund = {
   status: "pending" | "succeeded" | "failed" | "cancelled";
   reason: string | null;
   rawPayload: unknown;
+  succeededAt?: string | null;
 };
 
 class InMemoryRefundRepository implements StripeRefundRepository {
@@ -157,6 +161,24 @@ test("out-of-order stale refund events cannot downgrade a succeeded refund", asy
   assert.equal(repository.refunds.get("re_out_of_order")?.status, "succeeded");
 });
 
+test("same-status refund events refresh safe payload fields without changing first success", async () => {
+  const repository = new InMemoryRefundRepository();
+  const processor = createStripeRefundProcessor(repository);
+
+  await processor.record(refund({ id: "re_refresh", status: "succeeded", rawPayload: { revision: 1 } }));
+  const firstSucceededAt = repository.refunds.get("re_refresh")?.succeededAt;
+  await processor.record(refund({ id: "re_refresh", status: "succeeded", reason: "requested_by_customer", rawPayload: { revision: 2 } }));
+
+  const stored = repository.refunds.get("re_refresh");
+  assert.deepEqual(stored?.rawPayload, { revision: 2 });
+  assert.equal(stored?.reason, "requested_by_customer");
+  assert.equal(stored?.succeededAt, firstSucceededAt);
+  assert.equal(resolveMonotonicRefundStatus("succeeded", "pending"), "succeeded");
+  assert.equal(resolveMonotonicRefundStatus("failed", "succeeded"), "failed");
+  assert.equal(normalizeStripeRefundStatus("canceled"), "cancelled");
+  assert.equal(normalizeStripeRefundStatus("failure"), "failed");
+});
+
 test("refund processing rejects non-EUR and missing-payment inputs without exposing provider errors", async () => {
   const repository = new InMemoryRefundRepository();
   const processor = createStripeRefundProcessor(repository);
@@ -186,6 +208,45 @@ test("overview metrics retain a real zero visitor count and no conversion rate",
   );
 });
 
+test("commerce metrics sum and round in cents instead of floating point", () => {
+  assert.deepEqual(
+    calculateCommerceMetrics({
+      orders: [
+        { id: "one", paymentStatus: "paid", totalEur: 0.1 },
+        { id: "two", paymentStatus: "paid", totalEur: 0.2 }
+      ],
+      refunds: [{ orderId: "one", amountEur: 0.1, completed: true }],
+      uniqueVisitors: 2
+    }),
+    {
+      gmvEur: 0.3,
+      netSalesEur: 0.2,
+      paidOrders: 2,
+      averageOrderValueEur: 0.15,
+      conversionRate: 1
+    }
+  );
+});
+
+test("overview consumes database aggregate cents without row-limit truncation", () => {
+  assert.deepEqual(
+    buildOverviewMetricsFromAggregate({
+      paid_gmv_cents: "100100",
+      succeeded_refund_cents: "100",
+      paid_order_count: "1001",
+      unique_visitor_count: "2002",
+      open_after_sales_count: "4"
+    }),
+    {
+      gmvEur: 1001,
+      netSalesEur: 1000,
+      paidOrders: 1001,
+      averageOrderValueEur: 1,
+      conversionRate: 0.5
+    }
+  );
+});
+
 test("a failed source becomes an explicit unavailable result instead of zero-filled metrics", () => {
   const failure = getOverviewSourceFailure([
     ["orders", null],
@@ -210,9 +271,38 @@ test("webhook route keeps provider verification errors and processing errors red
   const route = readFileSync(new URL("../../app/api/stripe/webhook/route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(route, /error instanceof Error \? error\.message/);
   assert.match(route, /Could not process Stripe webhook\./);
+  assert.match(route, /"refund\.failed"/);
+  assert.doesNotMatch(route, /recordStripeWebhookSuccess/);
 });
 
 test("a replayed checkout confirmation cannot overwrite an already refunded order", () => {
   const paymentHandler = readFileSync(new URL("../server/stripe-order-payment.ts", import.meta.url), "utf8");
-  assert.match(paymentHandler, /order\.payment_status === "paid" \|\| order\.payment_status === "refunded"/);
+  assert.match(paymentHandler, /record_stripe_checkout_payment/);
+  assert.doesNotMatch(paymentHandler, /\.from\("payments"/);
+});
+
+test("financial migration keeps all Stripe business writes in service-only transaction RPCs", () => {
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/202607240011_stripe_financial_transactions.sql", import.meta.url),
+    "utf8"
+  );
+  const bootstrap = readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8");
+  const overview = readFileSync(new URL("../server/data-center-overview.ts", import.meta.url), "utf8");
+
+  for (const source of [migration, bootstrap]) {
+    assert.match(source, /record_stripe_refund/);
+    assert.match(source, /record_stripe_checkout_payment/);
+    assert.match(source, /get_data_center_overview/);
+    assert.match(source, /succeeded_at timestamptz/);
+    assert.match(source, /security definer/);
+    assert.match(source, /set search_path = public, pg_temp/);
+    assert.match(source, /grant execute on function public\.record_stripe_refund[\s\S]*to service_role/);
+  }
+  assert.match(migration, /idx_payments_provider_payment_id_unique/);
+  assert.match(bootstrap, /payments_provider_payment_id_unique/);
+  assert.match(migration, /idx_inventory_payment_confirmed_once/);
+  assert.match(migration, /idx_email_notifications_order_event_unique/);
+  assert.match(migration, /refund\.failed/);
+  assert.match(overview, /\.rpc\("get_data_center_overview"/);
+  assert.doesNotMatch(overview, /\.from\("orders"/);
 });

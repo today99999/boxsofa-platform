@@ -1,11 +1,8 @@
-import { calculateCommerceMetrics, type CommerceMetricInput } from "../data-center/metrics.ts";
+import { calculateCommerceMetrics, calculateCommerceMetricsFromCents, type CommerceMetricInput } from "../data-center/metrics.ts";
 import type { DataCenterOverview, DataFreshness, DashboardAlert } from "../data-center/types.ts";
 import type { createSupabaseServiceRoleClient } from "../supabase/server.ts";
 
 const MADRID_TIME_ZONE = "Europe/Madrid";
-const ORDER_QUERY_LIMIT = 10_000;
-const REFUND_QUERY_LIMIT = 10_000;
-const VISITOR_QUERY_LIMIT = 50_000;
 const OVERVIEW_ERROR_MESSAGE = "Could not load data center overview.";
 
 type ServiceClient = ReturnType<typeof createSupabaseServiceRoleClient>;
@@ -20,11 +17,19 @@ export type OverviewDateRange = OverviewRange & {
   endAt: string;
 };
 
+export type OverviewAggregateRow = {
+  paid_gmv_cents: number | string;
+  succeeded_refund_cents: number | string;
+  paid_order_count: number | string;
+  unique_visitor_count: number | string;
+  open_after_sales_count: number | string;
+};
+
 export class DataCenterOverviewLoadError extends Error {
   readonly sourceKey: string;
-  readonly reason: "query_failed" | "result_limit_exceeded";
+  readonly reason: "query_failed";
 
-  constructor(sourceKey: string, reason: "query_failed" | "result_limit_exceeded") {
+  constructor(sourceKey: string, reason: "query_failed" = "query_failed") {
     super("Data center overview source is unavailable.");
     this.sourceKey = sourceKey;
     this.reason = reason;
@@ -53,6 +58,15 @@ export function buildOverviewMetrics(input: CommerceMetricInput) {
   return calculateCommerceMetrics(input);
 }
 
+export function buildOverviewMetricsFromAggregate(row: OverviewAggregateRow) {
+  return calculateCommerceMetricsFromCents({
+    paidGmvCents: asSafeCents(row.paid_gmv_cents),
+    succeededRefundCents: asSafeCents(row.succeeded_refund_cents),
+    paidOrders: asSafeCount(row.paid_order_count),
+    uniqueVisitors: asSafeCount(row.unique_visitor_count)
+  });
+}
+
 export function toPublicOverviewErrorMessage(_error: unknown) {
   return OVERVIEW_ERROR_MESSAGE;
 }
@@ -61,31 +75,8 @@ export async function loadDataCenterOverview(rangeValue: string | null): Promise
   const range = getOverviewDateRange(rangeValue);
   const { createSupabaseServiceRoleClient } = await import("../supabase/server.ts");
   const supabase = createSupabaseServiceRoleClient();
-  const [ordersResult, visitorsResult, refundsResult, alertsResult, healthResult, afterSalesResult] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("id, payment_status, total_eur")
-      .eq("payment_provider", "stripe")
-      .in("payment_status", ["paid", "refunded"])
-      .gte("paid_at", range.startAt)
-      .lt("paid_at", range.endAt)
-      .limit(ORDER_QUERY_LIMIT + 1),
-    supabase
-      .from("analytics_events")
-      .select("visitor_id")
-      .eq("event_type", "page_view")
-      .gte("created_at", range.startAt)
-      .lt("created_at", range.endAt)
-      .limit(VISITOR_QUERY_LIMIT + 1),
-    supabase
-      .from("payment_refunds")
-      .select("order_id, amount_eur")
-      .eq("provider", "stripe")
-      .eq("currency", "EUR")
-      .eq("status", "succeeded")
-      .gte("updated_at", range.startAt)
-      .lt("updated_at", range.endAt)
-      .limit(REFUND_QUERY_LIMIT + 1),
+  const [aggregateResult, alertsResult, healthResult] = await Promise.all([
+    supabase.rpc("get_data_center_overview", { p_start_at: range.startAt, p_end_at: range.endAt }),
     supabase
       .from("dashboard_alerts")
       .select("id, alert_type, severity, title, detail, entity_type, entity_id, created_at")
@@ -95,62 +86,38 @@ export async function loadDataCenterOverview(rangeValue: string | null): Promise
     supabase
       .from("data_source_health")
       .select("source_key, state, last_success_at, record_count, last_error")
-      .order("source_key"),
-    supabase
-      .from("after_sales_cases")
-      .select("id", { count: "exact", head: true })
-      .not("status", "in", '("resolved","rejected")')
+      .order("source_key")
   ]);
 
   const sourceFailure = getOverviewSourceFailure([
-    ["orders", ordersResult.error],
-    ["website_analytics", visitorsResult.error],
-    ["stripe", refundsResult.error],
+    ["overview", aggregateResult.error],
     ["orders", alertsResult.error],
-    ["orders", afterSalesResult.error],
     ["orders", healthResult.error]
   ]);
   if (sourceFailure) {
-    await markSourceHealthFailure(supabase, sourceFailure.sourceKey, "query_failed");
+    await markOverviewSourceFailure(supabase);
     throw sourceFailure;
   }
 
-  if ((ordersResult.data?.length ?? 0) > ORDER_QUERY_LIMIT) {
-    await markSourceHealthFailure(supabase, "orders", "result_limit_exceeded");
-    throw new DataCenterOverviewLoadError("orders", "result_limit_exceeded");
-  }
-  if ((refundsResult.data?.length ?? 0) > REFUND_QUERY_LIMIT) {
-    await markSourceHealthFailure(supabase, "stripe", "result_limit_exceeded");
-    throw new DataCenterOverviewLoadError("stripe", "result_limit_exceeded");
-  }
-  if ((visitorsResult.data?.length ?? 0) > VISITOR_QUERY_LIMIT) {
-    await markSourceHealthFailure(supabase, "website_analytics", "result_limit_exceeded");
-    throw new DataCenterOverviewLoadError("website_analytics", "result_limit_exceeded");
+  const aggregate = Array.isArray(aggregateResult.data) ? aggregateResult.data[0] : null;
+  if (!aggregate) {
+    await markOverviewSourceFailure(supabase);
+    throw new DataCenterOverviewLoadError("overview");
   }
 
+  const aggregateRow = aggregate as OverviewAggregateRow;
+  const paidOrderCount = asSafeCount(aggregateRow.paid_order_count);
+  const visitors = asSafeCount(aggregateRow.unique_visitor_count);
   const now = new Date().toISOString();
-  const ordersHealthCurrent = await markOrdersHealthCurrent(supabase, ordersResult.data?.length ?? 0, now);
-  const metrics = buildOverviewMetrics({
-    orders: (ordersResult.data ?? []).map((order) => ({
-      id: order.id,
-      paymentStatus: order.payment_status,
-      totalEur: Number(order.total_eur)
-    })),
-    refunds: (refundsResult.data ?? []).map((refund) => ({
-      orderId: refund.order_id,
-      amountEur: Number(refund.amount_eur),
-      completed: true
-    })),
-    uniqueVisitors: new Set((visitorsResult.data ?? []).map((event) => event.visitor_id)).size
-  });
+  const ordersHealthCurrent = await markOrdersHealthCurrent(supabase, paidOrderCount, now);
 
   return {
     range: range.key,
-    metrics,
-    visitors: new Set((visitorsResult.data ?? []).map((event) => event.visitor_id)).size,
-    openAfterSales: afterSalesResult.count ?? 0,
+    metrics: buildOverviewMetricsFromAggregate(aggregateRow),
+    visitors,
+    openAfterSales: asSafeCount(aggregateRow.open_after_sales_count),
     alerts: toAlerts(alertsResult.data ?? []),
-    freshness: toFreshness(healthResult.data ?? [], now, ordersResult.data?.length ?? 0, ordersHealthCurrent)
+    freshness: toFreshness(healthResult.data ?? [], now, paidOrderCount, ordersHealthCurrent)
   };
 }
 
@@ -193,7 +160,7 @@ function madridMidnightToUtc(value: { year: number; month: number; day: number }
 
 export function getOverviewSourceFailure(entries: Array<[string, { message?: string } | null]>) {
   const failed = entries.find(([, error]) => Boolean(error));
-  return failed ? new DataCenterOverviewLoadError(failed[0], "query_failed") : null;
+  return failed ? new DataCenterOverviewLoadError(failed[0]) : null;
 }
 
 async function markOrdersHealthCurrent(supabase: ServiceClient, recordCount: number, now: string) {
@@ -212,18 +179,36 @@ async function markOrdersHealthCurrent(supabase: ServiceClient, recordCount: num
   return !error;
 }
 
-async function markSourceHealthFailure(supabase: ServiceClient, sourceKey: string, reason: "query_failed" | "result_limit_exceeded") {
-  const sourceType = sourceKey === "stripe" ? "stripe" : sourceKey === "website_analytics" ? "website" : "database";
-  await supabase.from("data_source_health").upsert(
-    {
-      source_key: sourceKey,
-      source_type: sourceType,
-      state: reason === "query_failed" ? "failed" : "partial",
-      last_attempt_at: new Date().toISOString(),
-      last_error: reason
-    },
-    { onConflict: "source_key" }
-  );
+async function markOverviewSourceFailure(supabase: ServiceClient) {
+  const now = new Date().toISOString();
+  await Promise.all([
+    ["orders", "database"],
+    ["website_analytics", "website"],
+    ["stripe", "stripe"]
+  ].map(async ([sourceKey, sourceType]) => {
+    await supabase.from("data_source_health").upsert(
+      {
+        source_key: sourceKey,
+        source_type: sourceType,
+        state: "failed",
+        last_attempt_at: now,
+        last_error: "overview_query_failed"
+      },
+      { onConflict: "source_key" }
+    );
+  }));
+}
+
+function asSafeCents(value: number | string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new DataCenterOverviewLoadError("overview");
+  }
+  return parsed;
+}
+
+function asSafeCount(value: number | string): number {
+  return asSafeCents(value);
 }
 
 function toAlerts(rows: Array<Record<string, unknown>>): DashboardAlert[] {

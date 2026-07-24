@@ -14,6 +14,7 @@
     "seo:audit": "node scripts/seo-audit.mjs",
     "api:auth-audit": "node scripts/api-auth-audit.mjs",
     "analytics:intents:integration": "node scripts/analytics-consent-intents-integration.mjs",
+    "stripe:financial:integration": "node scripts/stripe-financial-integration.mjs",
     "env:check": "node scripts/check-env.mjs",
     "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke && npm run seo:audit && npm run api:auth-audit",
     "production:ready": "node scripts/production-readiness.mjs",

@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import {
   recordStripeRefund,
-  recordStripeWebhookFailure,
-  recordStripeWebhookSuccess
+  recordStripeWebhookFailure
 } from "@/lib/server/stripe-refunds";
 import { confirmStripeCheckoutPayment } from "@/lib/server/stripe-order-payment";
 import { getStripeClient } from "@/lib/server/stripe";
@@ -36,32 +35,25 @@ export async function POST(request: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.payment_status === "paid") {
         handled = true;
-        const result = await confirmStripeCheckoutPayment(supabase, session);
+        const result = await confirmStripeCheckoutPayment(supabase, event, session);
         if (!result.ok) {
-          await recordStripeWebhookFailure(supabase, event.type, "checkout_processing_failed");
+          await recordStripeWebhookFailure(supabase, event, "checkout_processing_failed");
           return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
         }
       }
     }
 
-    if (event.type === "refund.created" || event.type === "refund.updated") {
+    if (event.type === "refund.created" || event.type === "refund.updated" || event.type === "refund.failed") {
       handled = true;
-      const result = await recordStripeRefund(supabase, event.data.object as Stripe.Refund);
+      const result = await recordStripeRefund(supabase, event, event.data.object as Stripe.Refund);
       if (!result.ok) {
-        await recordStripeWebhookFailure(supabase, event.type, result.code);
+        await recordStripeWebhookFailure(supabase, event, result.code);
         return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
       }
     }
 
-    if (handled) {
-      const health = await recordStripeWebhookSuccess(supabase, event.type);
-      if (!health.ok) {
-        await recordStripeWebhookFailure(supabase, event.type, "source_health_update_failed");
-        return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
-      }
-    }
   } catch {
-    await recordStripeWebhookFailure(supabase, event.type, "checkout_processing_failed");
+    await recordStripeWebhookFailure(supabase, event, "checkout_processing_failed");
     return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
   }
 

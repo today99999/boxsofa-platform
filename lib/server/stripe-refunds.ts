@@ -22,6 +22,7 @@ export type StoredStripeRefund = {
   status: StripeRefundStatus;
   reason: string | null;
   rawPayload: unknown;
+  succeededAt?: string | null;
 };
 
 export type StripeRefundRepository = {
@@ -41,22 +42,16 @@ export type StripeRefundFailureCode = Extract<StripeRefundProcessingResult, { ok
 
 type ServiceClient = ReturnType<typeof createSupabaseServiceRoleClient>;
 
-const STATUS_RANK: Record<StripeRefundStatus, number> = {
-  pending: 1,
-  failed: 2,
-  cancelled: 2,
-  succeeded: 3
-};
-
 export function normalizeStripeRefundStatus(status: string | null | undefined): StripeRefundStatus {
-  if (status === "succeeded") return "succeeded";
-  if (status === "failed") return "failed";
-  if (status === "canceled") return "cancelled";
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === "succeeded") return "succeeded";
+  if (normalized === "failed" || normalized === "failure") return "failed";
+  if (normalized === "canceled" || normalized === "cancelled") return "cancelled";
   return "pending";
 }
 
-export function isFullRefund(orderTotalEur: number, succeededRefundEur: number) {
-  return toComparableCents(succeededRefundEur) >= toComparableCents(orderTotalEur);
+export function isFullRefund(orderTotal: number, succeededRefundTotal: number) {
+  return toComparableCents(succeededRefundTotal) >= toComparableCents(orderTotal);
 }
 
 export function toStripeRefundInput(refund: Stripe.Refund): StripeRefundInput {
@@ -84,23 +79,20 @@ export function createStripeRefundProcessor(repository: StripeRefundRepository) 
 
         const incomingStatus = normalizeStripeRefundStatus(input.status);
         const existing = await repository.findRefund(input.id);
-        const status = existing && STATUS_RANK[existing.status] >= STATUS_RANK[incomingStatus]
-          ? existing.status
-          : incomingStatus;
+        const status = resolveMonotonicRefundStatus(existing?.status, incomingStatus);
         const persisted = !existing || status !== existing.status;
 
-        if (persisted) {
-          await repository.upsertRefund({
-            orderId: payment.orderId,
-            paymentId: payment.id,
-            providerRefundId: input.id,
-            amountCents: input.amountCents,
-            currency: "EUR",
-            status,
-            reason: input.reason,
-            rawPayload: input.rawPayload
-          });
-        }
+        await repository.upsertRefund({
+          orderId: existing?.orderId ?? payment.orderId,
+          paymentId: existing?.paymentId ?? payment.id,
+          providerRefundId: input.id,
+          amountCents: existing?.amountCents ?? input.amountCents,
+          currency: "EUR",
+          status,
+          reason: input.reason,
+          rawPayload: input.rawPayload,
+          succeededAt: existing?.succeededAt ?? (status === "succeeded" ? new Date().toISOString() : null)
+        });
 
         if (status !== "succeeded") {
           return { ok: true, status, orderRefunded: false, persisted };
@@ -112,7 +104,7 @@ export function createStripeRefundProcessor(repository: StripeRefundRepository) 
         ]);
         if (orderTotalCents === null) return { ok: false, code: "order_not_found" };
 
-        const orderRefunded = isFullRefund(centsToEur(orderTotalCents), centsToEur(succeededRefundCents));
+        const orderRefunded = succeededRefundCents >= orderTotalCents;
         if (orderRefunded) {
           await repository.markOrderRefunded(payment.orderId);
         }
@@ -125,30 +117,60 @@ export function createStripeRefundProcessor(repository: StripeRefundRepository) 
   };
 }
 
-export async function recordStripeRefund(supabase: ServiceClient, refund: Stripe.Refund) {
-  return createStripeRefundProcessor(createSupabaseStripeRefundRepository(supabase)).record(toStripeRefundInput(refund));
-}
+export async function recordStripeRefund(
+  supabase: ServiceClient,
+  event: Pick<Stripe.Event, "id" | "type">,
+  refund: Stripe.Refund
+) {
+  const input = toStripeRefundInput(refund);
+  const validation = validateRefundInput(input);
+  if (validation) return validation;
 
-export async function recordStripeWebhookSuccess(supabase: ServiceClient, eventType: string) {
-  return updateStripeWebhookHealth(supabase, {
-    eventType,
-    state: "current",
-    lastError: null,
-    succeeded: true
+  const { data, error } = await supabase.rpc("record_stripe_refund", {
+    p_event_id: event.id,
+    p_event_type: event.type,
+    p_provider_refund_id: input.id,
+    p_provider_payment_id: input.paymentIntentId,
+    p_amount_cents: input.amountCents,
+    p_currency: input.currency,
+    p_status: input.status ?? "pending",
+    p_reason: input.reason,
+    p_raw_payload: input.rawPayload
   });
+
+  const outcome = Array.isArray(data) ? data[0] : null;
+  if (error || !outcome || outcome.ok !== true) {
+    return { ok: false as const, code: "database_error" as const };
+  }
+
+  return {
+    ok: true as const,
+    status: normalizeStripeRefundStatus(input.status),
+    orderRefunded: outcome.order_refunded === true,
+    persisted: outcome.event_processed === true
+  };
 }
 
 export async function recordStripeWebhookFailure(
   supabase: ServiceClient,
-  eventType: string,
-  code: StripeRefundFailureCode | "checkout_processing_failed" | "source_health_update_failed"
+  event: Pick<Stripe.Event, "id" | "type">,
+  _code: StripeRefundFailureCode | "checkout_processing_failed" | "source_health_update_failed"
 ) {
-  return updateStripeWebhookHealth(supabase, {
-    eventType,
-    state: code === "payment_not_found" || code === "order_not_found" ? "delayed" : "failed",
-    lastError: code,
-    succeeded: false
+  const { error } = await supabase.rpc("mark_stripe_webhook_failure", {
+    p_event_id: event.id,
+    p_event_type: event.type,
+    p_error_code: "stripe_webhook_failed"
   });
+  return { ok: !error };
+}
+
+export function resolveMonotonicRefundStatus(
+  existing: StripeRefundStatus | undefined,
+  incoming: StripeRefundStatus
+): StripeRefundStatus {
+  if (!existing || existing === "pending") return incoming;
+  if (existing === "succeeded") return "succeeded";
+  return existing;
 }
 
 function validateRefundInput(input: StripeRefundInput): Extract<StripeRefundProcessingResult, { ok: false }> | null {
@@ -160,107 +182,4 @@ function validateRefundInput(input: StripeRefundInput): Extract<StripeRefundProc
 
 function toComparableCents(value: number): number {
   return Math.round(value * 100);
-}
-
-function centsToEur(cents: number): number {
-  return cents / 100;
-}
-
-function createSupabaseStripeRefundRepository(supabase: ServiceClient): StripeRefundRepository {
-  return {
-    async findPaidStripePayment(paymentIntentId) {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("id, order_id")
-        .eq("provider", "stripe")
-        .eq("provider_payment_id", paymentIntentId)
-        .eq("status", "paid")
-        .maybeSingle();
-      if (error) throw new Error("stripe_payment_lookup_failed");
-      return data ? { id: data.id, orderId: data.order_id } : null;
-    },
-
-    async findRefund(providerRefundId) {
-      const { data, error } = await supabase
-        .from("payment_refunds")
-        .select("order_id, payment_id, provider_refund_id, amount_eur, currency, status, reason, raw_payload")
-        .eq("provider_refund_id", providerRefundId)
-        .maybeSingle();
-      if (error) throw new Error("stripe_refund_lookup_failed");
-      if (!data) return null;
-      return {
-        orderId: data.order_id,
-        paymentId: data.payment_id ?? "",
-        providerRefundId: data.provider_refund_id,
-        amountCents: toComparableCents(Number(data.amount_eur)),
-        currency: "EUR",
-        status: normalizeStripeRefundStatus(data.status),
-        reason: data.reason,
-        rawPayload: data.raw_payload
-      };
-    },
-
-    async upsertRefund(refund) {
-      const { error } = await supabase.from("payment_refunds").upsert(
-        {
-          order_id: refund.orderId,
-          payment_id: refund.paymentId,
-          provider: "stripe",
-          provider_refund_id: refund.providerRefundId,
-          amount_eur: centsToEur(refund.amountCents),
-          currency: refund.currency,
-          status: refund.status,
-          reason: refund.reason,
-          raw_payload: refund.rawPayload
-        },
-        { onConflict: "provider_refund_id" }
-      );
-      if (error) throw new Error("stripe_refund_write_failed");
-    },
-
-    async getSucceededRefundTotalCents(orderId) {
-      const { data, error } = await supabase
-        .from("payment_refunds")
-        .select("amount_eur")
-        .eq("order_id", orderId)
-        .eq("status", "succeeded");
-      if (error) throw new Error("stripe_refund_total_failed");
-      return (data ?? []).reduce((total, row) => total + toComparableCents(Number(row.amount_eur)), 0);
-    },
-
-    async getOrderTotalCents(orderId) {
-      const { data, error } = await supabase.from("orders").select("total_eur").eq("id", orderId).maybeSingle();
-      if (error) throw new Error("order_total_lookup_failed");
-      return data ? toComparableCents(Number(data.total_eur)) : null;
-    },
-
-    async markOrderRefunded(orderId) {
-      const { error } = await supabase
-        .from("orders")
-        .update({ payment_status: "refunded", status: "refunded" })
-        .eq("id", orderId)
-        .neq("payment_status", "refunded");
-      if (error) throw new Error("order_refund_status_update_failed");
-    }
-  };
-}
-
-async function updateStripeWebhookHealth(
-  supabase: ServiceClient,
-  input: { eventType: string; state: "current" | "delayed" | "failed"; lastError: string | null; succeeded: boolean }
-) {
-  const now = new Date().toISOString();
-  const { error } = await supabase.from("data_source_health").upsert(
-    {
-      source_key: "stripe",
-      source_type: "stripe",
-      state: input.state,
-      last_attempt_at: now,
-      ...(input.succeeded ? { last_success_at: now } : {}),
-      last_error: input.lastError,
-      metadata: { lastEventType: input.eventType, lastOutcome: input.succeeded ? "success" : "failure" }
-    },
-    { onConflict: "source_key" }
-  );
-  return { ok: !error };
 }

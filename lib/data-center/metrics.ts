@@ -4,6 +4,13 @@ export type CommerceMetricInput = {
   uniqueVisitors: number;
 };
 
+export type CommerceMetricCentsInput = {
+  paidGmvCents: number;
+  succeededRefundCents: number;
+  paidOrders: number;
+  uniqueVisitors: number;
+};
+
 export type CommerceMetrics = {
   gmvEur: number;
   netSalesEur: number;
@@ -94,18 +101,39 @@ const GOOGLE_SEARCH_DOMAINS = new Set([
 
 export function calculateCommerceMetrics(input: CommerceMetricInput): CommerceMetrics {
   const paidOrders = input.orders.filter((order) => PAID_PAYMENT_STATUSES.has(normalizeStatus(order.paymentStatus)));
-  const gmvEur = paidOrders.reduce((sum, order) => sum + order.totalEur, 0);
-  const refundedEur = input.refunds
+  const paidGmvCents = paidOrders.reduce((sum, order) => sum + eurToCents(order.totalEur), 0);
+  const succeededRefundCents = input.refunds
     .filter((refund) => refund.completed)
-    .reduce((sum, refund) => sum + refund.amountEur, 0);
+    .reduce((sum, refund) => sum + eurToCents(refund.amountEur), 0);
 
-  return {
-    gmvEur,
-    netSalesEur: gmvEur - refundedEur,
+  return calculateCommerceMetricsFromCents({
+    paidGmvCents,
+    succeededRefundCents,
     paidOrders: paidOrders.length,
-    averageOrderValueEur: paidOrders.length > 0 ? gmvEur / paidOrders.length : 0,
-    conversionRate: input.uniqueVisitors > 0 ? paidOrders.length / input.uniqueVisitors : null
+    uniqueVisitors: input.uniqueVisitors
+  });
+}
+
+export function calculateCommerceMetricsFromCents(input: CommerceMetricCentsInput): CommerceMetrics {
+  const paidGmvCents = Math.max(0, Math.trunc(input.paidGmvCents));
+  const succeededRefundCents = Math.max(0, Math.trunc(input.succeededRefundCents));
+  const paidOrders = Math.max(0, Math.trunc(input.paidOrders));
+  const uniqueVisitors = Math.max(0, Math.trunc(input.uniqueVisitors));
+  return {
+    gmvEur: centsToEur(paidGmvCents),
+    netSalesEur: centsToEur(paidGmvCents - succeededRefundCents),
+    paidOrders,
+    averageOrderValueEur: paidOrders > 0 ? centsToEur(Math.round(paidGmvCents / paidOrders)) : 0,
+    conversionRate: uniqueVisitors > 0 ? paidOrders / uniqueVisitors : null
   };
+}
+
+function eurToCents(value: number): number {
+  return Math.round(value * 100);
+}
+
+function centsToEur(value: number): number {
+  return value / 100;
 }
 
 export function resolveAttribution(input: AttributionInput): Attribution {
