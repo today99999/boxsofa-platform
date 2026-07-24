@@ -62,7 +62,6 @@ test("repository migration hashes ignore only Windows line endings", () => {
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("MANIFEST.json", migrationDirectory), "utf8"));
-const pendingLocalMigrations = ["202607240026_order_locale_snapshot.sql"];
 
 function remotelyCoveredManifest() {
   const covered = structuredClone(manifest);
@@ -75,22 +74,11 @@ function remotelyCoveredManifest() {
   return covered;
 }
 
-test("local verification records migration 026 as pending remote deployment", () => {
-  const checkpointFiles = manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort();
-  const migrationsWithoutRemoteCheckpoint = manifest.migrations
-    .map((migration: { file: string }) => migration.file)
-    .filter((file: string) => !checkpointFiles.includes(file))
-    .sort();
-
-  assert.deepEqual(migrationsWithoutRemoteCheckpoint, pendingLocalMigrations);
+test("release verification covers every immutable migration remotely", () => {
   assert.deepEqual(
-    checkpointFiles,
-    manifest.migrations
-      .map((migration: { file: string }) => migration.file)
-      .filter((file: string) => !pendingLocalMigrations.includes(file))
-      .sort()
+    manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
+    manifest.migrations.map((migration: { file: string }) => migration.file).sort()
   );
-
 });
 
 function remoteCheckpointRows() {
