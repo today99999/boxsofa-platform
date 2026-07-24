@@ -51,4 +51,3 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 - Recording a refund amount is bookkeeping only and does not call Stripe.
 - Social analytics, social publishing, procurement and the extended Data Cube remain disconnected future integrations and show no numeric values.
 - No real refund, customer message, email, social publish or payment action occurred during this audit.
-
