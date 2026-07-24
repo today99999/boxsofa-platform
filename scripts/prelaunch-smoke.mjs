@@ -45,7 +45,7 @@ const privateChecks = [
   { path: '/admin/audit' },
   { path: '/admin/notifications' },
   { path: '/admin/support' },
-  { path: '/data-center', allowedStatuses: [200, 404] },
+  { path: '/data-center', allowedStatuses: [404] },
 ];
 
 const protectedApiChecks = [
@@ -112,7 +112,7 @@ function checkSecurityHeaders(path, headers) {
 }
 
 async function checkPrivateRoute(route) {
-  const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
+  const response = await fetch(baseUrl + route.path, { cache: 'no-store', redirect: 'manual' });
   if (!(route.allowedStatuses || [200]).includes(response.status)) {
     throw new Error(route.path + ' returned HTTP ' + response.status);
   }
@@ -128,7 +128,7 @@ async function checkPrivateRoute(route) {
 
 async function checkProtectedApi(route) {
   const response = await fetch(baseUrl + route.path, { cache: 'no-store' });
-  if (response.status !== 401 && response.status !== 403 && response.status !== 503) {
+  if (response.status !== 401 && response.status !== 403) {
     throw new Error(route.path + ' should reject anonymous access, received HTTP ' + response.status);
   }
 }

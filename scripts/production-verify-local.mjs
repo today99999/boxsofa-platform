@@ -120,7 +120,10 @@ try {
       ...withoutRemoteMigrationSecrets(),
       PORT: String(port),
       BOXSOFA_LOCAL_VERIFY: "1",
-      BOXSOFA_LOCAL_VERIFY_NONCE: nonce
+      BOXSOFA_LOCAL_VERIFY_NONCE: nonce,
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "local-verification-anon-key",
+      SUPABASE_SERVICE_ROLE_KEY: "local-verification-service-role-key"
     }
   });
   await waitForLocalServer(server, baseUrl, nonce);

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requireOwnerAccess } from "@/lib/server/admin-auth";
 import "./data-center.css";
 
@@ -14,9 +14,6 @@ export default async function DataCenterLayout({ children }: { children: React.R
   const access = await requireOwnerAccess();
 
   if (!access.ok) {
-    if (access.reason === "not_authenticated") {
-      redirect("/login");
-    }
     notFound();
   }
 

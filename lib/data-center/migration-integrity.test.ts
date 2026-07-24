@@ -44,8 +44,8 @@ function runScript(script: string, args: string[] = [], env: Record<string, stri
 test("migration manifest prevents applied SQL from being silently rewritten", () => {
   const result = runScript("scripts/verify-migration-manifest.mjs");
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Migration manifest verified: 23 SQL files/);
-  assert.match(result.stdout, /4 remote checkpoints/);
+  assert.match(result.stdout, /Migration manifest verified: 24 SQL files/);
+  assert.match(result.stdout, /24 remote checkpoints/);
 });
 
 test("Supabase migration comparison canonicalizes only line endings and trailing blank lines", () => {
@@ -60,6 +60,14 @@ const sourceByFile = new Map<string, string>(manifest.remoteCheckpoints.map((che
   checkpoint.file,
   readFileSync(new URL(checkpoint.file, migrationDirectory), "utf8")
 ]));
+
+test("release verification covers every immutable migration remotely", () => {
+  assert.equal(manifest.remoteCheckpoints.length, manifest.migrations.length);
+  assert.deepEqual(
+    manifest.remoteCheckpoints.map((checkpoint: { file: string }) => checkpoint.file).sort(),
+    manifest.migrations.map((migration: { file: string }) => migration.file).sort()
+  );
+});
 
 function remoteRows() {
   return manifest.remoteCheckpoints.map((checkpoint: { file: string; version: string; name: string }) => ({
@@ -136,8 +144,15 @@ test("Management API verifier accepts exact rows without exposing its credential
     }
   });
   assert.deepEqual(fetchedRows, rows);
-  assert.deepEqual(verifyRemoteMigrationRows(manifest, fetchedRows), {
-    remoteCheckpoints: manifest.remoteCheckpoints.length
+  const locallyMatchingManifest = structuredClone(manifest);
+  for (const checkpoint of locallyMatchingManifest.remoteCheckpoints) {
+    checkpoint.normalizedMd5 = createHash("md5")
+      .update(normalizeMigrationText(sourceByFile.get(checkpoint.file)!))
+      .digest("hex");
+    delete checkpoint.matchesLocal;
+  }
+  assert.deepEqual(verifyRemoteMigrationRows(locallyMatchingManifest, fetchedRows), {
+    remoteCheckpoints: locallyMatchingManifest.remoteCheckpoints.length
   });
 });
 

@@ -32,6 +32,10 @@ const caseNumberMigration = readFileSync(
   new URL("../../supabase/migrations/202607240021_after_sales_cursor_and_case_number_safety.sql", import.meta.url),
   "utf8"
 );
+const qualifiedUpdateMigration = readFileSync(
+  new URL("../../supabase/migrations/202607240023_qualify_after_sales_update_columns.sql", import.meta.url),
+  "utf8"
+);
 const createRoute = readFileSync(
   new URL("../../app/api/admin/after-sales/route.ts", import.meta.url),
   "utf8"
@@ -181,6 +185,20 @@ test("latest after-sales update function qualifies columns that overlap return v
       new RegExp(`else after_sales_cases\\.${column}|after_sales_cases\\.${column} \\+ 1`)
     );
   }
+});
+
+test("qualified after-sales update preserves the complete prior function contract", () => {
+  const functionPattern = /create or replace function public\.update_after_sales_case\([\s\S]+?\n\$\$;/;
+  const priorFunction = finalRefundMigration.match(functionPattern)?.[0];
+  const qualifiedFunction = qualifiedUpdateMigration.match(functionPattern)?.[0];
+  assert.ok(priorFunction);
+  assert.ok(qualifiedFunction);
+  const expectedFunction = priorFunction
+    .replace("else refund_amount_eur end", "else after_sales_cases.refund_amount_eur end")
+    .replace("else internal_note end", "else after_sales_cases.internal_note end")
+    .replace("else due_at end", "else after_sales_cases.due_at end")
+    .replace("version = version + 1", "version = after_sales_cases.version + 1");
+  assert.equal(qualifiedFunction, expectedFunction);
 });
 
 test("after-sales routes authenticate before JSON parsing and use a bounded keyset cursor", () => {

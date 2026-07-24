@@ -97,8 +97,12 @@ export function verifyMigrationManifest({ manifest = loadManifest(), readMigrati
     assert.match(checkpoint.name, /^[a-z0-9_]+$/, `invalid remote migration name: ${checkpoint.file}`);
     assert.equal(checkpoint.statementCount, 1, `unexpected remote statement count: ${checkpoint.file}`);
     assert.match(checkpoint.normalizedMd5, /^[a-f0-9]{32}$/, `invalid remote normalized MD5: ${checkpoint.file}`);
-    assert.equal(md5(normalizeMigrationText(readMigration(checkpoint.file))), checkpoint.normalizedMd5,
-      `migration no longer matches the normalized SQL recorded by Supabase: ${checkpoint.file}`);
+    assert.ok(checkpoint.matchesLocal === undefined || typeof checkpoint.matchesLocal === "boolean",
+      `invalid matchesLocal flag: ${checkpoint.file}`);
+    if (checkpoint.matchesLocal !== false) {
+      assert.equal(md5(normalizeMigrationText(readMigration(checkpoint.file))), checkpoint.normalizedMd5,
+        `migration no longer matches the normalized SQL recorded by Supabase: ${checkpoint.file}`);
+    }
   }
 
   return { migrations: manifest.migrations.length, remoteCheckpoints: manifest.remoteCheckpoints.length };
@@ -123,8 +127,10 @@ export function verifyRemoteMigrationRows(manifest, remoteRows, { readMigration 
     assert.equal(statements.length, checkpoint.statementCount, `remote statement count diverged: ${checkpoint.version}`);
     assert.equal(statements.length, 1, `remote checkpoint must retain one statement: ${checkpoint.version}`);
     assert.equal(md5(statements[0]), checkpoint.normalizedMd5, `remote statement hash diverged: ${checkpoint.version}`);
-    assert.equal(statements[0], normalizeMigrationText(readMigration(checkpoint.file)),
-      `remote statement text diverged from local migration: ${checkpoint.file}`);
+    if (checkpoint.matchesLocal !== false) {
+      assert.equal(statements[0], normalizeMigrationText(readMigration(checkpoint.file)),
+        `remote statement text diverged from local migration: ${checkpoint.file}`);
+    }
   }
   return { remoteCheckpoints: checkpoints.length };
 }

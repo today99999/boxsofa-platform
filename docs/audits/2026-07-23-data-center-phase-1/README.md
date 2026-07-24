@@ -11,16 +11,17 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 ## Database And Financial Truth
 
-- All Data Center migrations `001` through `023` are applied. The immutable manifest contains 23 SQL files and four exact remote checkpoints.
+- All Data Center migrations `001` through `024` are applied. The immutable manifest contains 24 SQL files and 24 exact remote checkpoints.
 - Migration `023` fixes a production-only PL/pgSQL ambiguity in `update_after_sales_case` by qualifying columns that overlap `RETURNS TABLE` variables.
+- Migration `024` makes the restricted release RPC return every Data Center migration fingerprint. Historical remote statements that were applied through corrective migrations are explicitly pinned by their production MD5 even where their stored text differs from the current local source file.
 - Reconciliation range: `2026-07-01T00:00:00Z` inclusive to `2026-08-01T00:00:00Z` exclusive.
 - Paid orders: `1`; GMV: `37500` cents; succeeded Stripe refunds: `0` cents; net sales: `37500` cents.
 - GMV is the merchandise total of Stripe-paid orders before refunds. Net sales is GMV minus succeeded Stripe refunds. Calculations remain integer-cent based.
 
 ## Automated Verification
 
-- `npm test`: PASS, 181/181.
-- `npm run db:migrations:verify`: PASS, 23 migrations and four remote checkpoints.
+- `npm test`: PASS, 186/186.
+- `npm run db:migrations:verify`: PASS, 24 migrations and 24 remote checkpoints.
 - `npm run db:bootstrap:execute`: PASS, 26 core tables, 44 owner policies, 26 RLS tables and 23 critical RPCs.
 - `npm run typecheck`: PASS.
 - `npm run build`: PASS.
@@ -39,7 +40,7 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 ## Privacy And Access
 
-- Anonymous owner APIs are denied. Private pages use `no-store` and `noindex`.
+- Anonymous owner APIs are denied with `401` or `403`; `503` cannot satisfy the release gate. Anonymous `/data-center` must return a non-redirected `404`. Private pages use `no-store` and `noindex`.
 - The owner gate executes server-side before private Data Center HTML is rendered.
 - Production currently has zero analytics consent rows and zero analytics events. Visitor count is therefore zero and conversion is represented as unavailable, not invented as `0%`.
 - `orders`, `stripe` and `website_analytics` each have an explicit source key, state and timestamp. Website analytics is currently `disconnected`; no social source is represented with a fabricated number.
