@@ -20,7 +20,7 @@ Verification window: 2026-07-23 to 2026-07-24, Europe/Madrid.
 
 ## Automated Verification
 
-- `npm test`: PASS, 186/186.
+- `npm test`: PASS, 188/188.
 - `npm run db:migrations:verify`: PASS, 25 migrations and 25 remote checkpoints.
 - `npm run db:bootstrap:execute`: PASS, 26 core tables, 44 owner policies, 26 RLS tables and 23 critical RPCs.
 - `npm run typecheck`: PASS.

@@ -258,7 +258,8 @@ test("superseded intent constraint recreation is rerunnable in migration history
 test("intent issuance qualifies output columns so PostgreSQL cannot confuse them with return fields", () => {
   const required = "returning analytics_consent_intents.id,\n    analytics_consent_intents.intent_revision,\n    analytics_consent_intents.expires_at";
   for (const sql of [consentIntentFinalizationMigration, consentIntentRpcOutputFixMigration, bootstrapSchema]) {
-    assert.match(sql.toLowerCase(), new RegExp(required.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    const normalizedSql = sql.replace(/\r\n/g, "\n");
+    assert.match(normalizedSql.toLowerCase(), new RegExp(required.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });
 

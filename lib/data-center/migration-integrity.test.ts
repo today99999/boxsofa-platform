@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { normalizeMigrationText } from "../../scripts/verify-migration-manifest.mjs";
+import {
+  normalizeMigrationText,
+  normalizeRepositoryMigrationText
+} from "../../scripts/verify-migration-manifest.mjs";
 import {
   criticalFunctions,
   publicRelationExpectations,
@@ -50,6 +53,11 @@ test("Supabase migration comparison canonicalizes only line endings and trailing
   assert.equal(normalizeMigrationText("select 1;\r\n\r\n"), "select 1;\n");
   assert.equal(normalizeMigrationText("select 1;\n\n\n"), "select 1;\n");
   assert.equal(normalizeMigrationText("select 1;\nselect 2;\n"), "select 1;\nselect 2;\n");
+});
+
+test("repository migration hashes ignore only Windows line endings", () => {
+  assert.equal(normalizeRepositoryMigrationText("select 1;\r\n\r\n"), "select 1;\n\n");
+  assert.equal(normalizeRepositoryMigrationText("select 1;\n\n"), "select 1;\n\n");
 });
 
 const migrationDirectory = new URL("../../supabase/migrations/", import.meta.url);

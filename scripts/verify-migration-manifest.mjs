@@ -24,6 +24,10 @@ function localMigrationText(file) {
   return readFileSync(join(migrationDirectory, file), "utf8");
 }
 
+export function normalizeRepositoryMigrationText(sql) {
+  return sql.replace(/\r\n/g, "\n");
+}
+
 function md5(value) {
   return createHash("md5").update(value).digest("hex");
 }
@@ -72,7 +76,9 @@ export function verifyMigrationManifest({ manifest = loadManifest(), readMigrati
   for (const entry of manifest.migrations) {
     assert.match(entry.file, /^\d{12,}_[a-z0-9_]+\.sql$/i, `invalid migration filename: ${entry.file}`);
     assert.match(entry.sha256, /^[a-f0-9]{64}$/, `invalid SHA-256 for ${entry.file}`);
-    const actual = createHash("sha256").update(readMigration(entry.file)).digest("hex");
+    const actual = createHash("sha256")
+      .update(normalizeRepositoryMigrationText(readMigration(entry.file)))
+      .digest("hex");
     assert.equal(actual, entry.sha256, `migration content changed: ${entry.file}`);
   }
 
