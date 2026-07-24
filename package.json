@@ -18,6 +18,7 @@
     "after-sales:integration": "node scripts/after-sales-integration.mjs",
     "db:migrations:verify": "node scripts/verify-migration-manifest.mjs",
     "db:bootstrap:validate": "node scripts/validate-bootstrap-sql.mjs",
+    "db:bootstrap:execute": "node scripts/execute-bootstrap-pglite.mjs",
     "env:check": "node scripts/check-env.mjs",
     "prelaunch:local": "npm run env:check && npm run prelaunch && npm run smoke && npm run seo:audit && npm run api:auth-audit",
     "production:ready": "node scripts/production-readiness.mjs",
@@ -33,6 +34,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

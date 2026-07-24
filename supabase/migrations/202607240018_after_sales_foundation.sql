@@ -225,7 +225,7 @@ begin
       null::bigint, null::timestamptz, null::timestamptz;
     return;
   end if;
-  if v_next_status = 'refunded' and (v_successful_refund_cents = 0 or coalesce(v_next_refund_cents, 0) = 0) then
+  if v_next_status = 'refunded' and (v_successful_refund_cents = 0 or v_next_refund_cents = 0) then
     return query select false, 'refund_not_verified', null::uuid, null::text, null::text, null::text, null::text,
       null::text, null::text, null::text, null::text, null::timestamptz, null::numeric, null::text,
       null::bigint, null::timestamptz, null::timestamptz;
