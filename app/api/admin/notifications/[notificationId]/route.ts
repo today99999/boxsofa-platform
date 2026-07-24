@@ -74,7 +74,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           async claim(id, leaseSeconds) {
             const { data, error } = await supabase.rpc("claim_email_notification_delivery", {
               p_notification_id: id,
-              p_lease_seconds: leaseSeconds
+              p_lease_seconds: leaseSeconds,
+              p_automatic: false
             });
             if (error) throw error;
             const row = Array.isArray(data) ? data[0] : null;

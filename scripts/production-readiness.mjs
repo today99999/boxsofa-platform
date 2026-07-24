@@ -1,15 +1,45 @@
 const baseUrl = (process.env.PRODUCTION_BASE_URL || 'https://boxsofa-platform.vercel.app').replace(/\/$/, '');
 const expectedSiteUrl = process.env.EXPECTED_SITE_URL || 'https://boxsofa.eu';
 const cronSecret = process.env.CRON_SECRET || '';
+const environmentOnly = process.argv.includes('--environment-only');
+const releaseMode = process.argv.includes('--release');
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const emailProvider = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+const emailFrom = (process.env.EMAIL_FROM || '').trim();
+const emailApiKey = process.env.EMAIL_API_KEY || '';
+
+function isLikelyEmailAddress(value) {
+  const emailMatch = value.match(/<([^>]+)>$/);
+  const email = (emailMatch?.[1] || value).trim();
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+}
+
+const configurationFailures = [];
+if (!serviceRoleKey) configurationFailures.push('SUPABASE_SERVICE_ROLE_KEY is required.');
+if (emailProvider !== 'resend') configurationFailures.push('EMAIL_PROVIDER must be resend.');
+if (!isLikelyEmailAddress(emailFrom)) configurationFailures.push('EMAIL_FROM must be a valid sender address.');
+if (emailApiKey.length < 20) configurationFailures.push('EMAIL_API_KEY is missing or too short.');
+if (releaseMode && process.env.EXPECT_PAYMENT_ENABLED !== 'true') {
+  configurationFailures.push('EXPECT_PAYMENT_ENABLED must be true for release mode.');
+}
 
 if (!cronSecret) {
-  console.error('CRON_SECRET is required for production readiness.');
+  configurationFailures.push('CRON_SECRET is required for production readiness.');
+}
+
+if (cronSecret && cronSecret.length < 32) {
+  configurationFailures.push('CRON_SECRET must be at least 32 characters for production readiness.');
+}
+
+if (configurationFailures.length) {
+  console.error('Production readiness configuration is incomplete.');
+  for (const failure of configurationFailures) console.error('- ' + failure);
   process.exit(1);
 }
 
-if (cronSecret.length < 32) {
-  console.error('CRON_SECRET must be at least 32 characters for production readiness.');
-  process.exit(1);
+if (environmentOnly) {
+  console.log('Production readiness configuration passed without printing secret values.');
+  process.exit(0);
 }
 
 const response = await fetch(baseUrl + '/api/health', { cache: 'no-store' });

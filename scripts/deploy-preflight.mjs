@@ -54,6 +54,8 @@ function run(label, script, env = withoutRemoteMigrationSecrets()) {
 
 // Vercel invokes this before its own `next build` command. Keep this list
 // build-free so the configured Vercel build command cannot recurse.
+run("release environment", "env:check:release", remoteMigrationVerifierEnv());
+run("production readiness configuration", "production:ready:release-config", remoteMigrationVerifierEnv());
 run("remote Supabase migration history", "db:migrations:verify-remote", remoteMigrationVerifierEnv());
 run("migration manifest", "db:migrations:verify");
 run("bootstrap lexical validation", "db:bootstrap:validate");

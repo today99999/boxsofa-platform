@@ -1,6 +1,7 @@
 import fs from 'fs';
 
 const envPath = '.env.local';
+const releaseMode = process.argv.includes('--release');
 const fileEnv = {};
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
@@ -27,9 +28,10 @@ const required = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'NEXT_PUBLIC_SITE_URL',
   'CRON_SECRET',
+  ...(releaseMode ? ['EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_API_KEY', 'EXPECT_PAYMENT_ENABLED'] : []),
 ];
 
-const recommendedBeforeLaunch = [
+const recommendedBeforeLaunch = releaseMode ? [] : [
   'EMAIL_PROVIDER',
   'EMAIL_FROM',
   'EMAIL_API_KEY',
@@ -54,6 +56,11 @@ if (missingRequired.length) {
   process.exit(1);
 }
 
+if (releaseMode && getEnv('EXPECT_PAYMENT_ENABLED') !== 'true') {
+  console.error('EXPECT_PAYMENT_ENABLED must be true for release mode.');
+  process.exit(1);
+}
+
 if (cronSecret.length < 32) {
   console.error('CRON_SECRET must be at least 32 characters.');
   process.exit(1);
@@ -64,7 +71,7 @@ if (missingRecommended.length) {
   console.warn('Recommended before launch, currently missing: ' + missingRecommended.join(', '));
 } else {
   if (emailProvider !== 'resend') {
-    emailIssues.push('EMAIL_PROVIDER must be resend. Current value: ' + emailProvider);
+    emailIssues.push('EMAIL_PROVIDER must be resend.');
   }
   if (!isLikelyEmailAddress(emailFrom)) {
     emailIssues.push('EMAIL_FROM must be a valid email address or Sender <email@example.com> value.');
@@ -74,7 +81,12 @@ if (missingRecommended.length) {
   }
 
   if (emailIssues.length) {
-    console.warn('Email provider variables are present but need review: ' + emailIssues.join(' '));
+    const output = 'Email provider variables need review: ' + emailIssues.join(' ');
+    if (releaseMode) {
+      console.error(output);
+      process.exit(1);
+    }
+    console.warn(output);
   } else {
     console.log('Email provider environment variables look ready.');
   }

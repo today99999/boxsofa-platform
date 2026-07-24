@@ -20,6 +20,14 @@ function effectivePaymentRpc(sql: string) {
   return sql.slice(start, end + 4);
 }
 
+function paymentEmailHelperSql(sql: string) {
+  const start = sql.indexOf("create or replace function public.build_payment_confirmed_email(");
+  assert.notEqual(start, -1, "payment email helper must exist");
+  const end = sql.indexOf("create or replace function public.sanitize_email_delivery_error", start);
+  assert.notEqual(end, -1, "payment email helper boundary must exist");
+  return sql.slice(start, end);
+}
+
 test("orders persist an immutable supported checkout locale", () => {
   assert.match(migration, /add column if not exists locale text/i);
   assert.match(migration, /preferred_locale/i);
@@ -77,11 +85,8 @@ test("payment-confirmed email helper executes with English fallback, immutable s
       create role anon;
       create role authenticated;
       create role service_role;
-      create table public.profiles (id uuid primary key, preferred_locale text);
-      create table public.orders (customer_id uuid, locale text);
-      create table public.email_notifications (id uuid primary key);
     `);
-    await database.exec(migration);
+    await database.exec(paymentEmailHelperSql(migration));
 
     const withMembership = await database.query<{ subject: string; body_text: string }>(
       "select subject, body_text from public.build_payment_confirmed_email('en', 'Ada Lovelace', 'BS-1001', true)"
@@ -111,7 +116,7 @@ test("payment-confirmed email helper executes with English fallback, immutable s
   }
 });
 
-test("paid notification schema and RPC atomically snapshot the membership transition", () => {
+test("paid notification schema and RPC atomically snapshot the lifetime membership welcome", () => {
   for (const sql of [migration, bootstrapSchema]) {
     const paymentRpc = effectivePaymentRpc(sql);
     assert.match(
@@ -120,23 +125,23 @@ test("paid notification schema and RPC atomically snapshot the membership transi
       "email notification snapshots must persist whether this payment welcomed a member"
     );
     assert.match(
+      sql,
+      /membership_welcomed_at timestamptz/i,
+      "profiles must retain a durable lifetime welcome marker"
+    );
+    assert.match(
       paymentRpc,
       /create or replace function public\.record_stripe_checkout_payment\(\s*p_event_id text,\s*p_event_type text,\s*p_order_id uuid,\s*p_order_number text,\s*p_provider_payment_id text,\s*p_session_id text,\s*p_amount_cents bigint,\s*p_currency text,\s*p_raw_payload jsonb\s*\)\s*returns table\(\s*ok boolean,\s*error_code text,\s*event_processed boolean,\s*payment_confirmed boolean,\s*email_queued boolean,\s*source_record_count bigint\s*\)/is
     );
     assert.match(
       paymentRpc,
-      /select\s+order_row\.customer_id,[\s\S]*from public\.orders order_row\s*where order_row\.id = p_order_id\s*for update;[\s\S]*select profile_row\.is_member[\s\S]*from public\.profiles profile_row[\s\S]*for update;[\s\S]*record_stripe_checkout_payment_v012[\s\S]*select profile_row\.is_member[\s\S]*build_payment_confirmed_email\(\s*v_order_locale,\s*v_customer_name,\s*v_order_number,\s*v_member_welcome\s*\)/is,
-      "the wrapper must lock the order before the profile, then read membership after the proven paid-order writer"
+      /select\s+order_row\.customer_id,[\s\S]*from public\.orders order_row\s*where order_row\.id = p_order_id\s*for update;[\s\S]*from public\.profiles profile_row[\s\S]*for update;[\s\S]*record_stripe_checkout_payment_v012[\s\S]*set membership_welcomed_at = coalesce\(profile_row\.member_since, now\(\)\)[\s\S]*profile_row\.membership_welcomed_at is null[\s\S]*returning true into v_member_welcome;[\s\S]*build_payment_confirmed_email\(\s*v_order_locale,\s*v_customer_name,\s*v_order_number,\s*v_member_welcome\s*\)/is,
+      "the wrapper must serialize the profile and atomically claim its lifetime welcome marker"
     );
     assert.match(
       paymentRpc,
-      /set subject = v_email\.subject,\s*preview_text = v_email\.preview_text,\s*body_text = v_email\.body_text,\s*member_welcome = v_member_welcome/is,
+      /set subject = v_email\.subject,\s*preview_text = v_email\.preview_text,\s*body_text = v_email\.body_text,\s*member_welcome = v_member_welcome,\s*automatic_delivery_eligible = true/is,
       "the queued row must store one immutable localized snapshot"
-    );
-    assert.match(
-      paymentRpc,
-      /v_member_welcome := v_customer_id is not null\s*and v_was_member is not true\s*and v_is_member is true;/is,
-      "only a linked customer's false-to-true transition may emit a member welcome"
     );
   }
 
@@ -153,6 +158,7 @@ test("paid notification schema and RPC atomically snapshot the membership transi
   assert.match(integration, /first crosses EUR 300[\s\S]*member_welcome/);
   assert.match(integration, /already-member customer[\s\S]*member_welcome/);
   assert.match(integration, /guest paid order[\s\S]*member_welcome/);
+  assert.match(integration, /refund[\s\S]*requalif[\s\S]*member_welcome/is);
   assert.match(
     integration,
     /Promise\.all\(\[\s*callPayment\(clientA, crossingThreshold,[\s\S]*callPayment\(clientB, crossingThreshold,[\s\S]*\]\)[\s\S]*expectExactCount\(\s*"email_notifications",\s*\{ order_id: crossingThreshold\.orderId, event: "payment_confirmed" \},\s*1,[\s\S]*expectPaidNotification\(\s*crossingThreshold,\s*true/is,

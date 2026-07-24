@@ -68,7 +68,7 @@ export async function sendTransactionalEmail(input: EmailSendInput): Promise<Ema
     return {
       ok: false,
       provider: provider || "not_configured",
-      error: "Email provider is not configured."
+      error: "email_provider_not_configured"
     };
   }
 
@@ -76,7 +76,7 @@ export async function sendTransactionalEmail(input: EmailSendInput): Promise<Ema
     return {
       ok: false,
       provider,
-      error: `Unsupported email provider: ${provider}.`
+      error: "email_provider_unsupported"
     };
   }
 
@@ -95,16 +95,15 @@ export async function sendTransactionalEmail(input: EmailSendInput): Promise<Ema
     })
   });
 
-  const body = await response.json().catch(() => null) as { id?: string; message?: string; error?: string } | null;
-
   if (!response.ok) {
     return {
       ok: false,
       provider,
-      error: body?.message || body?.error || `Email provider returned ${response.status}.`
+      error: `email_provider_http_error:${response.status}`
     };
   }
 
+  const body = await response.json().catch(() => null) as { id?: string } | null;
   return {
     ok: true,
     provider,

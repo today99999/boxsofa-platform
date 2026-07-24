@@ -144,8 +144,21 @@ async function callPayment(client, fixture, eventId, paymentId) {
   return { row: data ? firstRow(data, "payment RPC must return one row") : null, error };
 }
 
+async function callOfflinePayment(client, fixture, confirmedBy) {
+  const { data, error } = await client.rpc("record_offline_order_payment", {
+    p_order_id: fixture.orderId,
+    p_order_number: fixture.orderNumber,
+    p_confirmed_by: confirmedBy,
+    p_payment_method_note: "Technical integration fixture",
+    p_target_status: "paid_confirmed",
+    p_carrier: null,
+    p_tracking_number: null
+  });
+  return { row: data ? firstRow(data, "offline payment RPC must return one row") : null, error };
+}
+
 async function createLinkedCustomer() {
-  const email = `${runPrefix}-member@example.com`;
+  const email = `${runPrefix}-member-${randomUUID()}@example.com`;
   const { data: authData, error: authError } = await clientA.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -179,7 +192,9 @@ async function expectPaidNotification(fixture, expectedMemberWelcome, message) {
     .eq("event", "payment_confirmed")
     .single();
   assert.equal(error, null, `${message}: notification must be readable`);
-  assert.equal(data.member_welcome, expectedMemberWelcome, message);
+  if (expectedMemberWelcome !== null) {
+    assert.equal(data.member_welcome, expectedMemberWelcome, message);
+  }
   assert.ok(data.subject.length > 0, `${message}: localized subject must be snapshotted`);
   assert.ok(data.preview_text.length > 0, `${message}: localized preview must be snapshotted`);
   return data;
@@ -422,6 +437,119 @@ async function testMembershipAwarePaidNotifications() {
     false,
     "later payment by already-member customer must use member_welcome=false"
   );
+
+  const { data: welcomedProfile, error: welcomedProfileError } = await clientA
+    .from("profiles")
+    .select("membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(welcomedProfileError, null);
+  assert.ok(welcomedProfile.membership_welcomed_at, "first threshold crossing must persist the lifetime welcome marker");
+
+  const crossingRefund = await callRefund(
+    clientA,
+    `${runPrefix}-evt-member-refund`,
+    crossingPaymentId,
+    `${runPrefix}-re-member-refund`,
+    crossingThreshold.amountCents,
+    "succeeded",
+    1
+  );
+  assert.equal(crossingRefund.error, null, "membership demotion refund must succeed");
+
+  const { data: demotedProfile, error: demotedProfileError } = await clientA
+    .from("profiles")
+    .select("is_member, membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(demotedProfileError, null);
+  assert.equal(demotedProfile.is_member, false, "refund below threshold must demote current membership");
+  assert.equal(
+    demotedProfile.membership_welcomed_at,
+    welcomedProfile.membership_welcomed_at,
+    "refund must not clear the lifetime welcome marker"
+  );
+
+  const requalification = await insertOrderFixture(clientA, "member-requalification", {
+    totalEur: 200,
+    customerId,
+    locale: "es"
+  });
+  const requalifiedPayment = await callOfflinePayment(clientA, requalification, customerId);
+  assert.equal(requalifiedPayment.error, null, "offline requalification after refund must succeed");
+  assert.equal(requalifiedPayment.row.payment_confirmed, true);
+  await expectPaidNotification(
+    requalification,
+    false,
+    "refund and later requalification must not produce a second member_welcome"
+  );
+}
+
+async function testConcurrentStripeAndOfflineMembershipRefresh() {
+  const customerId = await createLinkedCustomer();
+  const stripeFixture = await insertOrderFixture(clientA, "concurrent-stripe-member", {
+    totalEur: 200,
+    customerId,
+    locale: "fr"
+  });
+  const offlineFixture = await insertOrderFixture(clientA, "concurrent-offline-member", {
+    totalEur: 200,
+    customerId,
+    locale: "de"
+  });
+
+  const [stripeResult, offlineResult] = await Promise.all([
+    callPayment(
+      clientA,
+      stripeFixture,
+      `${runPrefix}-evt-concurrent-stripe-member`,
+      `${runPrefix}-pi-concurrent-stripe-member`
+    ),
+    callOfflinePayment(clientB, offlineFixture, customerId)
+  ]);
+  assert.equal(stripeResult.error, null, "concurrent Stripe membership writer must succeed");
+  assert.equal(offlineResult.error, null, "concurrent offline membership writer must succeed");
+
+  const [stripeNotification, offlineNotification] = await Promise.all([
+    expectPaidNotification(stripeFixture, null, "Stripe concurrent notification must exist"),
+    expectPaidNotification(offlineFixture, null, "offline concurrent notification must exist")
+  ]);
+  assert.equal(
+    [stripeNotification, offlineNotification].filter((row) => row.member_welcome === true).length,
+    1,
+    "concurrent Stripe/offline threshold crossings must claim one lifetime welcome"
+  );
+
+  const { data: profile, error: profileError } = await clientA
+    .from("profiles")
+    .select("total_paid_eur, is_member, membership_welcomed_at")
+    .eq("id", customerId)
+    .single();
+  assert.equal(profileError, null);
+  assert.equal(Number(profile.total_paid_eur), 400, "serialized membership refresh must retain both paid orders");
+  assert.equal(profile.is_member, true);
+  assert.ok(profile.membership_welcomed_at);
+
+  const [offlineReplayA, offlineReplayB] = await Promise.all([
+    callOfflinePayment(clientA, offlineFixture, customerId),
+    callOfflinePayment(clientB, offlineFixture, customerId)
+  ]);
+  assert.equal(offlineReplayA.error, null);
+  assert.equal(offlineReplayB.error, null);
+  assert.equal(offlineReplayA.row.payment_confirmed, false);
+  assert.equal(offlineReplayB.row.payment_confirmed, false);
+  await expectExactCount(
+    "payments",
+    { order_id: offlineFixture.orderId, provider: "offline" },
+    1,
+    "concurrent offline replay must retain one payment"
+  );
+  await expectExactCount(
+    "email_notifications",
+    { order_id: offlineFixture.orderId, event: "payment_confirmed" },
+    1,
+    "concurrent offline replay must retain one outbox snapshot"
+  );
 }
 
 async function testPaymentRollback() {
@@ -535,6 +663,7 @@ async function cleanup() {
 try {
   await testPaymentTransactionAndReplay();
   await testMembershipAwarePaidNotifications();
+  await testConcurrentStripeAndOfflineMembershipRefresh();
   await testPaymentRollback();
   await testAggregateBeyondPostgrestLimit();
 } finally {

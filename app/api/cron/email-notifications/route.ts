@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCronRequest } from "@/lib/server/email-cron-auth";
-import { dispatchEmailNotifications } from "@/lib/server/email-notification-dispatcher";
+import {
+  dispatchEmailNotifications,
+  type EmailNotificationDispatchRepository
+} from "@/lib/server/email-notification-dispatcher";
 import { hasEmailProviderConfig, sendTransactionalEmail } from "@/lib/server/email-provider";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
 
@@ -16,7 +19,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const summary = await dispatchEmailNotifications(createSupabaseServiceRoleClient(), sendTransactionalEmail);
+    const repository = createSupabaseServiceRoleClient() as unknown as EmailNotificationDispatchRepository;
+    const summary = await dispatchEmailNotifications(repository, sendTransactionalEmail);
     return NextResponse.json({
       ok: true,
       scanned: summary.scanned,
