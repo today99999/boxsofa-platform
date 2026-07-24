@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description:
     "BoxSofa sells compressed sofas for European apartments, rental homes, old buildings, elevators, staircases, and compact living spaces. Free basic delivery and estimated cross-border delivery in 23-30 days.",
   applicationName: "BoxSofa Europe",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/assets/brand/boxsofa-mark.png",
     shortcut: "/assets/brand/boxsofa-mark.png",

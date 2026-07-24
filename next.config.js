@@ -56,6 +56,14 @@ module.exports = (phase) => ({
         headers: privateHeaders
       },
       {
+        source: "/data-center/:path*",
+        headers: privateHeaders
+      },
+      {
+        source: "/data-center",
+        headers: privateHeaders
+      },
+      {
         source: "/orders",
         headers: privateHeaders
       },
