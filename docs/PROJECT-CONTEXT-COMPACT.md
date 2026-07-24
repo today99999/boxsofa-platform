@@ -307,3 +307,11 @@ limit 5;
 - YouTube Shorts：`https://www.youtube.com/watch?v=HfC-NELpsYc`（任务/记录 `6a62577bb35dbe3991393f8a`，flow `9005518e-d425-4359-bbb3-cbadee985738`）。Instagram Reels：`https://www.instagram.com/reel/DbJQ_X-lHGb/`（任务/记录 `6a62577cb35dbe3991393f97`，flow `1d885a69-26df-493a-b8f8-e70f76ef8208`）。Pinterest video Pin：`https://www.pinterest.com/pin/1109363320813714282/`（任务/记录 `6a62577eb35dbe3991393fa3`，flow `b5650063-aa5f-456a-9b40-81829c2412fb`）。Pinterest 未附外链，以避开既有 spam 风险。
 - 已发布文案使用各平台 `boxsofa_final_20260723` UTM，限定为视觉产品演示，说明小户型、出租房、窄楼梯/小电梯、欧洲免费基础配送、Stripe 安全支付和预计 23–30 个工作日；未作折扣、快速到货、真实客户案例或政策例外承诺。
 - Facebook：AiToEarn 仍无公共主页授权，但已通过登录的 `BoxSofa Europe` 主页后台发布同一原片，且主页已显示 AI 内容标识。公开 Reel：`https://www.facebook.com/reel/1012090414790053/`。此素材五个平台均已完成，禁止重复上传。
+
+## 21. 社交自动发布（2026-07-24 11:12 Europe/Madrid）
+
+- 本轮 11:00 档选择审核通过、此前未发布或预约的原始竖版 `D:\压缩沙发\沙发视频\可发布的视频\2.mp4`（720 × 1280、15.042 秒、H.264/AAC 双声道）。未修改、裁切或加背景；新加入的 `妈妈的怀抱沙发魔法开箱...mp4` 虽符合比例和音频要求，但画面中的条纹造型沙发不符合当前主推压缩泡沫沙发，保守跳过。
+- 原始文件和单帧封面已推送到站点仓库提交 `3dd1913`；因站点 CDN 部署尚未完成，本轮将同一原始文件安全导入 AiToEarn 媒体库后发布，媒体 `6a632b10b35dbe39913d746d`，封面 `6a632c24b35dbe39913d7d09`。
+- AiToEarn flow：`4a7ef19c-657c-4b6e-b693-970c1a457014`。YouTube Shorts 已发布：`https://www.youtube.com/watch?v=zNH_MG7QYJg`（任务 `6a632c4eb35dbe39913d7d82`）；TikTok 已发布：`https://www.tiktok.com/@boxsofaeurope/video/7666019764703137057`（任务 `6a632c4eb35dbe39913d7d80`）；Pinterest 视频 Pin 已发布且未附外链以避开 spam 风险：`https://www.pinterest.com/pin/1109363320813761017/`（任务 `6a632c4eb35dbe39913d7d86`）。
+- Instagram Reels 任务 `6a632c4eb35dbe39913d7d84` 当前为平台处理中（status 2），尚未返回公开链接；下次巡检仅查询该任务，禁止新建或重复上传。各平台均使用各自 `sofa2_unboxing_20260724` UTM 文案，并仅陈述视觉产品演示、小户型/窄楼梯/小电梯、西班牙免费基础配送、Stripe 安全支付与预计 23–30 个工作日。
+- Facebook：AiToEarn 公共主页授权仍不可用。已登录 Chrome 和扩展检测均正常，但扩展自动化连接不可用；按浏览器控制流程未自行打开新窗口重连，因此本轮 Facebook 未提交。待用户确认可打开 Chrome 窗口后，仅用同一原片和 Facebook UTM 补发，且启用 AI 内容标识。
