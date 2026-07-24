@@ -30,6 +30,9 @@ commit;
 
 begin;
 
+alter table public.email_notifications
+  add column if not exists member_welcome boolean not null default false;
+
 create or replace function public.build_payment_confirmed_email(
   p_locale text,
   p_customer_name text,
@@ -94,5 +97,130 @@ $$;
 
 revoke all on function public.build_payment_confirmed_email(text, text, text, boolean) from public, anon, authenticated;
 grant execute on function public.build_payment_confirmed_email(text, text, text, boolean) to service_role, postgres;
+
+create or replace function public.record_stripe_checkout_payment(
+  p_event_id text,
+  p_event_type text,
+  p_order_id uuid,
+  p_order_number text,
+  p_provider_payment_id text,
+  p_session_id text,
+  p_amount_cents bigint,
+  p_currency text,
+  p_raw_payload jsonb
+)
+returns table(
+  ok boolean,
+  error_code text,
+  event_processed boolean,
+  payment_confirmed boolean,
+  email_queued boolean,
+  source_record_count bigint
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_identity record;
+  v_result record;
+  v_email record;
+  v_customer_id uuid;
+  v_order_locale text;
+  v_customer_name text;
+  v_order_number text;
+  v_was_member boolean := false;
+  v_is_member boolean := false;
+  v_member_welcome boolean := false;
+  v_notification_updated integer := 0;
+begin
+  -- Preserve the payment -> order -> source-health acquisition order used by refunds.
+  perform pg_advisory_xact_lock(hashtextextended('stripe:payment:' || coalesce(p_provider_payment_id, ''), 0));
+  perform pg_advisory_xact_lock(hashtextextended('stripe:order:' || coalesce(p_order_id::text, ''), 0));
+  select * into v_identity
+  from public.claim_stripe_webhook_event_identity(
+    p_event_id, p_event_type, 'checkout_session', p_session_id
+  );
+
+  if v_identity.accepted is not true then
+    return query select false, coalesce(v_identity.error_code, 'event_identity_mismatch'), false, false, false, 0::bigint;
+    return;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('stripe:source-health', 0));
+
+  select
+    order_row.customer_id,
+    order_row.locale,
+    order_row.customer_name,
+    order_row.order_number
+  into
+    v_customer_id,
+    v_order_locale,
+    v_customer_name,
+    v_order_number
+  from public.orders order_row
+  where order_row.id = p_order_id;
+
+  if v_customer_id is not null then
+    select profile_row.is_member
+    into v_was_member
+    from public.profiles profile_row
+    where profile_row.id = v_customer_id
+    for update;
+  end if;
+
+  select * into v_result
+  from public.record_stripe_checkout_payment_v012(
+    p_event_id, p_event_type, p_order_id, p_order_number, p_provider_payment_id,
+    p_session_id, p_amount_cents, p_currency, p_raw_payload
+  );
+
+  if v_result.payment_confirmed is true then
+    if v_customer_id is not null then
+      select profile_row.is_member
+      into v_is_member
+      from public.profiles profile_row
+      where profile_row.id = v_customer_id;
+    end if;
+
+    v_member_welcome := v_customer_id is not null
+      and v_was_member is not true
+      and v_is_member is true;
+
+    select * into v_email
+    from public.build_payment_confirmed_email(
+      v_order_locale,
+      v_customer_name,
+      v_order_number,
+      v_member_welcome
+    );
+
+    update public.email_notifications
+    set subject = v_email.subject,
+        preview_text = v_email.preview_text,
+        body_text = v_email.body_text,
+        member_welcome = v_member_welcome
+    where order_id = p_order_id
+      and event = 'payment_confirmed';
+
+    get diagnostics v_notification_updated = row_count;
+    if v_notification_updated <> 1 then
+      raise exception 'Paid-order notification snapshot is missing' using errcode = 'P0001';
+    end if;
+  end if;
+
+  return query select
+    v_result.ok,
+    v_result.error_code,
+    v_result.event_processed,
+    v_result.payment_confirmed,
+    v_result.email_queued,
+    v_result.source_record_count;
+end;
+$$;
+
+revoke all on function public.record_stripe_checkout_payment(text, text, uuid, text, text, text, bigint, text, jsonb) from public, anon, authenticated;
+grant execute on function public.record_stripe_checkout_payment(text, text, uuid, text, text, text, bigint, text, jsonb) to service_role;
 
 commit;

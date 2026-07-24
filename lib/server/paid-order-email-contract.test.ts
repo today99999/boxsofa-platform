@@ -70,6 +70,7 @@ test("payment-confirmed email helper executes with English fallback, immutable s
       create role service_role;
       create table public.profiles (id uuid primary key, preferred_locale text);
       create table public.orders (customer_id uuid, locale text);
+      create table public.email_notifications (id uuid primary key);
     `);
     await database.exec(migration);
 
@@ -99,4 +100,47 @@ test("payment-confirmed email helper executes with English fallback, immutable s
   } finally {
     await database.close();
   }
+});
+
+test("paid notification schema and RPC atomically snapshot the membership transition", () => {
+  for (const sql of [migration, bootstrapSchema]) {
+    assert.match(
+      sql,
+      /email_notifications[\s\S]*member_welcome boolean not null default false/i,
+      "email notification snapshots must persist whether this payment welcomed a member"
+    );
+    assert.match(
+      sql,
+      /create or replace function public\.record_stripe_checkout_payment\(\s*p_event_id text,\s*p_event_type text,\s*p_order_id uuid,\s*p_order_number text,\s*p_provider_payment_id text,\s*p_session_id text,\s*p_amount_cents bigint,\s*p_currency text,\s*p_raw_payload jsonb\s*\)\s*returns table\(\s*ok boolean,\s*error_code text,\s*event_processed boolean,\s*payment_confirmed boolean,\s*email_queued boolean,\s*source_record_count bigint\s*\)/is
+    );
+    assert.match(
+      sql,
+      /select profile_row\.is_member[\s\S]*from public\.profiles profile_row[\s\S]*for update;[\s\S]*record_stripe_checkout_payment_v012[\s\S]*select profile_row\.is_member[\s\S]*build_payment_confirmed_email\(\s*v_order_locale,\s*v_customer_name,\s*v_order_number,\s*v_member_welcome\s*\)/is,
+      "the wrapper must read membership before and after the proven paid-order writer and use the database template helper"
+    );
+    assert.match(
+      sql,
+      /set subject = v_email\.subject,\s*preview_text = v_email\.preview_text,\s*body_text = v_email\.body_text,\s*member_welcome = v_member_welcome/is,
+      "the queued row must store one immutable localized snapshot"
+    );
+    assert.match(
+      sql,
+      /v_member_welcome := v_customer_id is not null\s*and v_was_member is not true\s*and v_is_member is true;/is,
+      "only a linked customer's false-to-true transition may emit a member welcome"
+    );
+  }
+
+  assert.match(
+    bootstrapSchema,
+    /on public\.email_notifications\(order_id, event\)[\s\S]*where order_id is not null/i,
+    "the unique paid-notification replay guard must remain present"
+  );
+  assert.match(migration, /where order_id = p_order_id\s*and event = 'payment_confirmed'/i);
+
+  const integration = readFileSync(new URL("../../scripts/stripe-financial-integration.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(integration, /We would also like to thank you for becoming a BoxSofa member!/);
+  assert.match(integration, /below EUR 300[\s\S]*member_welcome/);
+  assert.match(integration, /first crosses EUR 300[\s\S]*member_welcome/);
+  assert.match(integration, /already-member customer[\s\S]*member_welcome/);
+  assert.match(integration, /guest paid order[\s\S]*member_welcome/);
 });
