@@ -1,8 +1,15 @@
 import tempfile
 import unittest
+from email.message import EmailMessage
 from pathlib import Path
 
-from scripts.boxsofa_paid_orders import Ledger, classify_orders, member_welcome_for, render_email
+from scripts.boxsofa_paid_orders import (
+    Ledger,
+    archive_message_in_sent,
+    classify_orders,
+    member_welcome_for,
+    render_email,
+)
 
 
 def order(number, payment="paid", status="paid_confirmed", total=100, customer="customer-1", locale="en"):
@@ -22,6 +29,78 @@ def order(number, payment="paid", status="paid_confirmed", total=100, customer="
 
 
 class PaidOrderTests(unittest.TestCase):
+    def test_archive_message_appends_seen_copy_to_sent_folder(self):
+        class FakeImap:
+            def __init__(self):
+                self.appended = []
+                self.logged_out = False
+
+            def login(self, address, password):
+                self.login_values = (address, password)
+
+            def list(self):
+                return "OK", [b'(\\HasNoChildren \\Sent) \"/\" \"Sent\"']
+
+            def append(self, folder, flags, date_time, message_bytes):
+                self.appended.append((folder, flags, date_time, message_bytes))
+                return "OK", [b"saved"]
+
+            def logout(self):
+                self.logged_out = True
+
+        message = EmailMessage()
+        message["From"] = "info@boxsofa.eu"
+        message["To"] = "customer@example.com"
+        message["Subject"] = "Order BX-123"
+        message.set_content("Thank you")
+        fake = FakeImap()
+
+        archived = archive_message_in_sent(
+            message,
+            "info@boxsofa.eu",
+            "secret",
+            imap_factory=lambda: fake,
+        )
+
+        self.assertTrue(archived)
+        self.assertEqual(fake.login_values, ("info@boxsofa.eu", "secret"))
+        self.assertEqual(len(fake.appended), 1)
+        folder, flags, date_time, saved_bytes = fake.appended[0]
+        self.assertEqual(folder, "Sent")
+        self.assertEqual(flags, "\\Seen")
+        self.assertIsNone(date_time)
+        self.assertIn(b"Order BX-123", saved_bytes)
+        self.assertTrue(fake.logged_out)
+
+    def test_archive_failure_is_reported_without_turning_delivery_into_a_retry(self):
+        class RejectingImap:
+            def login(self, address, password):
+                pass
+
+            def list(self):
+                return "OK", [b'(\\HasNoChildren \\Sent) \"/\" \"Sent\"']
+
+            def append(self, folder, flags, date_time, message_bytes):
+                return "NO", [b"not saved"]
+
+            def logout(self):
+                pass
+
+        message = EmailMessage()
+        message["From"] = "info@boxsofa.eu"
+        message["To"] = "customer@example.com"
+        message["Subject"] = "Order BX-456"
+        message.set_content("Thank you")
+
+        self.assertFalse(
+            archive_message_in_sent(
+                message,
+                "info@boxsofa.eu",
+                "secret",
+                imap_factory=lambda: RejectingImap(),
+            )
+        )
+
     def test_classification_deduplication_retry_and_membership(self):
         with tempfile.TemporaryDirectory() as folder:
             ledger = Ledger(Path(folder) / "ledger.json")

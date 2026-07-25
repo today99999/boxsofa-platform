@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import imaplib
 import json
 import os
 import re
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
+from email.utils import make_msgid
 from pathlib import Path
 from typing import Iterable
 
@@ -235,7 +237,47 @@ def ledger_path() -> Path:
     return base / "automations" / "boxsofa" / "paid-order-thank-you.json"
 
 
-def send_candidate(candidate: Candidate) -> None:
+def archive_message_in_sent(
+    message: EmailMessage,
+    address: str,
+    password: str,
+    imap_factory=None,
+) -> bool:
+    client = None
+    try:
+        client = imap_factory() if imap_factory else imaplib.IMAP4_SSL(
+            MAIL_HOST,
+            993,
+            ssl_context=ssl.create_default_context(),
+            timeout=20,
+        )
+        client.login(address, password)
+        status, raw_folders = client.list()
+        if status != "OK":
+            return False
+        sent_folder = None
+        for raw_folder in raw_folders or []:
+            line = raw_folder.decode("utf-8", "replace")
+            match = re.search(r' (?:(?:\"([^\"]+)\")|([^ ]+))$', line)
+            folder = (match.group(1) or match.group(2)) if match else ""
+            if "\\Sent" in line or folder.lower() in {"sent", "sent items", "sent messages"}:
+                sent_folder = folder
+                break
+        if not sent_folder:
+            return False
+        appended, _ = client.append(sent_folder, "\\Seen", None, message.as_bytes())
+        return appended == "OK"
+    except Exception:
+        return False
+    finally:
+        if client is not None:
+            try:
+                client.logout()
+            except Exception:
+                pass
+
+
+def send_candidate(candidate: Candidate) -> bool:
     address = required_environment("BOXSOFA_MAIL_ADDRESS")
     password = required_environment("BOXSOFA_MAIL_PASSWORD")
     subject, body = render_email(candidate.locale, candidate.name, candidate.order_number, candidate.member_welcome)
@@ -243,6 +285,7 @@ def send_candidate(candidate: Candidate) -> None:
     message["From"] = f"BoxSofa Europe <{address}>"
     message["To"] = candidate.email
     message["Subject"] = subject
+    message["Message-ID"] = make_msgid(domain="boxsofa.eu")
     message.set_content(body)
     client = smtplib.SMTP_SSL(MAIL_HOST, SMTP_PORT, context=ssl.create_default_context(), timeout=20)
     try:
@@ -250,6 +293,7 @@ def send_candidate(candidate: Candidate) -> None:
         client.send_message(message)
     finally:
         client.quit()
+    return archive_message_in_sent(message, address, password)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -275,12 +319,15 @@ def main() -> None:
     candidates, manual_review = classify_orders(rows, ledger, args.limit)
     sent: list[str] = []
     failed: list[str] = []
+    archive_failed: list[str] = []
     if args.command == "send":
         for candidate in candidates:
             try:
-                send_candidate(candidate)
+                archived = send_candidate(candidate)
                 ledger.record_success(candidate.order_number, candidate.locale, candidate.member_welcome)
                 sent.append(candidate.order_number)
+                if not archived:
+                    archive_failed.append(candidate.order_number)
             except Exception:
                 failed.append(candidate.order_number)
     result = {
@@ -293,6 +340,7 @@ def main() -> None:
         ],
         "sentOrderNumbers": sent,
         "failedOrderNumbers": failed,
+        "archiveFailedOrderNumbers": archive_failed,
         "manualReviewOrderNumbers": manual_review,
     }
     print(json.dumps(result, ensure_ascii=False))
