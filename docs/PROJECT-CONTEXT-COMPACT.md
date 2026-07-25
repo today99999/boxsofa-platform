@@ -347,3 +347,9 @@ limit 5;
 ### 延迟任务核对（2026-07-25 21:32 Europe/Madrid）
 
 - 仅查询、未重建 2026-07-24 晚间 `1.mp4` 的处理任务：TikTok 已完成 `https://www.tiktok.com/@boxsofaeurope/video/7666157343545003296`（任务 `6a63a9677ce74e5c1c74379e`）；Instagram Reels 已完成 `https://www.instagram.com/reel/DbL1_15DPnl/`（任务 `6a63a9687ce74e5c1c7437a8`）；Pinterest 已完成 `https://www.pinterest.com/pin/1109363320813792142/`（任务 `6a63a96b7ce74e5c1c7437bc`，未附外链以避开 spam 风险）。
+
+## 24. Facebook 账号限制（2026-07-25）
+
+- 用户确认 Facebook 账号于 2026-07-24 被封禁。当前尚未确认受限对象是个人账号、`BoxSofa Europe` 公共主页、广告账户还是整个商务资产；在看到 Facebook 封禁页面原文和官方邮件前，不猜测违规原因，也不提交通用申诉。
+- `BoxSofa 每日两条视频发布` 自动任务已临时移除 Facebook：在用户明确确认恢复前，不登录 Facebook、不尝试重新授权、不发布或补发，也不创建替代账号；YouTube Shorts、TikTok、Instagram Reels 和 Pinterest 保持正常发布。
+- 恢复处理顺序：先保存封禁页面和官方邮件证据，再通过 Facebook 登录后的申诉提示或 `Account Status` 查看具体资产、原因、申诉入口与期限；若属于盗号或异常登录，则改走官方 hacked-account 恢复流程。
