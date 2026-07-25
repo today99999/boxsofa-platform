@@ -343,3 +343,7 @@ limit 5;
 - YouTube Shorts 已发布：`https://www.youtube.com/watch?v=uZ54ZDOPMIE`（任务 `6a63a9647ce74e5c1c74377c`，flow `8f4144ae-1f3c-47ff-9e6a-88a32df54fd3`）。文案使用 YouTube UTM `grey_corduroy_unboxing_20260724`，仅陈述视觉产品演示、小户型/出租房、窄楼梯/小电梯、西班牙免费基础配送、Stripe 安全支付与预计 23–30 个工作日。
 - TikTok：任务 `6a63a9677ce74e5c1c74379e`（flow `f3919369-eded-4a82-a5eb-b3c6fc18762c`）已提交平台处理（status 2），尚无公开链接；Instagram Reels：任务 `6a63a9687ce74e5c1c7437a8`（flow `6a796602-3208-4b53-84ef-ff7109327e64`）处理（status 2），尚无公开链接；Pinterest：任务 `6a63a96b7ce74e5c1c7437bc`（flow `692a9de3-8cca-46f8-b6bc-403729251ddc`）处理（status 2），尚无公开链接。Pinterest 未附外链，以避开既有 spam 风险。下次仅查询这三项状态，禁止新建或重复上传。
 - Facebook：AiToEarn 仍无公共主页授权；Chrome 扩展浏览器连接不可用，按 Chrome 控制流程未打开新窗口重连，因此尚未手动补发。等待用户确认后，仅使用同一原片、Facebook UTM 和 AI 内容标识补发。
+
+### 延迟任务核对（2026-07-25 21:32 Europe/Madrid）
+
+- 仅查询、未重建 2026-07-24 晚间 `1.mp4` 的处理任务：TikTok 已完成 `https://www.tiktok.com/@boxsofaeurope/video/7666157343545003296`（任务 `6a63a9677ce74e5c1c74379e`）；Instagram Reels 已完成 `https://www.instagram.com/reel/DbL1_15DPnl/`（任务 `6a63a9687ce74e5c1c7437a8`）；Pinterest 已完成 `https://www.pinterest.com/pin/1109363320813792142/`（任务 `6a63a96b7ce74e5c1c7437bc`，未附外链以避开 spam 风险）。
