@@ -90,10 +90,16 @@ async function checkPage(route) {
     assert(html.includes('"shippingDetails"'), `${route.path} missing offer shippingDetails`);
     assert(html.includes('"@type":"OfferShippingDetails"'), `${route.path} missing OfferShippingDetails JSON-LD`);
     assert(html.includes('"shippingRate":{"@type":"MonetaryAmount","value":0,"currency":"EUR"}'), `${route.path} missing free EUR shipping rate`);
+    for (const country of ['ES', 'FR', 'DE', 'IT', 'NL', 'CH', 'GB']) {
+      assert(html.includes(`"addressCountry":"${country}"`), `${route.path} missing ${country} shipping destination`);
+    }
     assert(html.includes('"transitTime":{"@type":"QuantitativeValue","minValue":23,"maxValue":30,"unitCode":"d"}'), `${route.path} missing 23-30 day transit time`);
     assert(html.includes('"hasMerchantReturnPolicy"'), `${route.path} missing offer hasMerchantReturnPolicy`);
     assert(html.includes('"@type":"MerchantReturnPolicy"'), `${route.path} missing MerchantReturnPolicy JSON-LD`);
+    assert(html.includes('"applicableCountry":["AL","AD","AT"'), `${route.path} missing Europe-wide return policy countries`);
+    assert(html.includes('"merchantReturnLink":"https://boxsofa.eu/returns"'), `${route.path} missing return policy link`);
     assert(html.includes('"merchantReturnDays":14'), `${route.path} missing 14-day merchant return window`);
+    assert(html.includes('"returnFees":"https://schema.org/ReturnFeesCustomerResponsibility"'), `${route.path} missing customer-responsibility return fees`);
     assert(html.includes('"@type":"FAQPage"'), `${route.path} missing product FAQ JSON-LD`);
     assert(html.includes('"@type":"BreadcrumbList"'), `${route.path} missing BreadcrumbList JSON-LD`);
   }

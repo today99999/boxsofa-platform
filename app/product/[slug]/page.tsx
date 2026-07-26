@@ -18,6 +18,7 @@ import {
   getSeoProductTitle
 } from "@/lib/catalogMarketing";
 import { buildFaqJsonLd, productFaqs } from "@/lib/conversionFaq";
+import { europeDeliveryCountryCodes } from "@/lib/europeShipping";
 import type { TranslationKey } from "@/lib/i18n";
 import { buildBreadcrumbJsonLd } from "@/lib/structuredData";
 
@@ -64,6 +65,36 @@ function isUnknownSpec(value: string) {
 function formatWeight(weight: string) {
   if (isUnknownSpec(weight)) return "";
   return /kg$/i.test(weight.trim()) ? weight : `${weight} KG`;
+}
+
+function buildFreeEuropeShippingDetails(countryCode: string) {
+  return {
+    "@type": "OfferShippingDetails",
+    shippingDestination: {
+      "@type": "DefinedRegion",
+      addressCountry: countryCode
+    },
+    shippingRate: {
+      "@type": "MonetaryAmount",
+      value: 0,
+      currency: "EUR"
+    },
+    deliveryTime: {
+      "@type": "ShippingDeliveryTime",
+      handlingTime: {
+        "@type": "QuantitativeValue",
+        minValue: 1,
+        maxValue: 3,
+        unitCode: "d"
+      },
+      transitTime: {
+        "@type": "QuantitativeValue",
+        minValue: 23,
+        maxValue: 30,
+        unitCode: "d"
+      }
+    }
+  };
 }
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
@@ -121,40 +152,15 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       price: product.priceEur,
       availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       itemCondition: "https://schema.org/NewCondition",
-      shippingDetails: {
-        "@type": "OfferShippingDetails",
-        shippingDestination: {
-          "@type": "DefinedRegion",
-          addressCountry: "ES"
-        },
-        shippingRate: {
-          "@type": "MonetaryAmount",
-          value: 0,
-          currency: "EUR"
-        },
-        deliveryTime: {
-          "@type": "ShippingDeliveryTime",
-          handlingTime: {
-            "@type": "QuantitativeValue",
-            minValue: 1,
-            maxValue: 3,
-            unitCode: "d"
-          },
-          transitTime: {
-            "@type": "QuantitativeValue",
-            minValue: 23,
-            maxValue: 30,
-            unitCode: "d"
-          }
-        }
-      },
+      shippingDetails: europeDeliveryCountryCodes.map(buildFreeEuropeShippingDetails),
       hasMerchantReturnPolicy: {
         "@type": "MerchantReturnPolicy",
-        applicableCountry: "ES",
+        applicableCountry: europeDeliveryCountryCodes,
+        merchantReturnLink: absoluteUrl("/returns"),
         returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
         merchantReturnDays: 14,
         returnMethod: "https://schema.org/ReturnByMail",
-        returnFees: "https://schema.org/ReturnShippingFees"
+        returnFees: "https://schema.org/ReturnFeesCustomerResponsibility"
       }
     }
   };

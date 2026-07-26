@@ -48,10 +48,12 @@ export const europeDeliveryCountries = [
   { code: "VA", name: "Vatican City" }
 ] as const;
 
-const europeDeliveryCountryCodes = new Set<string>(
-  europeDeliveryCountries.map((country) => country.code)
+export const europeDeliveryCountryCodes = europeDeliveryCountries.map((country) => country.code);
+
+const europeDeliveryCountryCodeSet = new Set<string>(
+  europeDeliveryCountryCodes
 );
 
 export function isEuropeDeliveryCountry(code: string) {
-  return europeDeliveryCountryCodes.has(code.toUpperCase());
+  return europeDeliveryCountryCodeSet.has(code.toUpperCase());
 }
