@@ -353,3 +353,14 @@ limit 5;
 - 用户确认 Facebook 账号于 2026-07-24 被封禁。当前尚未确认受限对象是个人账号、`BoxSofa Europe` 公共主页、广告账户还是整个商务资产；在看到 Facebook 封禁页面原文和官方邮件前，不猜测违规原因，也不提交通用申诉。
 - `BoxSofa 每日两条视频发布` 自动任务已临时移除 Facebook：在用户明确确认恢复前，不登录 Facebook、不尝试重新授权、不发布或补发，也不创建替代账号；YouTube Shorts、TikTok、Instagram Reels 和 Pinterest 保持正常发布。
 - 恢复处理顺序：先保存封禁页面和官方邮件证据，再通过 Facebook 登录后的申诉提示或 `Account Status` 查看具体资产、原因、申诉入口与期限；若属于盗号或异常登录，则改走官方 hacked-account 恢复流程。
+
+
+
+## 27. 社交自动发布（2026-07-26 20:05 Europe/Madrid）
+
+- 11:00 的延迟任务已仅查询并补录为完成：TikTok `https://www.tiktok.com/@boxsofaeurope/video/7666761537683524897`（任务 `6a65cecd7ce74e5c1c7dd231`，flow `4cf7359b-b1c8-4b1d-a6bf-70d6fa10fd13`）；Instagram Reels `https://www.instagram.com/reel/DbQCbTzDzrr/`（任务 `6a65ced67ce74e5c1c7dd26a`，flow `ed4211c4-423a-444a-9bb1-bf18e68272cb`）；Pinterest video Pin `https://www.pinterest.com/pin/1109363320813911086/`（任务 `6a65ceea7ce74e5c1c7dd32d`，flow `dbbed62a-1c90-414a-97ad-c234bedab6c2`，未附外链以避开 spam 风险）。
+- 本轮 20:00 选择此前未记录为已发布或已预约的原始竖版 `D:\压缩沙发\沙发视频\可发布的视频\初始场景_-_2026-07-20_202607201806.mp4`（奶油色压缩单椅拆箱；720 × 1280、16.042 秒、H.264/AAC）。快速检查确认可访问，画面展示压缩包装拆开至成品；未裁切、补边、重编码或加入画中画。公开原始源仅在分支 `social-media/cream-armchair-20260726` 的提交 `7e0e2f4`，AiToEarn 媒体 `6a664bdf7ce74e5c1c80685f`。
+- 已完成：YouTube Shorts `https://www.youtube.com/watch?v=i-tGDl7ggW0`（任务 `6a664c3f7ce74e5c1c8069a3`，flow `4e7bfcb6-c188-4b9f-b165-bcbb70cda384`，20:05:22）；TikTok `https://www.tiktok.com/@boxsofaeurope/video/7666899407069023521`（任务 `6a664c427ce74e5c1c8069b5`，flow `8ea2d49b-92b6-4bb7-947b-ca808889edb9`，20:06:03）；Instagram Reels `https://www.instagram.com/reel/DbQ_lyej-XH/`（任务 `6a664c437ce74e5c1c8069c3`，flow `d404d845-85ee-4f44-9627-d339b955fd04`，20:06:24）；Pinterest video Pin `https://www.pinterest.com/pin/1109363320813941488/`（任务 `6a664c467ce74e5c1c8069df`，flow `0b238bf8-cef9-4b85-bfac-9d91f377a2e7`，20:06:21，未挂外链）。发布时间均为 2026-07-26 Europe/Madrid；禁止重建或重复上传。
+- 各平台文案使用对应 `cream_armchair_unboxing_20260726` UTM（Pinterest 无外链），仅陈述视觉产品演示、小户型/出租房、窄楼梯/小电梯、欧洲全境免费基础配送、Stripe 安全支付与预计 23–30 个工作日；无折扣、快速到货、真实客户案例或政策例外承诺。Facebook 因账号受限跳过：未登录、未重新授权、未发布、未补发、未创建替代账号。
+
+
