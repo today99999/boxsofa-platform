@@ -271,6 +271,47 @@ test("Vercel build gives remote credentials only to the preflight child", () => 
   ]);
 });
 
+test("Vercel preview preflight skips remote migration verification when credentials are unavailable", () => {
+  const result = runScript("scripts/deploy-preflight.mjs", [], {
+    NODE_ENV: "test",
+    VERCEL_ENV: "preview",
+    BOXSOFA_DEPLOY_PREFLIGHT_TEST_ADAPTER: "scripts/test-fixtures/vercel-build-sentinel.mjs",
+    NEXT_PUBLIC_SUPABASE_URL: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
+    SUPABASE_PROJECT_REF: "",
+    SUPABASE_ACCESS_TOKEN: ""
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Skipped for Vercel preview deployment without remote Supabase migration credentials/);
+  assert.doesNotMatch(result.stdout, /"phase":"remote Supabase migration history"/);
+
+  const phases = result.stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line).phase);
+  assert.deepEqual(phases, [
+    "migration manifest",
+    "bootstrap lexical validation",
+    "bootstrap PGlite execution",
+    "unit tests",
+    "typecheck"
+  ]);
+});
+
+test("Vercel production preflight still requires remote migration credentials", () => {
+  const result = runScript("scripts/deploy-preflight.mjs", [], {
+    NODE_ENV: "test",
+    VERCEL_ENV: "production",
+    BOXSOFA_DEPLOY_PREFLIGHT_TEST_ADAPTER: "scripts/test-fixtures/vercel-build-sentinel.mjs",
+    NEXT_PUBLIC_SUPABASE_URL: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
+    SUPABASE_PROJECT_REF: "",
+    SUPABASE_ACCESS_TOKEN: ""
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /"phase":"remote Supabase migration history"/);
+});
+
 function validBootstrapCatalog() {
   return {
     publicRelations: publicRelationExpectations.map(({ relname, relkind }) => ({

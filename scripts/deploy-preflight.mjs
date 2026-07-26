@@ -42,9 +42,25 @@ function remoteMigrationVerifierEnv() {
   return sanitized;
 }
 
+function hasRemoteMigrationCredentials() {
+  return Boolean(
+    (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+      || (process.env.SUPABASE_PROJECT_REF && process.env.SUPABASE_ACCESS_TOKEN)
+  );
+}
+
+function canSkipRemoteMigrationVerification() {
+  return process.env.VERCEL_ENV === "preview" && !hasRemoteMigrationCredentials();
+}
+
+function testAdapter() {
+  return process.env.NODE_ENV === "test" ? process.env.BOXSOFA_DEPLOY_PREFLIGHT_TEST_ADAPTER : undefined;
+}
+
 function run(label, script, env = withoutRemoteMigrationSecrets()) {
   console.log(`\n=== ${label} ===`);
-  const result = spawnSync(npmCommand, npmArgs(script), {
+  const adapter = testAdapter();
+  const result = spawnSync(adapter ? process.execPath : npmCommand, adapter ? [adapter, label] : npmArgs(script), {
     stdio: "inherit",
     env
   });
@@ -54,7 +70,12 @@ function run(label, script, env = withoutRemoteMigrationSecrets()) {
 
 // Vercel invokes this before its own `next build` command. Keep this list
 // build-free so the configured Vercel build command cannot recurse.
-run("remote Supabase migration history", "db:migrations:verify-remote", remoteMigrationVerifierEnv());
+if (canSkipRemoteMigrationVerification()) {
+  console.log("\n=== remote Supabase migration history ===");
+  console.log("Skipped for Vercel preview deployment without remote Supabase migration credentials.");
+} else {
+  run("remote Supabase migration history", "db:migrations:verify-remote", remoteMigrationVerifierEnv());
+}
 run("migration manifest", "db:migrations:verify");
 run("bootstrap lexical validation", "db:bootstrap:validate");
 run("bootstrap PGlite execution", "db:bootstrap:execute");
