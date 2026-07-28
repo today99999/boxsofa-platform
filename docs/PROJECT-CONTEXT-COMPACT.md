@@ -336,3 +336,10 @@ limit 5;
 - 数据中心模块状态继续保存在 `?section=`，点击模块会写入浏览历史，浏览器前进/后退可恢复上一模块；全局搜索结果统一返回 `/data-center?section=...` 并触发同一站内切换流程。
 - 手机底部导航的 5 个入口全部可用：总览、订单、产品、售后、客户；“查看店铺”改为新窗口打开，数据中心本身保持不动。
 - 回归验证：189/189 自动测试通过，TypeScript 类型检查和 Next.js 正式构建通过。
+
+## 23. 社交自动发布（2026-07-28 18:30 Europe/Madrid）
+
+- 本轮只选择一条此前未记录为已发布或已预约的原始视频：`D:\压缩沙发\沙发视频\可发布视频2\boxsofa-asmr-unboxing-final-480p.mp4`。快速核验通过：480 × 854 竖版、15.00 秒、H.264/AAC、文件可访问；画面为压缩包装展开至成品沙发。未裁切、补边、重编码、画中画或背景扩展。
+- 已将原始视频推送至独立分支 `social-media/asmr-unboxing-20260728`（提交 `993b39d`），并仅为 Pinterest 的视频封面硬性要求从原片截取一帧（提交 `d6285fc`）。Facebook 因账号受限跳过：未登录、未重新授权、未发布、未补发、未创建替代账号。
+- AiToEarn 未创建发布任务：其对 GitHub Raw 源返回 `Publish content validation failed`。经核验该源的 MIME 类型为 `application/octet-stream`，无法通过视频校验；因此没有重试、没有重建任务、没有发布或预约。后续应在可提供 `video/mp4` 响应的已部署公开源可用后，仅对同一素材创建一次预约。
+- 账号分析依据：YouTube、TikTok、Pinterest 仅返回 28 天汇总指标，Instagram 返回权限缺失，均未提供受众在线时段。因此计划默认时段为 Instagram Reels 19:00、YouTube Shorts 20:00、TikTok 20:30、Pinterest 21:00（Europe/Madrid）；本轮因媒体验证失败未实际创建这些预约。
