@@ -343,3 +343,14 @@ limit 5;
 - 已将原始视频推送至独立分支 `social-media/asmr-unboxing-20260728`（提交 `993b39d`），并仅为 Pinterest 的视频封面硬性要求从原片截取一帧（提交 `d6285fc`）。Facebook 因账号受限跳过：未登录、未重新授权、未发布、未补发、未创建替代账号。
 - AiToEarn 未创建发布任务：其对 GitHub Raw 源返回 `Publish content validation failed`。经核验该源的 MIME 类型为 `application/octet-stream`，无法通过视频校验；因此没有重试、没有重建任务、没有发布或预约。后续应在可提供 `video/mp4` 响应的已部署公开源可用后，仅对同一素材创建一次预约。
 - 账号分析依据：YouTube、TikTok、Pinterest 仅返回 28 天汇总指标，Instagram 返回权限缺失，均未提供受众在线时段。因此计划默认时段为 Instagram Reels 19:00、YouTube Shorts 20:00、TikTok 20:30、Pinterest 21:00（Europe/Madrid）；本轮因媒体验证失败未实际创建这些预约。
+
+## 24. 社交自动发布修复与预约（2026-07-28 19:31 Europe/Madrid）
+
+- 继续只使用第 23 节选中的同一条素材，没有另选第二条视频。为满足当前平台上传入口的硬性兼容要求，将原片保守缩放为 720 × 1280，并将总时长从恰好 15.00 秒收敛到 14.90 秒；保留 H.264/AAC 和原始画面，不加画中画、模糊背景、白边、灰边或背景扩展。最终发布文件名为 `boxsofa-asmr-unboxing-platform-720x1280.mp4`，对应 AiToEarn 内部媒体 URL `https://assets.aitoearn.ai/6a5cca25f462298aacf8ec53/user/media/202607/oE0K0AovTE3U-NBnf7cLd.mp4`。
+- AiToEarn 网页合并编辑器的字段检查全部通过，但提交时四个平台统一返回 `Validation failed`，且发布记录查询为空，证明这些失败尝试没有创建任务。当前网页端只返回通用错误，无法安全复用；修复方案是改用 AiToEarn v2 正式发布流接口，为同一内部媒体分别创建平台任务，避免网页合并表单的无效载荷和单一共享排期。
+- Instagram Reels：计划 2026-07-28 19:45 Europe/Madrid；flow `boxsofa-20260728-instagram-v1`，任务/记录 `6a68e73e93269a9e88e55e95`，状态 6（已排队）。19:00 默认时段在修复完成前已经过去，因此采用当晚最近可用时段 19:45。
+- YouTube Shorts：计划 2026-07-28 20:00 Europe/Madrid；flow `boxsofa-20260728-youtube-v1`，任务/记录 `6a68e74893269a9e88e55f42`，状态 6（已排队）。
+- TikTok：计划 2026-07-28 20:30 Europe/Madrid；flow `boxsofa-20260728-tiktok-v1`，任务/记录 `6a68e75293269a9e88e55fe5`，状态 6（已排队）。
+- Pinterest：计划 2026-07-28 21:00 Europe/Madrid；flow `boxsofa-20260728-pinterest-v1`，任务/记录 `6a68e75c93269a9e88e56021`，状态 6（已排队）；Board `Compressed Sofas`（ID `1109363389402312698`），未附站外链接以规避既有 spam 风险。
+- 各平台文案分别使用 Instagram、YouTube、TikTok UTM；Pinterest 使用搜索关键词承接。时段依据仍为第 23 节的账号分析结果：当前没有平台返回可用的受众在线小时数据，因此沿用默认晚间时段。Facebook 因账号受限继续跳过：未登录、未重新授权、未发布或补发。
+- 后续自动化防错：提交前必须确认使用 `assets.aitoearn.ai/.../user/media/...` 内部媒体 URL；网页合并发布若返回通用校验失败且记录为空，不得重复提交，应直接使用 v2 发布流并为每个平台建立独立排期；创建后必须再次查询发布记录并确认状态 6/待处理，后续只查询原任务，禁止重复上传。
