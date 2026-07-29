@@ -1977,9 +1977,11 @@ video {
   left: 18px;
   max-width: 860px;
   padding: 16px;
+  pointer-events: auto;
   position: fixed;
   right: 18px;
-  z-index: 30;
+  isolation: isolate;
+  z-index: 100;
 }
 
 .cookie-banner p {
@@ -1995,6 +1997,10 @@ video {
 .cookie-actions {
   display: flex;
   gap: 10px;
+}
+
+.cookie-actions .button {
+  touch-action: manipulation;
 }
 
 .stock-list,
@@ -3916,12 +3922,14 @@ body:has(.checkout-layout) .chat-button {
   }
 
   .cookie-banner {
-    bottom: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
     left: 10px;
-    max-height: min(52vh, 360px);
+    max-height: min(52dvh, 360px);
     overflow: auto;
+    overscroll-behavior: contain;
     padding: 14px;
     right: 10px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .cookie-actions .button {

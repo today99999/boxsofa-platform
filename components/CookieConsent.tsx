@@ -143,20 +143,40 @@ export function CookieConsent() {
     consentSyncGenerationRef.current += 1;
     const operation = ++userOperationRef.current;
     resetAnalyticsConsentRecovery();
-    const persisted = await persistConsent(nextConsent);
+    setSaveError(false);
+
+    // Close the banner immediately. Mobile visitors must not be trapped behind
+    // network latency; analytics remains disabled until the server confirms it.
+    setConsent(nextConsent);
+    clearAnalyticsServerReady(nextConsent === "analytics" ? "temporary" : "withdrawn");
+    try {
+      localStorage.setItem(ANALYTICS_CONSENT_KEY, nextConsent);
+    } catch {
+      // Storage can be unavailable in hardened browser modes. The in-memory
+      // choice still applies for this page and analytics remains disabled.
+    }
+
+    let persisted = false;
+    try {
+      persisted = await persistConsent(nextConsent);
+    } catch {
+      persisted = false;
+    }
     if (operation !== userOperationRef.current) return;
+
+    if (nextConsent === "necessary") {
+      clearAnalyticsClientState();
+    }
     if (!persisted) {
-      setSaveError(true);
+      // Keep the local choice and retry synchronization on the next mount.
+      // In particular, a locally accepted analytics choice cannot enable
+      // tracking while server readiness remains false.
       return;
     }
-    setSaveError(false);
-    localStorage.setItem(ANALYTICS_CONSENT_KEY, nextConsent);
+
     markConsentSynchronized(localStorage, nextConsent, CONSENT_VERSION);
-    setConsent(nextConsent);
     if (nextConsent === "analytics") {
       markAnalyticsServerReady();
-    } else {
-      clearAnalyticsClientState();
     }
   }
 
