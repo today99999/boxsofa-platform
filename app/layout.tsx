@@ -7,7 +7,7 @@ import { AnalyticsRouteTracker } from "@/components/AnalyticsRouteTracker";
 export const metadata: Metadata = {
   metadataBase: new URL("https://boxsofa.eu"),
   title: {
-    default: "BoxSofa Europe | Compressed Sofas for European Homes",
+    default: "BoxSofa Europe Official Site | Compressed Sofas",
     template: "%s | BoxSofa Europe"
   },
   description:
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     canonical: "/"
   },
   openGraph: {
-    title: "BoxSofa Europe | Compressed Sofas for European Homes",
+    title: "BoxSofa Europe Official Site | Compressed Sofas",
     description:
       "Compressed sofas built for European apartments, rental homes, elevators, staircases, and compact living spaces.",
     url: "https://boxsofa.eu",
