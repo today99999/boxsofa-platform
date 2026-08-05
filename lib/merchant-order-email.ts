@@ -1,5 +1,3 @@
-import { europeDeliveryCountries } from "./europeShipping.ts";
-
 export type PaidOrderMerchantEmailInput = {
   orderNumber: string;
   customerName: string;
@@ -16,44 +14,7 @@ export type PaidOrderMerchantEmailInput = {
   siteUrl?: string;
 };
 
-const countryNames = new Map<string, string>(
-  europeDeliveryCountries.map((country) => [country.code, country.name] as const)
-);
-
-const chineseCountryNames: Record<string, string> = {
-  AT: "奥地利",
-  BE: "比利时",
-  BG: "保加利亚",
-  HR: "克罗地亚",
-  CY: "塞浦路斯",
-  CZ: "捷克",
-  DE: "德国",
-  DK: "丹麦",
-  EE: "爱沙尼亚",
-  ES: "西班牙",
-  FI: "芬兰",
-  FR: "法国",
-  GB: "英国",
-  GR: "希腊",
-  HU: "匈牙利",
-  IE: "爱尔兰",
-  IS: "冰岛",
-  IT: "意大利",
-  LT: "立陶宛",
-  LU: "卢森堡",
-  LV: "拉脱维亚",
-  MT: "马耳他",
-  NL: "荷兰",
-  NO: "挪威",
-  PL: "波兰",
-  PT: "葡萄牙",
-  RO: "罗马尼亚",
-  SE: "瑞典",
-  SI: "斯洛文尼亚",
-  SK: "斯洛伐克",
-  TR: "土耳其",
-  UA: "乌克兰"
-};
+const chineseRegionNames = new Intl.DisplayNames(["zh-CN"], { type: "region" });
 
 function display(value: string) {
   return value.trim() || "未提供";
@@ -62,7 +23,7 @@ function display(value: string) {
 function formatCountry(countryCode: string) {
   const code = countryCode.trim().toUpperCase();
   if (!code) return "未提供";
-  return `${chineseCountryNames[code] || countryNames.get(code) || code}（${code}）`;
+  return `${chineseRegionNames.of(code) || code}（${code}）`;
 }
 
 function formatItems(items: PaidOrderMerchantEmailInput["items"]) {

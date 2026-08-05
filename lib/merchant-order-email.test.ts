@@ -53,3 +53,18 @@ test("uses the configured merchant recipient and handles missing optional order 
   assert.match(email.bodyText, /商品明细：请登录商家后台查看/);
   assert.match(email.bodyText, /https:\/\/boxsofa\.eu\/admin/);
 });
+
+test("renders every supported delivery country through Chinese region names", () => {
+  const email = buildPaidOrderMerchantEmail({
+    orderNumber: "BS-2026-0100",
+    customerName: "Customer",
+    customerEmail: "customer@example.com",
+    customerPhone: "+355 000 000",
+    countryCode: "AL",
+    totalEur: 499,
+    items: [],
+    siteUrl: "https://boxsofa.eu"
+  });
+
+  assert.match(email.bodyText, /配送国家：阿尔巴尼亚（AL）/);
+});
