@@ -4,6 +4,8 @@ import {
   recordStripeRefund,
   recordStripeWebhookFailure
 } from "@/lib/server/stripe-refunds";
+import { sendTransactionalEmail } from "@/lib/server/email-provider";
+import { sendPaidOrderMerchantNotification } from "@/lib/server/paid-order-merchant-notification";
 import { confirmStripeCheckoutPayment } from "@/lib/server/stripe-order-payment";
 import { getStripeClient } from "@/lib/server/stripe";
 import { createSupabaseServiceRoleClient, hasSupabaseServiceRoleConfig } from "@/lib/supabase/server";
@@ -39,6 +41,59 @@ export async function POST(request: Request) {
         if (!result.ok) {
           await recordStripeWebhookFailure(supabase, event, "checkout_processing_failed");
           return NextResponse.json({ ok: false, message: "Could not process Stripe webhook." }, { status: 500 });
+        }
+
+        const orderId = session.metadata?.orderId;
+        if (!orderId) {
+          return NextResponse.json({ ok: false, message: "Could not notify the merchant." }, { status: 500 });
+        }
+
+        const merchantNotification = await sendPaidOrderMerchantNotification({
+          orderId,
+          recipient: process.env.ORDER_NOTIFY_EMAIL || "info@boxsofa.eu",
+          siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://boxsofa.eu",
+          repository: {
+            async loadPaidOrder(id) {
+              const { data, error } = await supabase
+                .from("orders")
+                .select(
+                  "id, order_number, customer_name, customer_email, customer_phone, address_snapshot, total_eur, payment_status, order_items(name_snapshot, color_snapshot, quantity)"
+                )
+                .eq("id", id)
+                .eq("payment_status", "paid")
+                .maybeSingle();
+
+              if (error) throw error;
+              if (!data) return null;
+
+              const addressSnapshot =
+                data.address_snapshot && typeof data.address_snapshot === "object"
+                  ? data.address_snapshot as { countryCode?: unknown }
+                  : null;
+              return {
+                id: data.id,
+                orderNumber: data.order_number,
+                customerName: data.customer_name,
+                customerEmail: data.customer_email,
+                customerPhone: data.customer_phone,
+                countryCode:
+                  typeof addressSnapshot?.countryCode === "string"
+                    ? addressSnapshot.countryCode
+                    : "",
+                totalEur: Number(data.total_eur),
+                items: (data.order_items || []).map((item) => ({
+                  name: item.name_snapshot,
+                  color: item.color_snapshot,
+                  quantity: item.quantity
+                }))
+              };
+            }
+          },
+          send: sendTransactionalEmail
+        });
+
+        if (merchantNotification.state !== "delivered") {
+          return NextResponse.json({ ok: false, message: "Could not notify the merchant." }, { status: 500 });
         }
       }
     }
